@@ -28,6 +28,7 @@ fun MainScreen(
     onSwitch: (PlateOption) -> Unit,
     onRefresh: () -> Unit,
     onMessageShown: () -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(state.message) {
@@ -77,6 +78,9 @@ fun MainScreen(
             }
             TextButton(onClick = onRefresh, enabled = !state.loading && state.switching == null) {
                 Text("Refresh")
+            }
+            TextButton(onClick = onOpenSettings) {
+                Text("Settings")
             }
         }
     }
