@@ -48,6 +48,8 @@ dependencies {
     implementation(libs.retrofit.kotlinx.serialization)
     implementation(libs.okhttp)
     implementation(libs.security.crypto)
+    implementation(libs.androidx.work.runtime)
+    implementation(libs.play.services.location)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
