@@ -20,5 +20,20 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <receiver
+            android:name=".parking.android.CarBluetoothReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.bluetooth.device.action.ACL_CONNECTED" />
+                <action android:name="android.bluetooth.device.action.ACL_DISCONNECTED" />
+            </intent-filter>
+        </receiver>
+        <receiver
+            android:name=".parking.android.ActivityUpdatesReceiver"
+            android:exported="false" />
+        <receiver
+            android:name=".parking.android.ParkActionReceiver"
+            android:exported="false" />
     </application>
 </manifest>
