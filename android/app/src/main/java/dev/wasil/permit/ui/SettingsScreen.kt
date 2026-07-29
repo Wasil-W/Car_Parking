@@ -20,8 +20,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
@@ -36,6 +42,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -47,6 +54,7 @@ import dev.wasil.permit.parking.ParkStateStore
 import dev.wasil.permit.parking.android.PlayServicesSignals
 import dev.wasil.permit.parking.android.SharedSync
 import dev.wasil.permit.parking.shared.SharedStateStore
+import dev.wasil.permit.ui.theme.LocalHandoffColors
 import kotlinx.coroutines.launch
 
 private fun granted(context: Context, permission: String): Boolean =
@@ -61,6 +69,7 @@ fun SettingsScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val colors = LocalHandoffColors.current
     var refresh by remember { mutableIntStateOf(0) }
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -75,12 +84,106 @@ fun SettingsScreen(
     var homeStatus by remember { mutableStateOf<String?>(null) }
     var syncUrl by remember { mutableStateOf(stateStore.syncUrl ?: "") }
     var syncStatus by remember { mutableStateOf<String?>(null) }
+    var editing by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier.fillMaxSize().padding(24.dp).verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text("Settings", style = MaterialTheme.typography.headlineSmall)
+
+        // --- Setup summary: the set-once questions (whose phone, sync URL), collapsed. ---
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Icon(Icons.Filled.Check, contentDescription = null, tint = colors.fine)
+                    Text("Setup complete", style = MaterialTheme.typography.titleMedium)
+                }
+                Text(
+                    "${myCar?.name?.lowercase()?.replaceFirstChar { it.uppercase() }}'s phone",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    (if (syncUrl.isNotBlank()) "Sync configured" else "Sync not set up") +
+                        " · " + (if (carMac != null) "car paired" else "no car paired"),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
+                if (editing) {
+                    HorizontalDivider()
+
+                    Text("Whose phone is this?", style = MaterialTheme.typography.titleMedium)
+                    Row {
+                        MyCar.entries.forEach { option ->
+                            Row(Modifier.clickable {
+                                stateStore.myCar = option
+                                myCar = option
+                            }.padding(end = 24.dp)) {
+                                RadioButton(selected = myCar == option, onClick = {
+                                    stateStore.myCar = option
+                                    myCar = option
+                                })
+                                Text(option.name.lowercase().replaceFirstChar { it.uppercase() },
+                                    Modifier.padding(top = 12.dp))
+                            }
+                        }
+                    }
+
+                    Text("Shared state (Firebase)", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Database URL from SETUP_FIREBASE.md. Both phones must use the same URL.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    OutlinedTextField(
+                        value = syncUrl,
+                        onValueChange = { syncUrl = it },
+                        label = { Text("https://…firebasedatabase.app") },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Row {
+                        Button(onClick = {
+                            stateStore.syncUrl = syncUrl.trim().ifBlank { null }
+                            syncStatus = "Saved."
+                            SharedSync.requestSync(context)
+                        }) { Text("Save") }
+                        TextButton(onClick = {
+                            syncStatus = "Testing…"
+                            scope.launch {
+                                syncStatus = runCatching { sharedStore().heartbeat() }
+                                    .fold({ "Connection OK." }, { "FAILED: ${it.message}" })
+                            }
+                        }) { Text("Test connection") }
+                    }
+                    syncStatus?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                }
+
+                TextButton(
+                    onClick = { editing = !editing },
+                    modifier = Modifier.align(Alignment.End),
+                ) { Text(if (editing) "Done" else "Edit") }
+            }
+        }
+
+        // --- Detection: options you might occasionally change. ---
+        Text("Detection", style = MaterialTheme.typography.labelSmall)
+
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("Auto-claim permit on park", Modifier.padding(top = 12.dp))
+            Switch(checked = autoClaim, onCheckedChange = {
+                stateStore.autoClaim = it
+                autoClaim = it
+            })
+        }
 
         Text("Car Bluetooth device", style = MaterialTheme.typography.titleMedium)
         Text(
@@ -114,32 +217,8 @@ fun SettingsScreen(
         }
         HorizontalDivider()
 
-        Text("Whose phone is this?", style = MaterialTheme.typography.titleMedium)
-        Row {
-            MyCar.entries.forEach { option ->
-                Row(Modifier.clickable {
-                    stateStore.myCar = option
-                    myCar = option
-                }.padding(end = 24.dp)) {
-                    RadioButton(selected = myCar == option, onClick = {
-                        stateStore.myCar = option
-                        myCar = option
-                    })
-                    Text(option.name.lowercase().replaceFirstChar { it.uppercase() },
-                        Modifier.padding(top = 12.dp))
-                }
-            }
-        }
-        HorizontalDivider()
-
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("Auto-claim permit on park", Modifier.padding(top = 12.dp))
-            Switch(checked = autoClaim, onCheckedChange = {
-                stateStore.autoClaim = it
-                autoClaim = it
-            })
-        }
-        HorizontalDivider()
+        // --- Zones ---
+        Text("Zones", style = MaterialTheme.typography.labelSmall)
 
         Text("Home zone", style = MaterialTheme.typography.titleMedium)
         Text(
@@ -183,34 +262,6 @@ fun SettingsScreen(
         homeStatus?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
         HorizontalDivider()
 
-        Text("Shared state (Firebase)", style = MaterialTheme.typography.titleMedium)
-        Text(
-            "Database URL from SETUP_FIREBASE.md. Both phones must use the same URL.",
-            style = MaterialTheme.typography.bodySmall,
-        )
-        OutlinedTextField(
-            value = syncUrl,
-            onValueChange = { syncUrl = it },
-            label = { Text("https://…firebasedatabase.app") },
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Row {
-            Button(onClick = {
-                stateStore.syncUrl = syncUrl.trim().ifBlank { null }
-                syncStatus = "Saved."
-                SharedSync.requestSync(context)
-            }) { Text("Save") }
-            TextButton(onClick = {
-                syncStatus = "Testing…"
-                scope.launch {
-                    syncStatus = runCatching { sharedStore().heartbeat() }
-                        .fold({ "Connection OK." }, { "FAILED: ${it.message}" })
-                }
-            }) { Text("Test connection") }
-        }
-        syncStatus?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-        HorizontalDivider()
-
         Text("Free zones", style = MaterialTheme.typography.titleMedium)
         if (zones.isEmpty()) Text("None marked. Use \"Free here\" on a parking notification.")
         zones.forEachIndexed { index, zone ->
@@ -225,8 +276,10 @@ fun SettingsScreen(
         }
         HorizontalDivider()
 
-        Text("Permissions", style = MaterialTheme.typography.titleMedium)
-        // Reading `refresh` here makes permission grants recompose this section.
+        // --- System: permission grants, battery optimisation — quiet when fine. ---
+        Text("System", style = MaterialTheme.typography.labelSmall)
+
+        // Reading `refresh` here makes permission/battery grants recompose this section.
         val revision = refresh
         val needed = buildList {
             if (Build.VERSION.SDK_INT >= 33) add(Manifest.permission.POST_NOTIFICATIONS)
@@ -234,13 +287,42 @@ fun SettingsScreen(
             if (Build.VERSION.SDK_INT >= 29) add(Manifest.permission.ACTIVITY_RECOGNITION)
             add(Manifest.permission.ACCESS_FINE_LOCATION)
         }
-        needed.forEach { permission ->
-            val ok = remember(revision, permission) { granted(context, permission) }
+        val missingPermissions = remember(revision) { needed.count { !granted(context, it) } }
+        val powerManager = context.getSystemService(PowerManager::class.java)
+        val ignoringBatteryOpt = remember(revision) {
+            powerManager?.isIgnoringBatteryOptimizations(context.packageName) == true
+        }
+        val rows = healthRows(missingPermissions = missingPermissions, batteryOptimised = !ignoringBatteryOpt)
+
+        rows.forEach { row ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text((if (ok) "OK " else "Missing ") + permission.substringAfterLast('.'),
-                    Modifier.padding(top = 12.dp))
-                if (!ok) TextButton(onClick = { permissionLauncher.launch(permission) }) {
-                    Text("Grant")
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Icon(
+                        if (row.ok) Icons.Filled.Check else Icons.Filled.Warning,
+                        contentDescription = null,
+                        tint = if (row.ok) colors.fine else colors.alert,
+                    )
+                    Text(row.label, Modifier.padding(top = 12.dp))
+                }
+                row.fixLabel?.let { fix ->
+                    TextButton(onClick = {
+                        when (fix) {
+                            "Grant" -> needed.firstOrNull { !granted(context, it) }
+                                ?.let { permissionLauncher.launch(it) }
+                            else -> {
+                                context.startActivity(
+                                    Intent(
+                                        Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                                        Uri.parse("package:${context.packageName}"),
+                                    ),
+                                )
+                                refresh++
+                            }
+                        }
+                    }) { Text(fix) }
                 }
             }
         }
@@ -257,29 +339,6 @@ fun SettingsScreen(
                 ),
             )
         }) { Text("Open app settings") }
-        HorizontalDivider()
-
-        Text("Battery", style = MaterialTheme.typography.titleMedium)
-        val powerManager = context.getSystemService(PowerManager::class.java)
-        val ignoring = remember(refresh) {
-            powerManager?.isIgnoringBatteryOptimizations(context.packageName) == true
-        }
-        Text(
-            if (ignoring) "Battery optimization is OFF for this app — good."
-            else "Samsung/Android may put this app to sleep and miss park events. Turn optimization off.",
-            style = MaterialTheme.typography.bodySmall,
-        )
-        if (!ignoring) {
-            Button(onClick = {
-                context.startActivity(
-                    Intent(
-                        Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-                        Uri.parse("package:${context.packageName}"),
-                    ),
-                )
-                refresh++
-            }) { Text("Disable battery optimization") }
-        }
         HorizontalDivider()
 
         TextButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Back") }
