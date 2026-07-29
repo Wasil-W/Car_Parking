@@ -7,4 +7,10 @@ class FakeParkStateStore : ParkStateStore {
     override var autoClaim: Boolean = true
     override var parked: Boolean = false
     override var lastParkLocation: GeoPoint? = null
+    override var parkedOutside: Boolean = false
+    override var parkedAtMs: Long = 0
+    override var lastZoneCode: String? = null
+    override var homeZone: FreeZone? = null
+    override var syncUrl: String? = null
+    override var lastAlertedClaimMs: Long = 0
 }
