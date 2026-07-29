@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.os.PowerManager
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -22,7 +23,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -31,14 +34,20 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import dev.wasil.permit.parking.FreeZone
 import dev.wasil.permit.parking.FreeZoneStore
 import dev.wasil.permit.parking.MyCar
 import dev.wasil.permit.parking.ParkStateStore
+import dev.wasil.permit.parking.android.PlayServicesSignals
+import dev.wasil.permit.parking.android.SharedSync
+import dev.wasil.permit.parking.shared.SharedStateStore
+import kotlinx.coroutines.launch
 
 private fun granted(context: Context, permission: String): Boolean =
     ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
@@ -47,9 +56,11 @@ private fun granted(context: Context, permission: String): Boolean =
 fun SettingsScreen(
     stateStore: ParkStateStore,
     freeZoneStore: FreeZoneStore,
+    sharedStore: () -> SharedStateStore,
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var refresh by remember { mutableIntStateOf(0) }
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -60,6 +71,10 @@ fun SettingsScreen(
     var myCar by remember { mutableStateOf(stateStore.myCar) }
     var autoClaim by remember { mutableStateOf(stateStore.autoClaim) }
     var zones by remember { mutableStateOf(freeZoneStore.all()) }
+    var homeZone by remember { mutableStateOf(stateStore.homeZone) }
+    var homeStatus by remember { mutableStateOf<String?>(null) }
+    var syncUrl by remember { mutableStateOf(stateStore.syncUrl ?: "") }
+    var syncStatus by remember { mutableStateOf<String?>(null) }
 
     Column(
         modifier = Modifier.fillMaxSize().padding(24.dp).verticalScroll(rememberScrollState()),
@@ -126,6 +141,76 @@ fun SettingsScreen(
         }
         HorizontalDivider()
 
+        Text("Home zone", style = MaterialTheme.typography.titleMedium)
+        Text(
+            homeZone?.let { "Home set: %.5f, %.5f (radius %.0f m)".format(it.lat, it.lng, it.radiusM) }
+                ?: "Not set. Parking inside your home zone never claims the permit.",
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        homeZone?.let { zone ->
+            Text("Radius: %.0f m".format(zone.radiusM))
+            Slider(
+                value = zone.radiusM.toFloat(),
+                onValueChange = {
+                    val updated = zone.copy(radiusM = it.toDouble())
+                    stateStore.homeZone = updated
+                    homeZone = updated
+                },
+                valueRange = 30f..200f,
+            )
+        }
+        Button(onClick = {
+            homeStatus = "Getting location…"
+            scope.launch {
+                val point = PlayServicesSignals(context).currentLocation()
+                if (point == null) {
+                    homeStatus = "Couldn't get a location — check location permission and try outdoors."
+                } else {
+                    val zone = FreeZone(point.lat, point.lng, homeZone?.radiusM ?: 60.0, "Home")
+                    stateStore.homeZone = zone
+                    homeZone = zone
+                    homeStatus = "Home saved."
+                }
+            }
+        }) { Text(if (homeZone == null) "Set home to current location" else "Move home here") }
+        if (homeZone != null) {
+            TextButton(onClick = {
+                stateStore.homeZone = null
+                homeZone = null
+                homeStatus = null
+            }) { Text("Clear home zone") }
+        }
+        homeStatus?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+        HorizontalDivider()
+
+        Text("Shared state (Firebase)", style = MaterialTheme.typography.titleMedium)
+        Text(
+            "Database URL from SETUP_FIREBASE.md. Both phones must use the same URL.",
+            style = MaterialTheme.typography.bodySmall,
+        )
+        OutlinedTextField(
+            value = syncUrl,
+            onValueChange = { syncUrl = it },
+            label = { Text("https://…firebasedatabase.app") },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Row {
+            Button(onClick = {
+                stateStore.syncUrl = syncUrl.trim().ifBlank { null }
+                syncStatus = "Saved."
+                SharedSync.requestSync(context)
+            }) { Text("Save") }
+            TextButton(onClick = {
+                syncStatus = "Testing…"
+                scope.launch {
+                    syncStatus = runCatching { sharedStore().heartbeat() }
+                        .fold({ "Connection OK." }, { "FAILED: ${it.message}" })
+                }
+            }) { Text("Test connection") }
+        }
+        syncStatus?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+        HorizontalDivider()
+
         Text("Free zones", style = MaterialTheme.typography.titleMedium)
         if (zones.isEmpty()) Text("None marked. Use \"Free here\" on a parking notification.")
         zones.forEachIndexed { index, zone ->
@@ -172,6 +257,30 @@ fun SettingsScreen(
                 ),
             )
         }) { Text("Open app settings") }
+        HorizontalDivider()
+
+        Text("Battery", style = MaterialTheme.typography.titleMedium)
+        val powerManager = context.getSystemService(PowerManager::class.java)
+        val ignoring = remember(refresh) {
+            powerManager?.isIgnoringBatteryOptimizations(context.packageName) == true
+        }
+        Text(
+            if (ignoring) "Battery optimization is OFF for this app — good."
+            else "Samsung/Android may put this app to sleep and miss park events. Turn optimization off.",
+            style = MaterialTheme.typography.bodySmall,
+        )
+        if (!ignoring) {
+            Button(onClick = {
+                context.startActivity(
+                    Intent(
+                        Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                        Uri.parse("package:${context.packageName}"),
+                    ),
+                )
+                refresh++
+            }) { Text("Disable battery optimization") }
+        }
+        HorizontalDivider()
 
         TextButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Back") }
     }

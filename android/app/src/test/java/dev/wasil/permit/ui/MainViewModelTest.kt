@@ -10,6 +10,12 @@ import dev.wasil.permit.data.api.PermitApi
 import dev.wasil.permit.data.api.VrnEntry
 import dev.wasil.permit.data.store.FakeCredentialStore
 import dev.wasil.permit.data.store.PermitConfig
+import dev.wasil.permit.parking.ClaimPermit
+import dev.wasil.permit.parking.FakeParkStateStore
+import dev.wasil.permit.parking.FakeSharedStateStore
+import dev.wasil.permit.parking.GuardedClaim
+import dev.wasil.permit.parking.RecordingParkNotifier
+import dev.wasil.permit.parking.shared.PhoneState
 import java.io.IOException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -46,12 +52,24 @@ class MainViewModelTest {
     private val dispatcher = StandardTestDispatcher()
     private lateinit var api: ScriptedApi
     private val config = PermitConfig("u", "p", "RH950F", "XX123Y")
+    private val now = 1_000_000_000_000L
 
     @Before fun setUp() { Dispatchers.setMain(dispatcher); api = ScriptedApi() }
     @After fun tearDown() { Dispatchers.resetMain() }
 
-    private fun vm(store: FakeCredentialStore = FakeCredentialStore(config)) =
-        MainViewModel(PermitRepository(api), store)
+    private fun vm(
+        store: FakeCredentialStore = FakeCredentialStore(config),
+        parkState: FakeParkStateStore = FakeParkStateStore(),
+        shared: FakeSharedStateStore = FakeSharedStateStore(configured = false),
+    ): MainViewModel {
+        val repo = PermitRepository(api)
+        val guarded = GuardedClaim(
+            repo, store, parkState, shared,
+            ClaimPermit(repo, store, parkState, RecordingParkNotifier()),
+            nowMs = { now },
+        )
+        return MainViewModel(repo, store, parkState, { guarded }, { shared })
+    }
 
     @Test
     fun `unconfigured store shows setup screen`() = runTest(dispatcher) {
@@ -89,6 +107,30 @@ class MainViewModelTest {
         dispatcher.scheduler.advanceUntilIdle()
         assertTrue(vm.state.value.message != null)
     }
+
+    @Test
+    fun `switching while the brother is parked and holding raises the blocked dialog`() =
+        runTest(dispatcher) {
+            api.active = "XX123Y"   // permit on Walid's car
+            val shared = FakeSharedStateStore(
+                other = PhoneState(
+                    parkedOutside = true, parkedAtMs = now - 120_000, heartbeatAtMs = now - 60_000,
+                ),
+            )
+            val vm = vm(shared = shared)
+            dispatcher.scheduler.advanceUntilIdle()
+            vm.switchTo(PlateOption("Wasil", "RH950F"))
+            dispatcher.scheduler.advanceUntilIdle()
+
+            val blocked = vm.state.value.blocked
+            assertEquals("Walid", blocked?.otherLabel)
+            assertEquals("XX123Y", api.active)   // permit untouched
+
+            vm.confirmBlockedSwitch()            // "Claim anyway"
+            dispatcher.scheduler.advanceUntilIdle()
+            assertEquals("RH950F", api.active)
+            assertNull(vm.state.value.blocked)
+        }
 
     @Test
     fun `saveSetup normalizes plates and leaves setup mode`() = runTest(dispatcher) {

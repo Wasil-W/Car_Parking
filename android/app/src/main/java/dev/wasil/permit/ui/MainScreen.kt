@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -29,6 +30,9 @@ fun MainScreen(
     onRefresh: () -> Unit,
     onMessageShown: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenMap: () -> Unit,
+    onConfirmBlocked: () -> Unit,
+    onDismissBlocked: () -> Unit,
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(state.message) {
@@ -76,12 +80,42 @@ fun MainScreen(
                     )
                 }
             }
+            state.otherStatus?.let {
+                Text(it, style = MaterialTheme.typography.bodyMedium)
+            }
             TextButton(onClick = onRefresh, enabled = !state.loading && state.switching == null) {
                 Text("Refresh")
+            }
+            TextButton(onClick = onOpenMap) {
+                Text("Map")
             }
             TextButton(onClick = onOpenSettings) {
                 Text("Settings")
             }
+        }
+
+        state.blocked?.let { blocked ->
+            val time = { ms: Long ->
+                java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+                    .format(java.util.Date(ms))
+            }
+            AlertDialog(
+                onDismissRequest = onDismissBlocked,
+                title = { Text("${blocked.otherLabel}'s car is parked") },
+                text = {
+                    Text(
+                        "${blocked.otherLabel} parked at ${time(blocked.parkedAtMs)} " +
+                            "(last seen ${time(blocked.heartbeatAtMs)}) and the permit is on their car. " +
+                            "Claiming now would leave it unpermitted — that's a fine if it's still there.",
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = onConfirmBlocked) { Text("Claim anyway") }
+                },
+                dismissButton = {
+                    TextButton(onClick = onDismissBlocked) { Text("Cancel") }
+                },
+            )
         }
     }
 }

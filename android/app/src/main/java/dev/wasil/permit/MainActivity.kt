@@ -15,6 +15,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.wasil.permit.ui.MainScreen
 import dev.wasil.permit.ui.MainViewModel
+import dev.wasil.permit.ui.MapScreen
 import dev.wasil.permit.ui.SettingsScreen
 import dev.wasil.permit.ui.SetupScreen
 
@@ -25,7 +26,11 @@ class MainActivity : ComponentActivity() {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 val app = application as PermitApp
-                return MainViewModel(app.repository, app.credentialStore) as T
+                return MainViewModel(
+                    app.repository, app.credentialStore, app.parkStateStore,
+                    guardedClaim = { app.guardedClaim() },
+                    sharedStore = { app.sharedStateStore() },
+                ) as T
             }
         }
     }
@@ -37,6 +42,7 @@ class MainActivity : ComponentActivity() {
             MaterialTheme {
                 val state by viewModel.state.collectAsStateWithLifecycle()
                 var showSettings by remember { mutableStateOf(false) }
+                var showMap by remember { mutableStateOf(false) }
                 when {
                     state.needsSetup -> SetupScreen(onSave = viewModel::saveSetup)
                     showSettings -> {
@@ -44,7 +50,15 @@ class MainActivity : ComponentActivity() {
                         SettingsScreen(
                             stateStore = app.parkStateStore,
                             freeZoneStore = app.freeZoneStore,
+                            sharedStore = { app.sharedStateStore() },
                             onBack = { showSettings = false },
+                        )
+                    }
+                    showMap -> {
+                        BackHandler { showMap = false }
+                        MapScreen(
+                            stateStore = app.parkStateStore,
+                            onBack = { showMap = false },
                         )
                     }
                     else -> MainScreen(
@@ -53,6 +67,9 @@ class MainActivity : ComponentActivity() {
                         onRefresh = viewModel::refresh,
                         onMessageShown = viewModel::consumeMessage,
                         onOpenSettings = { showSettings = true },
+                        onOpenMap = { showMap = true },
+                        onConfirmBlocked = viewModel::confirmBlockedSwitch,
+                        onDismissBlocked = viewModel::dismissBlocked,
                     )
                 }
             }
