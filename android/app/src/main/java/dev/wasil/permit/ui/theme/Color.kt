@@ -30,14 +30,32 @@ val FineLight = Color(0xFF4C7645)
 val AlertDark = Color(0xFFB3503C)
 val AlertLight = Color(0xFF96412F)
 
+// Muted rust containers for the ColorScheme error family — same alert hue as
+// AlertDark/AlertLight, just desaturated toward a fill, mirroring how
+// Wasil/WalidContainer already relate to Wasil/WalidStrong.
+val AlertContainerDark = Color(0xFF2E1D18)
+val AlertOnContainerDark = Color(0xFFD9A08F)
+val AlertContainerLight = Color(0xFFF5E4DF)
+val AlertOnContainerLight = Color(0xFF6B2E1F)
+
 val SurfaceDark = Color(0xFF171715)
 val CardDark = Color(0xFF201F1C)
 val HairlineDark = Color(0xFF2E2D28)
 val TextPrimaryDark = Color(0xFFDEDCD4)
 val TextSecondaryDark = Color(0xFF918E85)
 
+// Extra neutral steps for the ColorScheme surface-container ramp. Same warm
+// dark/light neutral family as Surface/Card/Hairline above, just filling the
+// gaps at the darkest (dark mode) and mid-tone (light mode) ends so no
+// container slot has to fall back to Material 3's default purple.
+val SurfaceContainerLowestDark = Color(0xFF0F0F0E)
+val SurfaceContainerHighDark = Color(0xFF272622)
+
 val SurfaceLight = Color(0xFFFAF9F5)
 val CardLight = Color(0xFFFFFFFF)
 val HairlineLight = Color(0xFFE3E1D9)
 val TextPrimaryLight = Color(0xFF26241F)
 val TextSecondaryLight = Color(0xFF6B6862)
+
+val SurfaceContainerLight = Color(0xFFF2F0E9)
+val SurfaceContainerHighLight = Color(0xFFEAE8DE)
