@@ -56,10 +56,28 @@ notification that says retries stopped.
 
 ---
 
-## v0.4 — the map becomes the home for everything location-based
+## v0.4 — the functionality update
 
-Decided 2026-07-29. All location actions should happen where you can see them
-on a map, instead of being buried as buttons in Settings:
+Confirmed 2026-07-30: the next release is where code changes land. It carries
+the two bugs above, the notification work below, and the map rework.
+
+### Tappable notifications
+
+Every notification gets a content intent so tapping it opens a full-screen
+version of the same decision, rather than only offering cramped notification
+actions. Highest value on the blocked-claim notification: show the mark with the
+dot mid-travel, the facts (when the other car parked, when it was last seen, why
+claiming is risky), and the same three choices — claim anyway, mark this spot
+free, leave it. Needs a `PendingIntent`, a screen, and ViewModel state to carry
+the decision, which is why it was cut from the layout-only v0.3.1.
+
+Also here: notification small icons become state-aware, showing which arc is
+lit. v0.3.1 only swaps in a static mark icon.
+
+### The map becomes the home for everything location-based
+
+All location actions should happen where you can see them on a map, instead of
+being buried as buttons in Settings:
 
 - Show the home zone on the map as a circle, with its radius draggable, rather
   than the current blind "set home to current location" button.

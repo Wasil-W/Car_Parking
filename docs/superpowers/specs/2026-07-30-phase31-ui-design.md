@@ -159,20 +159,16 @@ Reorganised by how often each item changes:
   order, instead of a permanent wall of permission buttons. Battery
   optimisation keeps its current behaviour, which works well.
 
-### Decision screen
+### Notifications
 
-Every notification gets a content intent, so tapping it opens a full-screen
-version of the same decision instead of only offering cramped notification
-actions. The blocked-claim case matters most: the mark with the dot mid-travel,
-the facts (when the other car parked, when it was last seen, why claiming is
-risky), and three choices — claim anyway, mark this spot free, leave it.
+Notifications keep their current behaviour, wording, and actions. The only
+change is cosmetic: their small icons become the Handoff mark instead of the
+stock Android drawables (`ic_menu_mylocation`, `ic_dialog_alert`) they borrow
+today. A pure asset swap with no logic attached.
 
-This is the one item in the release that is not purely visual: it needs a
-`PendingIntent`, a screen, and ViewModel state to carry the decision. It is
-included because a decision screen nothing can open is worthless.
-
-Notification small icons reflect state — which arc is lit — since that costs
-only a drawable.
+Making notifications tappable — a content intent opening a full-screen decision
+view, and a state-aware small icon — is deferred to v0.4, because both need
+real plumbing rather than a drawable.
 
 ### Map and setup screen
 
@@ -188,8 +184,12 @@ and the tariff data all stay exactly as Phase 3 left them. The two known bugs
 are recorded in the backlog and fixed separately from this release, so a
 visual change never has to be bisected against a behavioural one.
 
-No home-screen widget, no map rework, no Bluetooth picker redesign beyond
-restyling, no notification changes beyond the content intent and state icon.
+Also out: the notification decision screen and content intents, a home-screen
+widget, the map rework, and any Bluetooth picker redesign beyond restyling. All
+are recorded in `docs/BACKLOG.md` against v0.4.
+
+The rule this release holds to: if a change needs a `PendingIntent`, a
+ViewModel field, or a new code path, it is not layout and does not belong here.
 
 ## Testing
 
@@ -207,9 +207,9 @@ New coverage is limited to what has real logic:
   "Fix" affordance shows.
 
 Manual checks: both light and dark mode on every screen; the icon on a light
-and a dark wallpaper; first-run flow start to finish on a clean install;
-tapping each notification type; and confirming the upgrade path leaves an
-existing install's configuration intact.
+and a dark wallpaper; first-run flow start to finish on a clean install; each
+notification type showing its new icon with unchanged text and actions; and
+confirming the upgrade path leaves an existing install's configuration intact.
 
 ## Version
 
