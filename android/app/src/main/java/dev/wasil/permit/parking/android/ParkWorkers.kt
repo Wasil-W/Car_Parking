@@ -55,7 +55,7 @@ object ParkWorkers {
 
 private fun foregroundInfo(context: Context): ForegroundInfo {
     val notification = NotificationCompat.Builder(context, ParkNotifications.CHANNEL_STATUS)
-        .setSmallIcon(android.R.drawable.ic_menu_mylocation)
+        .setSmallIcon(dev.wasil.permit.R.drawable.ic_notification)
         .setContentTitle("Checking whether you parked…")
         .build()
     return ForegroundInfo(ParkNotifications.STATUS_ID, notification)
