@@ -65,6 +65,7 @@ class MainActivity : ComponentActivity() {
                     }
                     else -> MainScreen(
                         state = state,
+                        myCar = app.parkStateStore.myCar,
                         onSwitch = viewModel::switchTo,
                         onRefresh = viewModel::refresh,
                         onMessageShown = viewModel::consumeMessage,
