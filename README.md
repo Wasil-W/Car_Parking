@@ -5,7 +5,7 @@ Walid's cars. See `PROJECT_BRIEF.md` for the full roadmap.
 
 - `permit.py` — Phase 0 Python CLI proof of the permit API (source of truth
   for request/response shapes).
-- `android/` — Phase 1 native Kotlin app (Compose, MVVM, Retrofit).
+- `android/` — the Handoff Android app (Compose, MVVM, Retrofit).
 
 ## Build
 
@@ -71,6 +71,30 @@ likely why detection worked once and then stopped).
 
 One-time setup: see `SETUP_FIREBASE.md` (free Firebase project, one URL pasted
 into Settings on both phones). On-device checks: `docs/phase3-manual-test-checklist.md`.
+
+## v0.3.1: Handoff — the visual layer
+
+The app is now called **Handoff**, after what it does: the permit is passed
+between two cars rather than owned by either. Its mark is two facing arcs with a
+dot between them — the arcs are the cars, the dot is the permit. The dot sits
+against whichever arc holds it and that arc lights up while the other dims, so
+who has the permit survives a glance at any size.
+
+Wasil is slate blue, Walid is terracotta, and those two colours mean *identity*
+and nothing else. Status uses a separate green and rust, and only ever on small
+icons — so a green tick never reads as "Wasil". There are full light and dark
+palettes, following the phone's setting.
+
+The main screen now answers one question at a glance and offers one action:
+because there are exactly two cars, the permit can only move to one place, so
+"Hand to Walid" replaces a pair of plate buttons. Settings is grouped by how
+often you touch each thing, with set-once questions moved into a first-run flow
+and system requirements collapsed into a health row that stays quiet when
+everything is fine.
+
+This release changed no behaviour: detection, claiming, shared state and the
+collision guard are exactly as Phase 3 left them, and all 96 Phase 3 tests pass
+unedited. Deferred work is tracked in `docs/BACKLOG.md`.
 
 ## Data attribution
 

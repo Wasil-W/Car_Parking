@@ -8,9 +8,49 @@ Convention from v0.3.1 onward: **visual and layout releases take a patch bump**
 
 ---
 
-## v0.3.1 — Handoff *(in progress)*
+## v0.3.1 — Handoff
 
-Entry written when the release is finished.
+This release changes how the app looks and reads, not what it does — every
+switch, claim, and collision check behaves exactly as it did in v0.3.
+
+**A name, and a mark to go with it.** The app is now called **Handoff**, after
+what it actually does: the permit is passed between two cars, not owned by
+either. Its mark is two facing arcs with a dot between them — the arcs are the
+cars, the dot is the permit. The dot sits against whichever arc holds it, and
+that arc lights up while the other dims, so who currently has the permit
+survives a glance at any size, on the main screen or in a notification.
+
+**Identity and state, kept apart.** Wasil is slate blue and Walid is
+terracotta, and those two colours mean *whose car* and nothing else. Whether
+something needs attention is a separate green-and-rust pair, used only on small
+icons and labels, never as a card fill. An earlier palette used a desaturated
+green and amber for identity, which meant a green card could be read as both
+"success" and "Wasil" at once — this release keeps the two systems apart by hue
+and by scale so that collision can't happen again.
+
+**Full light and dark palettes.** Both modes are first-class: every identity
+and state colour has its own value in light and in dark, with nothing shared
+between the two palettes, because a mid-tone that contrasts well on near-black
+reads as washed out on near-white. Material's default purple is gone from
+every slot it used to leak into.
+
+**A launcher icon that doesn't apologise.** The stock Android robot is
+replaced by an adaptive icon built from the same two-arc mark — a static
+launcher glyph with the dot centred between the arcs. (The icon itself doesn't
+show who's holding the permit; the dot only moves to reflect that inside the
+app.)
+
+**One button, because there are only two cars.** The main screen used to offer
+two plate buttons; now it offers one — "Hand to Walid" or "Hand to Wasil",
+whichever is the only place the permit can currently go. Settings is
+reorganised the same way: grouped by how often you actually touch each thing,
+with the set-once questions (whose phone this is, the sync URL) moved into a
+first-run flow that appears once, and permission and battery requirements
+collapsed into a single health row that stays quiet when everything is fine.
+
+No behaviour changed in this release: detection, claiming, shared state and the
+collision guard are exactly as v0.3 left them, and all 96 of its tests pass
+unedited alongside 13 new ones. 109 tests total, `versionCode` 4.
 
 ---
 

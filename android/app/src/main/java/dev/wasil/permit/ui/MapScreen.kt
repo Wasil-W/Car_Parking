@@ -5,9 +5,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -47,14 +48,15 @@ fun MapScreen(stateStore: ParkStateStore, onBack: () -> Unit) {
         ?.let { SimpleDateFormat("d MMM HH:mm", Locale.getDefault()).format(Date(it)) }
 
     Column(Modifier.fillMaxSize().padding(12.dp)) {
-        Text("Map", style = MaterialTheme.typography.headlineSmall)
+        Text("Map", style = MaterialTheme.typography.titleMedium)
         Text(
             when {
                 car == null -> "No parked location recorded yet."
                 parkedAt != null -> "Car parked $parkedAt."
                 else -> "Last known car position shown."
             },
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         AndroidView(
             modifier = Modifier.fillMaxWidth().weight(1f),
@@ -89,6 +91,10 @@ fun MapScreen(stateStore: ParkStateStore, onBack: () -> Unit) {
             },
         )
         Text("© OpenStreetMap contributors", style = MaterialTheme.typography.bodySmall)
-        TextButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Back") }
+        Button(
+            onClick = onBack,
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+        ) { Text("Back") }
     }
 }
