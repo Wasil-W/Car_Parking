@@ -49,13 +49,21 @@ green and amber. That collided with status colour: a green card meant both
 "success" and "Wasil", and a clay button meant both "Walid" and "risky action".
 Identity therefore moves to hues that carry no state meaning.
 
-| Role | Colour | Where it may appear |
-|---|---|---|
-| Wasil | slate blue `#5A7D9A` | Large fills only — hero card, lit arc, "whose car" labels |
-| Walid | terracotta `#B07B55` | Large fills only — same |
-| Inactive arc | `#3E3E39` | The dimmed half of the mark |
-| Fine | green `#5C8A54` | Small icons and labels only |
-| Needs attention | rust `#B3503C` | Small icons and labels only |
+Identity needs three roles, not one. The hero card is a **tint** with the strong
+colour as its border, not a slab of saturated colour — a full-strength card was
+what read as "bright and shiny" in review, and the tinted version as "sleek".
+
+| Role | Dark mode | Light mode | Where it may appear |
+|---|---|---|---|
+| Wasil strong | `#5A7D9A` | `#45657F` | Lit arc, hero card border, the primary button |
+| Wasil container | `#1E2A33` | `#E8EDF2` | Hero card background only |
+| Wasil on-container | `#A8C0D4` | `#2F4A5F` | Text and plate inside that card |
+| Walid strong | `#B07B55` | `#8A5C39` | Same three uses, mirrored |
+| Walid container | `#2C2118` | `#F3E9E0` | Hero card background only |
+| Walid on-container | `#D9B48F` | `#6B4529` | Text and plate inside that card |
+| Inactive arc | `#3E3E39` | `#C9C6BC` | The dimmed half of the mark |
+| Fine | `#5C8A54` | `#4C7645` | Small icons and labels only |
+| Needs attention | `#B3503C` | `#96412F` | Small icons and labels only |
 
 Identity is separated from state by **hue and by scale**: identity is only ever
 a large fill, state is only ever a small icon plus label. If two colours ever
@@ -71,11 +79,35 @@ Light neutrals: surface `#FAF9F5`, card `#FFFFFF`, hairline `#E3E1D9`, primary
 text `#26241F`, secondary text `#6B6862` — warm off-whites, matching the warm
 cast of the dark set rather than pure grey.
 
-Identity hues stay the same in both modes when used as a **fill**, so the hero
-card reads as the same blue or terracotta on either theme. When an identity
-colour is used as **text or a hairline** on a light surface it darkens one step
-— Wasil `#4A6B87`, Walid `#96653F` — to hold contrast against white. State
-colours do the same: green `#4C7645`, rust `#96412F` on light.
+### How the light palette was derived
+
+Light mode gets its **own** shades of the same two hues, not the dark values
+reused. Measured against their own backgrounds, the dark values were already
+contrast-matched — `#5A7D9A` is 4.13:1 on `#171715` and 4.12:1 on `#FAF9F5`,
+because a mid-tone sits near the perceptual middle and lands in the same place
+from either direction.
+
+The number hides the actual problem, which is the text sitting **on** the fill.
+Cream text on `#5A7D9A` is only 3.16:1 — past the 3:1 large-text minimum and
+nothing more. A mid-tone fill on a near-white page also simply reads as washed.
+So the light fills drop a step, which raises both the fill's contrast against
+the page and white text's contrast against the fill:
+
+| Pair | Contrast |
+|---|---|
+| Wasil `#45657F` on `#FAF9F5` | 5.8:1 |
+| Walid `#8A5C39` on `#FAF9F5` | 5.4:1 |
+| White text on either light fill | ~6:1 |
+| Fine `#4C7645` on `#FAF9F5` | 5.0:1 |
+| Alert `#96412F` on `#FAF9F5` | 6.4:1 |
+
+The two identity colours are also balanced against **each other**, not just the
+background: the first terracotta tried came out at 4.7:1 against the blue's
+5.8:1, which would have made Walid's card read as consistently weaker than
+Wasil's. `#8A5C39` closes that gap.
+
+Rule for implementers: every identity and state colour has a distinct value per
+mode. Nothing is shared between the two palettes.
 
 ## Theme
 
