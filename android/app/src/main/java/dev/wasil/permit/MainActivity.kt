@@ -17,7 +17,7 @@ import dev.wasil.permit.ui.MainScreen
 import dev.wasil.permit.ui.MainViewModel
 import dev.wasil.permit.ui.MapScreen
 import dev.wasil.permit.ui.SettingsScreen
-import dev.wasil.permit.ui.SetupScreen
+import dev.wasil.permit.ui.SetupFlow
 import dev.wasil.permit.ui.theme.HandoffTheme
 
 class MainActivity : ComponentActivity() {
@@ -46,7 +46,28 @@ class MainActivity : ComponentActivity() {
                 var showSettings by remember { mutableStateOf(false) }
                 var showMap by remember { mutableStateOf(false) }
                 when {
-                    state.needsSetup -> SetupScreen(onSave = viewModel::saveSetup)
+                    state.needsSetup || app.parkStateStore.myCar == null -> {
+                        var setupDone by remember { mutableStateOf(false) }
+                        if (setupDone) {
+                            MainScreen(
+                                state = state,
+                                myCar = app.parkStateStore.myCar,
+                                onSwitch = viewModel::switchTo,
+                                onRefresh = viewModel::refresh,
+                                onMessageShown = viewModel::consumeMessage,
+                                onOpenSettings = { showSettings = true },
+                                onOpenMap = { showMap = true },
+                                onConfirmBlocked = viewModel::confirmBlockedSwitch,
+                                onDismissBlocked = viewModel::dismissBlocked,
+                            )
+                        } else {
+                            SetupFlow(
+                                stateStore = app.parkStateStore,
+                                onSaveCredentials = viewModel::saveSetup,
+                                onDone = { setupDone = true },
+                            )
+                        }
+                    }
                     showSettings -> {
                         BackHandler { showSettings = false }
                         SettingsScreen(

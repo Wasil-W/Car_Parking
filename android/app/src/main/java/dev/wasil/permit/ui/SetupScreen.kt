@@ -29,8 +29,8 @@ fun SetupScreen(onSave: (String, String, String, String) -> Unit) {
         modifier = Modifier.fillMaxSize().padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("One-time setup", style = MaterialTheme.typography.headlineSmall)
-        Text("Stored encrypted on this phone only.")
+        Text("Your permit account", style = MaterialTheme.typography.headlineSmall)
+        Text("Stored encrypted on this phone. Asked once.")
         OutlinedTextField(username, { username = it }, label = { Text("Permit username") },
             singleLine = true, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(password, { password = it }, label = { Text("Permit password") },
@@ -45,6 +45,6 @@ fun SetupScreen(onSave: (String, String, String, String) -> Unit) {
             enabled = username.isNotBlank() && password.isNotBlank() &&
                 wasilPlate.isNotBlank() && walidPlate.isNotBlank(),
             modifier = Modifier.fillMaxWidth(),
-        ) { Text("Save") }
+        ) { Text("Continue") }
     }
 }
