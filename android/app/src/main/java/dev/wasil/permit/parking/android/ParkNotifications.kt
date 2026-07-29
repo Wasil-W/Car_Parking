@@ -52,23 +52,68 @@ class ParkNotifications(private val context: Context) : ParkNotifier {
         // screen surfaces that; never crash a background worker over it.
     }
 
-    override fun statusPermitOn(label: String, vrn: String) {
+    private fun time(ms: Long): String =
+        SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(ms))
+
+    override fun statusPermitOn(label: String, vrn: String, zoneText: String?) {
+        val text = buildString {
+            append("Claimed at ${now()}")
+            zoneText?.let { append(" · $it") }
+        }
         notify(STATUS_ID, NotificationCompat.Builder(context, CHANNEL_STATUS)
             .setSmallIcon(android.R.drawable.ic_menu_mylocation)
             .setContentTitle("Permit on $label's car ($vrn)")
-            .setContentText("Claimed at ${now()}")
+            .setContentText(text)
             .setOngoing(true)
             .setOnlyAlertOnce(true))
         dismissEvents(context)
     }
 
-    override fun statusFreeZone() {
+    override fun statusParkedNoClaim(reason: String) {
         notify(STATUS_ID, NotificationCompat.Builder(context, CHANNEL_STATUS)
             .setSmallIcon(android.R.drawable.ic_menu_mylocation)
-            .setContentTitle("Parked in a free zone")
-            .setContentText("Permit untouched (${now()})")
+            .setContentTitle("Parked — permit untouched")
+            .setContentText("$reason (${now()})")
             .setOngoing(true)
             .setOnlyAlertOnce(true))
+    }
+
+    override fun askGiveBack(otherLabel: String) {
+        notify(EVENT_ID, NotificationCompat.Builder(context, CHANNEL_EVENTS)
+            .setSmallIcon(android.R.drawable.ic_dialog_map)
+            .setContentTitle("Give the permit back to $otherLabel?")
+            .setContentText("You parked free; $otherLabel's car is parked outside and the permit is still on yours.")
+            .setAutoCancel(true)
+            .addAction(action(ParkActionReceiver.ACTION_GIVE_BACK, "Give back"))
+            .addAction(action(ParkActionReceiver.ACTION_IGNORE, "Keep it")))
+    }
+
+    override fun blockedByOther(otherLabel: String, parkedAtMs: Long, heartbeatAtMs: Long) {
+        notify(EVENT_ID, NotificationCompat.Builder(context, CHANNEL_EVENTS)
+            .setSmallIcon(android.R.drawable.stat_notify_error)
+            .setContentTitle("$otherLabel's car is parked — permit NOT claimed")
+            .setContentText("$otherLabel parked at ${time(parkedAtMs)} (last seen ${time(heartbeatAtMs)}). Claiming would leave their car unpermitted.")
+            .setAutoCancel(true)
+            .addAction(action(ParkActionReceiver.ACTION_CLAIM_FORCE, "Claim anyway"))
+            .addAction(action(ParkActionReceiver.ACTION_IGNORE, "Ignore")))
+    }
+
+    override fun takeover(byLabel: String) {
+        notify(EVENT_ID, NotificationCompat.Builder(context, CHANNEL_EVENTS)
+            .setSmallIcon(android.R.drawable.stat_notify_error)
+            .setContentTitle("$byLabel took the permit")
+            .setContentText("Your car is parked WITHOUT a permit. Move it or reclaim.")
+            .setAutoCancel(true)
+            .addAction(action(ParkActionReceiver.ACTION_CLAIM, "Reclaim"))
+            .addAction(action(ParkActionReceiver.ACTION_IGNORE, "OK")))
+    }
+
+    override fun eventNote(text: String) {
+        notify(EVENT_ID, NotificationCompat.Builder(context, CHANNEL_EVENTS)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentTitle("Permit Switcher")
+            .setContentText(text)
+            .setAutoCancel(true))
     }
 
     override fun askManualDecision() {

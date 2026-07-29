@@ -10,11 +10,17 @@ interface DetectionSignals {
 }
 
 interface ParkNotifier {
-    fun statusPermitOn(label: String, vrn: String)
-    fun statusFreeZone()
+    fun statusPermitOn(label: String, vrn: String, zoneText: String? = null)
+    /** Ongoing status when parked without claiming (home / free zone / free street). */
+    fun statusParkedNoClaim(reason: String)
     fun askManualDecision()
+    fun askGiveBack(otherLabel: String)
+    fun blockedByOther(otherLabel: String, parkedAtMs: Long, heartbeatAtMs: Long)
+    fun takeover(byLabel: String)
     fun switchFailed(reason: String?)
     fun mismatchWarning(serverVrn: String?)
+    /** One-off dismissible note on the events channel. */
+    fun eventNote(text: String)
 }
 
 sealed interface ParkOutcome {
@@ -70,7 +76,7 @@ class ParkDetectionUseCase(
                 val point = latestPoint
                 when {
                     point != null && isInFreeZone(point, freeZones.all()) -> {
-                        notifier.statusFreeZone()
+                        notifier.statusParkedNoClaim("in a free zone")
                         ParkOutcome.FreeZoneParked
                     }
                     !stateStore.autoClaim -> {

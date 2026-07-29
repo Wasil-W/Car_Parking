@@ -14,6 +14,8 @@ class ParkActionReceiver : BroadcastReceiver() {
 
     companion object {
         const val ACTION_CLAIM = "dev.wasil.permit.CLAIM"
+        const val ACTION_CLAIM_FORCE = "dev.wasil.permit.CLAIM_FORCE"
+        const val ACTION_GIVE_BACK = "dev.wasil.permit.GIVE_BACK"
         const val ACTION_IGNORE = "dev.wasil.permit.IGNORE"
         const val ACTION_FREE_HERE = "dev.wasil.permit.FREE_HERE"
     }

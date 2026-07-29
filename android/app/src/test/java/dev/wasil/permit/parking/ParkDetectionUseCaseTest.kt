@@ -38,27 +38,6 @@ private class ScriptedSignals(
         if (locations.size > 1) locations.removeAt(0) else locations.first()
 }
 
-private class RecordingNotifier : ParkNotifier {
-    val calls = mutableListOf<String>()
-    override fun statusPermitOn(label: String, vrn: String) { calls += "status:$label:$vrn" }
-    override fun statusFreeZone() { calls += "freezone" }
-    override fun askManualDecision() { calls += "manual" }
-    override fun switchFailed(reason: String?) { calls += "failed" }
-    override fun mismatchWarning(serverVrn: String?) { calls += "mismatch:$serverVrn" }
-}
-
-private class SwitchApi(var active: String? = "XX123Y", var fail: Boolean = false) : PermitApi {
-    override suspend fun login(body: LoginRequest) = LoginResponse("tok")
-    override suspend fun getClientProduct(productId: Long): ClientProductResponse =
-        ClientProductResponse(listOf(
-            VrnEntry("RH950F", active == "RH950F"), VrnEntry("XX123Y", active == "XX123Y")))
-    override suspend fun activate(body: ActivateRequest): ActivateResponse {
-        if (fail) throw IOException("offline")
-        active = body.vrn
-        return ActivateResponse(1)
-    }
-}
-
 class ParkDetectionUseCaseTest {
     private val config = PermitConfig("u", "p", "RH950F", "XX123Y")
     private val stillAt6s = ActivitySample(ActivityType.STILL, 85, 6_000)
@@ -69,7 +48,7 @@ class ParkDetectionUseCaseTest {
         state: FakeParkStateStore = FakeParkStateStore(),
         zones: FakeFreeZoneStore = FakeFreeZoneStore(),
         api: SwitchApi = SwitchApi(),
-        notifier: RecordingNotifier = RecordingNotifier(),
+        notifier: RecordingParkNotifier = RecordingParkNotifier(),
     ): ParkDetectionUseCase {
         val claim = ClaimPermit(PermitRepository(api), FakeCredentialStore(config), state, notifier)
         return ParkDetectionUseCase(signals, state, zones, claim, notifier)
@@ -79,7 +58,7 @@ class ParkDetectionUseCaseTest {
     fun `confirmed park auto-claims my plate and updates status`() = runTest {
         val signals = ScriptedSignals(script = mapOf(1 to stillAt6s))
         val state = FakeParkStateStore()
-        val notifier = RecordingNotifier()
+        val notifier = RecordingParkNotifier()
         val outcome = useCase(signals, state, notifier = notifier).run()
         assertEquals(ParkOutcome.Claimed("RH950F"), outcome)
         assertTrue(state.parked)
@@ -101,7 +80,7 @@ class ParkDetectionUseCaseTest {
     @Test
     fun `timeout with no evidence asks for a manual decision`() = runTest {
         val signals = ScriptedSignals()
-        val notifier = RecordingNotifier()
+        val notifier = RecordingParkNotifier()
         val api = SwitchApi()
         val outcome = useCase(signals, api = api, notifier = notifier).run()
         assertEquals(ParkOutcome.ManualNeeded, outcome)
@@ -120,6 +99,7 @@ class ParkDetectionUseCaseTest {
         assertEquals("XX123Y", api.active)
     }
 
+
     @Test
     fun `auto-claim off falls back to manual notification`() = runTest {
         val signals = ScriptedSignals(script = mapOf(1 to stillAt6s))
@@ -133,7 +113,7 @@ class ParkDetectionUseCaseTest {
     @Test
     fun `network failure during switch is loud and reported`() = runTest {
         val signals = ScriptedSignals(script = mapOf(1 to stillAt6s))
-        val notifier = RecordingNotifier()
+        val notifier = RecordingParkNotifier()
         val outcome = useCase(signals, api = SwitchApi(fail = true), notifier = notifier).run()
         assertEquals(ParkOutcome.SwitchFailed, outcome)
         assertTrue(notifier.calls.contains("failed"))
@@ -149,7 +129,7 @@ class ParkDetectionUseCaseTest {
             override suspend fun activate(body: ActivateRequest) = ActivateResponse(1)
         }
         val signals = ScriptedSignals(script = mapOf(1 to stillAt6s))
-        val notifier = RecordingNotifier()
+        val notifier = RecordingParkNotifier()
         val state = FakeParkStateStore()
         val claim = ClaimPermit(PermitRepository(api), FakeCredentialStore(config), state, notifier)
         val outcome = ParkDetectionUseCase(signals, state, FakeFreeZoneStore(), claim, notifier).run()
