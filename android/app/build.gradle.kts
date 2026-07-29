@@ -13,8 +13,8 @@ android {
         applicationId = "dev.wasil.permit"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1"
+        versionCode = 3
+        versionName = "0.3"
     }
 
     buildTypes {
@@ -50,6 +50,7 @@ dependencies {
     implementation(libs.security.crypto)
     implementation(libs.androidx.work.runtime)
     implementation(libs.play.services.location)
+    implementation(libs.osmdroid)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

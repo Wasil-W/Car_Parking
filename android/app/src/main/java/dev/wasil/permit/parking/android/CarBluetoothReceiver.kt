@@ -5,7 +5,6 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import androidx.core.content.IntentCompat
-import androidx.work.WorkManager
 import dev.wasil.permit.parking.PrefsParkStateStore
 
 class CarBluetoothReceiver : BroadcastReceiver() {
@@ -22,9 +21,12 @@ class CarBluetoothReceiver : BroadcastReceiver() {
         when (intent.action) {
             BluetoothDevice.ACTION_ACL_DISCONNECTED -> ParkWorkers.enqueueDetection(context)
             BluetoothDevice.ACTION_ACL_CONNECTED -> {
-                // Back in the car: driving again, everything resets.
-                WorkManager.getInstance(context).cancelUniqueWork(ParkWorkers.DETECTION_WORK)
+                // Back in the car: driving again, everything pending is stale.
+                SharedSync.cancelClaimChain(context)
                 store.parked = false
+                store.parkedOutside = false
+                store.lastZoneCode = null
+                SharedSync.requestSync(context)
                 ParkNotifications.dismissEvents(context)
             }
         }

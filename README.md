@@ -38,6 +38,49 @@ Smoke test: park and stay seated (expect a claim notification within ~20 s);
 park and walk away; drive somewhere with the permit website open and verify
 every switch; mark home with "Free here" and park there again (no switch).
 
+## Phase 3: shared state between the two phones
+
+The two phones now know about each other, so claiming the permit can no longer
+silently strand the other car. Each phone publishes "am I parked in a paid
+zone, where, since when" to a shared Firebase Realtime Database (plain HTTPS,
+no Firebase SDK). Before any switch — automatic, from a notification, or from
+the main screen — the app checks the other phone: if that car is parked in a
+paid zone, was seen within 6 hours, and the permit is currently on its plate,
+the switch is blocked with a "Claim anyway" override instead of going through.
+Taking it anyway alerts the other phone ("Walid took the permit").
+
+Other Phase 3 behaviour:
+
+- **Home zone** (Settings → set to current location, 30–200 m): parking there
+  never claims and never blocks the other phone.
+- **Real paid zones:** Amsterdam's official tariff areas are bundled, so
+  parking outside every paid polygon is recognised as free street parking and
+  claims nothing. Claim notifications show the hourly rate and zone code.
+- **Give-back:** park at home or in a free spot while the other car is parked
+  in a paid zone and still needs the permit, and it is handed back
+  automatically.
+- **Map** (personal, nothing shared): your car's last parked spot plus your
+  own current position.
+
+Fixes for the Phase 2 problems found in real use: claim retries now wait for
+connectivity instead of burning their backoff offline; a park with no GPS fix
+asks instead of claiming blind; "Free here" reads a fresh location at tap
+time; pending claims are cancelled when you get back in the car; and Settings
+has a button to disable battery optimization (Samsung app-sleep was very
+likely why detection worked once and then stopped).
+
+One-time setup: see `SETUP_FIREBASE.md` (free Firebase project, one URL pasted
+into Settings on both phones). On-device checks: `docs/phase3-manual-test-checklist.md`.
+
+## Data attribution
+
+- Parking tariff areas: © Gemeente Amsterdam, parkeertarieven dataset
+  (maps.amsterdam.nl), CC-BY 4.0. Snapshot downloaded 2026-07-29 from
+  `https://amsterdam-maps.bma-collective.com/embed/parkeren/deploy_data/tarieven.json`
+  and bundled as `android/app/src/main/assets/amsterdam_tarieven.json`
+  (29 tariff areas, WGS84 polygons).
+- Map tiles: © OpenStreetMap contributors.
+
 ## Security notes
 
 - No credentials or plates live in this repo. Everything is entered on the

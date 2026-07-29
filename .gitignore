@@ -1,2 +1,4 @@
 *Zone.Identifier
 __pycache__/
+.idea/
+.mailmap

@@ -2,6 +2,8 @@ package dev.wasil.permit.parking
 
 import android.content.Context
 import android.content.SharedPreferences
+import dev.wasil.permit.data.api.PermitJson
+import kotlinx.serialization.encodeToString
 
 class PrefsParkStateStore(private val prefs: SharedPreferences) : ParkStateStore {
 
@@ -43,4 +45,32 @@ class PrefsParkStateStore(private val prefs: SharedPreferences) : ParkStateStore
                 .putFloat("last_acc", value?.accuracyM ?: 0f)
                 .apply()
         }
+
+    override var parkedOutside: Boolean
+        get() = prefs.getBoolean("parked_outside", false)
+        set(value) { prefs.edit().putBoolean("parked_outside", value).apply() }
+
+    override var parkedAtMs: Long
+        get() = prefs.getLong("parked_at_ms", 0L)
+        set(value) { prefs.edit().putLong("parked_at_ms", value).apply() }
+
+    override var lastZoneCode: String?
+        get() = prefs.getString("last_zone_code", null)
+        set(value) { prefs.edit().putString("last_zone_code", value).apply() }
+
+    override var homeZone: FreeZone?
+        get() = prefs.getString("home_zone", null)?.let {
+            runCatching { PermitJson.decodeFromString<FreeZone>(it) }.getOrNull()
+        }
+        set(value) {
+            prefs.edit().putString("home_zone", value?.let { PermitJson.encodeToString(it) }).apply()
+        }
+
+    override var syncUrl: String?
+        get() = prefs.getString("sync_url", null)
+        set(value) { prefs.edit().putString("sync_url", value).apply() }
+
+    override var lastAlertedClaimMs: Long
+        get() = prefs.getLong("last_alerted_claim_ms", 0L)
+        set(value) { prefs.edit().putLong("last_alerted_claim_ms", value).apply() }
 }

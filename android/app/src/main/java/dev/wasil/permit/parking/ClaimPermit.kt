@@ -10,17 +10,17 @@ class ClaimPermit(
     private val stateStore: ParkStateStore,
     private val notifier: ParkNotifier,
 ) {
-    suspend fun claim(): ParkOutcome {
+    suspend fun claim(target: MyCar? = null, zoneText: String? = null): ParkOutcome {
         val config = credentialStore.load() ?: return ParkOutcome.NotConfigured
-        val mine = stateStore.myCar ?: return ParkOutcome.NotConfigured
-        val (label, plate) = when (mine) {
+        val car = target ?: stateStore.myCar ?: return ParkOutcome.NotConfigured
+        val (label, plate) = when (car) {
             MyCar.WASIL -> "Wasil" to config.wasilPlate
             MyCar.WALID -> "Walid" to config.walidPlate
         }
         return try {
             when (val result = repository.switchTo(plate)) {
                 is PermitRepository.SwitchResult.Confirmed -> {
-                    notifier.statusPermitOn(label, result.activeVrn)
+                    notifier.statusPermitOn(label, result.activeVrn, zoneText)
                     ParkOutcome.Claimed(result.activeVrn)
                 }
                 is PermitRepository.SwitchResult.Mismatch -> {
