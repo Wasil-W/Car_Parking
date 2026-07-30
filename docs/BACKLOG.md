@@ -235,9 +235,19 @@ still there at that moment. That needs the tariff time windows parsed (currently
 display-only text), a scheduled wake-up, and a "still parked?" test — which makes
 it a behaviour release of its own, not a small addition to another one.
 
-This also partly answers `IDEAS.md`'s open question about an hour budget: the
-budget question changes *how much* this matters, but deferring is the correct
-design either way.
+**Answered 2026-07-30: there is no hour budget.** The permit is valid year-round
+with no capped pool of hours, so a claim costs nothing. That settles it in
+favour of today's behaviour: claiming on arrival regardless of the clock wastes
+nothing, and the existing "time windows are display-only" decision stands
+unchanged. It also removes hour-tracking from the ideas list entirely — there is
+nothing to track.
+
+What remains is only the tidiness argument for not claiming when parking is
+already free, which Wasil wants but explicitly does not want over-engineered
+yet ("I have an idea but for now I don't want to overcomplicate it"). Parked
+here until that idea arrives. Whatever form it takes, the deferral requirement
+above still applies — a car that stays overnight needs the permit when charging
+resumes.
 
 ---
 
