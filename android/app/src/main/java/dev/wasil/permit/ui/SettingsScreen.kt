@@ -15,9 +15,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -86,8 +89,36 @@ fun SettingsScreen(
     var syncStatus by remember { mutableStateOf<String?>(null) }
     var editing by remember { mutableStateOf(false) }
 
+    // Reading `refresh` here makes permission/battery grants recompose this.
+    // Computed up front (not just inside the System section further down) so
+    // the Setup summary card above it can derive a real "is everything done"
+    // tick from the same facts, instead of a hard-coded "Setup complete".
+    val revision = refresh
+    val needed = buildList {
+        if (Build.VERSION.SDK_INT >= 33) add(Manifest.permission.POST_NOTIFICATIONS)
+        add(Manifest.permission.BLUETOOTH_CONNECT)
+        if (Build.VERSION.SDK_INT >= 29) add(Manifest.permission.ACTIVITY_RECOGNITION)
+        add(Manifest.permission.ACCESS_FINE_LOCATION)
+    }
+    val missingPermissions = remember(revision) { needed.count { !granted(context, it) } }
+    val powerManager = context.getSystemService(PowerManager::class.java)
+    val ignoringBatteryOpt = remember(revision) {
+        powerManager?.isIgnoringBatteryOptimizations(context.packageName) == true
+    }
+    val rows = healthRows(
+        missingPermissions = missingPermissions,
+        batteryOptimised = !ignoringBatteryOpt,
+        carPaired = carMac != null,
+        syncConfigured = syncUrl.isNotBlank(),
+        homeZoneSet = homeZone != null,
+    )
+    val setupOk = rows.all { it.ok }
+
     Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp).verticalScroll(rememberScrollState()),
+        modifier = Modifier.fillMaxSize()
+            .windowInsetsPadding(WindowInsets.safeDrawing)
+            .padding(24.dp)
+            .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text("Settings", style = MaterialTheme.typography.headlineSmall)
@@ -105,8 +136,15 @@ fun SettingsScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Icon(Icons.Filled.Check, contentDescription = null, tint = colors.fine)
-                    Text("Setup complete", style = MaterialTheme.typography.titleMedium)
+                    Icon(
+                        if (setupOk) Icons.Filled.Check else Icons.Filled.Warning,
+                        contentDescription = null,
+                        tint = if (setupOk) colors.fine else colors.alert,
+                    )
+                    Text(
+                        if (setupOk) "Setup complete" else "Setup incomplete",
+                        style = MaterialTheme.typography.titleMedium,
+                    )
                 }
                 Text(
                     "${myCar?.name?.lowercase()?.replaceFirstChar { it.uppercase() }}'s phone",
@@ -276,23 +314,10 @@ fun SettingsScreen(
         }
         HorizontalDivider()
 
-        // --- System: permission grants, battery optimisation — quiet when fine. ---
+        // --- System: permission grants, battery optimisation, and what first-run
+        // could skip — quiet when fine. `rows` is computed above, alongside the
+        // Setup summary card, so both read the same facts. ---
         Text("System", style = MaterialTheme.typography.labelSmall)
-
-        // Reading `refresh` here makes permission/battery grants recompose this section.
-        val revision = refresh
-        val needed = buildList {
-            if (Build.VERSION.SDK_INT >= 33) add(Manifest.permission.POST_NOTIFICATIONS)
-            add(Manifest.permission.BLUETOOTH_CONNECT)
-            if (Build.VERSION.SDK_INT >= 29) add(Manifest.permission.ACTIVITY_RECOGNITION)
-            add(Manifest.permission.ACCESS_FINE_LOCATION)
-        }
-        val missingPermissions = remember(revision) { needed.count { !granted(context, it) } }
-        val powerManager = context.getSystemService(PowerManager::class.java)
-        val ignoringBatteryOpt = remember(revision) {
-            powerManager?.isIgnoringBatteryOptimizations(context.packageName) == true
-        }
-        val rows = healthRows(missingPermissions = missingPermissions, batteryOptimised = !ignoringBatteryOpt)
 
         rows.forEach { row ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {

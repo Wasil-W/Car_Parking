@@ -2,9 +2,12 @@ package dev.wasil.permit.ui
 
 import android.annotation.SuppressLint
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
@@ -47,7 +50,11 @@ fun MapScreen(stateStore: ParkStateStore, onBack: () -> Unit) {
     val parkedAt = stateStore.parkedAtMs.takeIf { it > 0 && stateStore.parked }
         ?.let { SimpleDateFormat("d MMM HH:mm", Locale.getDefault()).format(Date(it)) }
 
-    Column(Modifier.fillMaxSize().padding(12.dp)) {
+    Column(
+        Modifier.fillMaxSize()
+            .windowInsetsPadding(WindowInsets.safeDrawing)
+            .padding(12.dp),
+    ) {
         Text("Map", style = MaterialTheme.typography.titleMedium)
         Text(
             when {

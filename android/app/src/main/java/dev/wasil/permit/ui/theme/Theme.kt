@@ -27,6 +27,11 @@ data class HandoffColors(
     val fine: Color,
     val alert: Color,
     val dot: Color,
+    // Content colour for text/icons drawn on an identity `*Strong` fill (the
+    // hand-over button). Computed per mode — see Color.kt — because neither
+    // white nor the existing cream/charcoal text tokens clear 4.5:1 against
+    // every strong fill in every mode.
+    val onStrong: Color,
 ) {
     fun strongFor(car: MyCar) = if (car == MyCar.WASIL) wasilStrong else walidStrong
     fun containerFor(car: MyCar) = if (car == MyCar.WASIL) wasilContainer else walidContainer
@@ -46,6 +51,7 @@ private val DarkColors = HandoffColors(
     walidOnContainer = WalidOnContainerDark,
     arcInactive = ArcInactiveDark, fine = FineDark, alert = AlertDark,
     dot = TextPrimaryDark,
+    onStrong = OnIdentityStrongDark,
 )
 
 private val LightColors = HandoffColors(
@@ -59,17 +65,23 @@ private val LightColors = HandoffColors(
     // The dot must contrast with the hero card, which is a pale tint in light
     // mode — a white dot would vanish on it.
     dot = TextPrimaryLight,
+    onStrong = OnIdentityStrongLight,
 )
 
 // Every slot below is set explicitly so nothing falls back to Material 3's
-// stock baseline purple. Secondary and tertiary resolve to neutrals (never a
-// new hue, never Walid's terracotta in a generic slot); primaryContainer is
-// the one generic slot that legitimately carries Wasil's blue, because
-// primary already does. See docs/superpowers/specs for the full rationale.
+// stock baseline purple — and every slot is neutral. Identity colour (Wasil's
+// blue, Walid's terracotta) never appears in a generic ColorScheme slot,
+// because every Button, Switch, Slider, RadioButton, focus ring and progress
+// indicator reads `primary`/`primaryContainer` — if either carried Wasil's
+// blue, it would render that way on Walid's phone too, and "blue" would mean
+// "interactive" instead of "Wasil". Identity appears only where code asks for
+// it explicitly, via HandoffColors.strongFor/containerFor/onContainerFor (see
+// the hand-over button in MainScreen). See docs/superpowers/specs for the
+// full rationale.
 private val DarkScheme = darkColorScheme(
-    primary = WasilStrongDark, onPrimary = TextPrimaryDark,
-    primaryContainer = WasilContainerDark, onPrimaryContainer = WasilOnContainerDark,
-    inversePrimary = WasilStrongLight,
+    primary = TextPrimaryDark, onPrimary = SurfaceDark,
+    primaryContainer = SurfaceContainerHighDark, onPrimaryContainer = TextPrimaryDark,
+    inversePrimary = TextPrimaryLight,
     secondary = TextSecondaryDark, onSecondary = SurfaceDark,
     secondaryContainer = CardDark, onSecondaryContainer = TextPrimaryDark,
     tertiary = ArcInactiveDark, onTertiary = TextPrimaryDark,
@@ -77,7 +89,7 @@ private val DarkScheme = darkColorScheme(
     background = SurfaceDark, onBackground = TextPrimaryDark,
     surface = SurfaceDark, onSurface = TextPrimaryDark,
     surfaceVariant = CardDark, onSurfaceVariant = TextSecondaryDark,
-    surfaceTint = WasilStrongDark,
+    surfaceTint = TextPrimaryDark,
     inverseSurface = SurfaceLight, inverseOnSurface = TextPrimaryLight,
     error = AlertDark, onError = TextPrimaryDark,
     errorContainer = AlertContainerDark, onErrorContainer = AlertOnContainerDark,
@@ -92,9 +104,9 @@ private val DarkScheme = darkColorScheme(
 )
 
 private val LightScheme = lightColorScheme(
-    primary = WasilStrongLight, onPrimary = CardLight,
-    primaryContainer = WasilContainerLight, onPrimaryContainer = WasilOnContainerLight,
-    inversePrimary = WasilStrongDark,
+    primary = TextPrimaryLight, onPrimary = CardLight,
+    primaryContainer = SurfaceContainerLight, onPrimaryContainer = TextPrimaryLight,
+    inversePrimary = TextPrimaryDark,
     secondary = TextSecondaryLight, onSecondary = CardLight,
     secondaryContainer = HairlineLight, onSecondaryContainer = TextPrimaryLight,
     tertiary = ArcInactiveLight, onTertiary = TextPrimaryLight,
@@ -102,7 +114,7 @@ private val LightScheme = lightColorScheme(
     background = SurfaceLight, onBackground = TextPrimaryLight,
     surface = SurfaceLight, onSurface = TextPrimaryLight,
     surfaceVariant = CardLight, onSurfaceVariant = TextSecondaryLight,
-    surfaceTint = WasilStrongLight,
+    surfaceTint = TextPrimaryLight,
     inverseSurface = SurfaceDark, inverseOnSurface = TextPrimaryDark,
     error = AlertLight, onError = CardLight,
     errorContainer = AlertContainerLight, onErrorContainer = AlertOnContainerLight,
