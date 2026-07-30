@@ -50,7 +50,9 @@ collapsed into a single health row that stays quiet when everything is fine.
 
 No behaviour changed in this release: detection, claiming, shared state and the
 collision guard are exactly as v0.3 left them, and all 96 of its tests pass
-unedited alongside 13 new ones. 109 tests total, `versionCode` 4.
+unedited alongside 18 new ones. That the old tests needed no edits is the
+evidence, not just a statistic — a layout change that quietly altered behaviour
+would have broken one. 114 tests total, `versionCode` 4.
 
 ---
 
