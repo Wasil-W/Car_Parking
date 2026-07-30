@@ -93,8 +93,10 @@ and system requirements collapsed into a health row that stays quiet when
 everything is fine.
 
 This release changed no behaviour: detection, claiming, shared state and the
-collision guard are exactly as Phase 3 left them, and all 96 Phase 3 tests pass
-unedited. Deferred work is tracked in `docs/BACKLOG.md`.
+collision guard are exactly as Phase 3 left them, and all 96 of Phase 3's tests
+pass unedited alongside 18 new ones — 114 in total. That the old tests needed no
+edits is the evidence that nothing behavioural moved. Deferred work is tracked in
+`docs/BACKLOG.md`.
 
 ## Data attribution
 
