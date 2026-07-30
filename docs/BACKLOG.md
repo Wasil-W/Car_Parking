@@ -84,7 +84,26 @@ Fix: make `switchTo` idempotent — read `activePlate()` first and return
 activate. Add a test for "target already active → Confirmed, activate never
 called".
 
-### 2. No cap on claim retries — MEDIUM
+### 2. The car's location sometimes gets left behind — MEDIUM, needs diagnosis
+
+Reported 2026-07-30: the map's car position is sometimes stale, showing a
+previous parking spot rather than the current one. Not yet root-caused.
+
+Candidates, in order of suspicion:
+
+- `lastParkLocation` is only written on a *confirmed* park. The `Unclear`
+  timeout path and the no-GPS-fix path both leave the previous value in place,
+  so a park that ends in a manual-decision notification keeps yesterday's pin.
+- The park may be confirmed before the GPS fix settles, storing a coarse or
+  stale fix from early in the detection window rather than the final one.
+- Nothing clears the pin when the car is driven away — Bluetooth reconnect
+  clears `parked` but not `lastParkLocation`, so the pin outlives its truth.
+
+Worth fixing before walking-directions-back-to-the-car is built on top of it: a
+feature that navigates you confidently to the wrong street is worse than no
+feature. Reproduce first, then fix — do not guess between those three.
+
+### 3. No cap on claim retries — MEDIUM
 
 `ClaimPermitWorker` returns `Result.retry()` for any `SwitchFailed` with no
 attempt limit. Any persistent failure (bad credentials, API change) loops
@@ -145,6 +164,80 @@ shared state, where home-zone editing lives).
 - Firebase Auth: current rules leave a room readable to anyone who knows the
   database URL and the room hash. Acceptable for two brothers; revisit if the
   app ever leaves the family.
+
+---
+
+## Decisions on the ideas backlog — 2026-07-30
+
+Wasil's answers to `docs/IDEAS.md`, recorded so the menu doesn't get re-served.
+
+**Wanted:**
+
+- **Tell the other person automatically when you take the permit.** A takeover
+  alert already exists, but it rides the 15-minute heartbeat, so it can arrive
+  long after the fact. Wanted: promptly. Worth checking whether the existing
+  alert is simply too slow rather than building a second mechanism.
+- **QR code** for the database URL — the worst setup step, and the natural
+  onboarding path for any third car later.
+- **Home-screen widget** — confirmed as the right surface for glanceable state.
+- **Walking directions back to the car.**
+- **Dot animation** on a switch, **haptic tick** on a confirmed claim, and
+  **dark map tiles** matching the theme.
+- **Time-window awareness** — see the warning below, this one is not simple.
+
+**Not wanted:**
+
+- Silent-phone alert. Both phones charge in the car, so a dead phone isn't the
+  failure mode it looked like from outside.
+- Permit expiry reminder. Renewal keeps the same login, so a lapse is an
+  inconvenience rather than a trap.
+- Fairness ledger, parking duration on the hero card, per-brother notification
+  sounds, chat between phones.
+- Automatic tariff-data updates — confirmed as unnecessary.
+
+**Deferred:**
+
+- Switch history: keep it out of the main UI. The permit website already holds
+  this, so pull from there if it's ever needed rather than storing a second copy.
+- Zone statistics: only interesting later, and only the "what you would have
+  paid" part. Not the map-of-where-you-park part.
+- Wear OS: later, not never.
+- Machine-learned prediction: amusing, not planned.
+
+**Strategic, recorded because it changes what this app is for:**
+
+- **In-app parking payment is the intended direction** for a future public
+  version. The reasoning is that almost nobody has a visitor permit, but
+  everybody pays for parking — so the automation is worth more to strangers than
+  the permit-switching is. `IDEAS.md` rates this "probably don't" on scope and
+  regulatory grounds, which stands for *this* app; it does not stand as an
+  argument against a separate product.
+- **Multiple cars** belongs to that same public version: let a user register N
+  cars and map a Bluetooth device to each. Explicitly not wanted here, where the
+  two-car assumption earns the one-button design.
+- **NFC tag in the car** is a customer-facing idea rather than one for this
+  household — but a good one, and the clean answer for cars without Bluetooth.
+
+### ⚠ Time-window awareness — do not implement the obvious version
+
+Agreed: don't claim the permit when parking is already free, e.g. arriving at
+20:00 in a zone that charges 09:00–19:00.
+
+**The naive version causes fines.** If you park at 20:00 and are still there at
+09:00 the next morning, the car needs the permit from 09:00 — and nothing would
+claim it, because the decision was made the previous evening and never revisited.
+Today's "claim on arrival regardless" behaviour is crude but safe for exactly
+this reason.
+
+Any implementation must therefore **defer** rather than skip: don't claim now,
+schedule a claim for when paid hours resume, and re-check whether the car is
+still there at that moment. That needs the tariff time windows parsed (currently
+display-only text), a scheduled wake-up, and a "still parked?" test — which makes
+it a behaviour release of its own, not a small addition to another one.
+
+This also partly answers `IDEAS.md`'s open question about an hour budget: the
+budget question changes *how much* this matters, but deferring is the correct
+design either way.
 
 ---
 
