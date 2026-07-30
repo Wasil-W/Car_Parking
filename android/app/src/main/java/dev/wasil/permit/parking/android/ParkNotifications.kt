@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import dev.wasil.permit.R
 import dev.wasil.permit.parking.ParkNotifier
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -61,7 +62,7 @@ class ParkNotifications(private val context: Context) : ParkNotifier {
             zoneText?.let { append(" · $it") }
         }
         notify(STATUS_ID, NotificationCompat.Builder(context, CHANNEL_STATUS)
-            .setSmallIcon(android.R.drawable.ic_menu_mylocation)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("Permit on $label's car ($vrn)")
             .setContentText(text)
             .setOngoing(true)
@@ -71,7 +72,7 @@ class ParkNotifications(private val context: Context) : ParkNotifier {
 
     override fun statusParkedNoClaim(reason: String) {
         notify(STATUS_ID, NotificationCompat.Builder(context, CHANNEL_STATUS)
-            .setSmallIcon(android.R.drawable.ic_menu_mylocation)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("Parked — permit untouched")
             .setContentText("$reason (${now()})")
             .setOngoing(true)
@@ -80,7 +81,7 @@ class ParkNotifications(private val context: Context) : ParkNotifier {
 
     override fun askGiveBack(otherLabel: String) {
         notify(EVENT_ID, NotificationCompat.Builder(context, CHANNEL_EVENTS)
-            .setSmallIcon(android.R.drawable.ic_dialog_map)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("Give the permit back to $otherLabel?")
             .setContentText("You parked free; $otherLabel's car is parked outside and the permit is still on yours.")
             .setAutoCancel(true)
@@ -90,7 +91,7 @@ class ParkNotifications(private val context: Context) : ParkNotifier {
 
     override fun blockedByOther(otherLabel: String, parkedAtMs: Long, heartbeatAtMs: Long) {
         notify(EVENT_ID, NotificationCompat.Builder(context, CHANNEL_EVENTS)
-            .setSmallIcon(android.R.drawable.stat_notify_error)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("$otherLabel's car is parked — permit NOT claimed")
             .setContentText("$otherLabel parked at ${time(parkedAtMs)} (last seen ${time(heartbeatAtMs)}). Claiming would leave their car unpermitted.")
             .setAutoCancel(true)
@@ -100,7 +101,7 @@ class ParkNotifications(private val context: Context) : ParkNotifier {
 
     override fun takeover(byLabel: String) {
         notify(EVENT_ID, NotificationCompat.Builder(context, CHANNEL_EVENTS)
-            .setSmallIcon(android.R.drawable.stat_notify_error)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("$byLabel took the permit")
             .setContentText("Your car is parked WITHOUT a permit. Move it or reclaim.")
             .setAutoCancel(true)
@@ -110,15 +111,15 @@ class ParkNotifications(private val context: Context) : ParkNotifier {
 
     override fun eventNote(text: String) {
         notify(EVENT_ID, NotificationCompat.Builder(context, CHANNEL_EVENTS)
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle("Permit Switcher")
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle("Handoff")
             .setContentText(text)
             .setAutoCancel(true))
     }
 
     override fun askManualDecision() {
         notify(EVENT_ID, NotificationCompat.Builder(context, CHANNEL_EVENTS)
-            .setSmallIcon(android.R.drawable.ic_dialog_map)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("Parked? Decide about the permit")
             .setContentText("Detected a possible park at ${now()}")
             .setAutoCancel(true)
@@ -129,7 +130,7 @@ class ParkNotifications(private val context: Context) : ParkNotifier {
 
     override fun switchFailed(reason: String?) {
         notify(EVENT_ID, NotificationCompat.Builder(context, CHANNEL_EVENTS)
-            .setSmallIcon(android.R.drawable.stat_notify_error)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("Permit switch FAILED")
             .setContentText(reason ?: "Network error - will retry automatically")
             .setAutoCancel(true)
@@ -139,7 +140,7 @@ class ParkNotifications(private val context: Context) : ParkNotifier {
 
     override fun mismatchWarning(serverVrn: String?) {
         notify(EVENT_ID, NotificationCompat.Builder(context, CHANNEL_EVENTS)
-            .setSmallIcon(android.R.drawable.stat_notify_error)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("WARNING: permit switch not confirmed")
             .setContentText("Server reports ${serverVrn ?: "no plate"} active - check the website!")
             .setAutoCancel(true)

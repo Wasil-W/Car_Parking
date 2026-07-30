@@ -4,8 +4,8 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -17,7 +17,8 @@ import dev.wasil.permit.ui.MainScreen
 import dev.wasil.permit.ui.MainViewModel
 import dev.wasil.permit.ui.MapScreen
 import dev.wasil.permit.ui.SettingsScreen
-import dev.wasil.permit.ui.SetupScreen
+import dev.wasil.permit.ui.SetupFlow
+import dev.wasil.permit.ui.theme.HandoffTheme
 
 class MainActivity : ComponentActivity() {
 
@@ -38,13 +39,35 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val app = application as PermitApp
+        enableEdgeToEdge()
         setContent {
-            MaterialTheme {
+            HandoffTheme {
                 val state by viewModel.state.collectAsStateWithLifecycle()
                 var showSettings by remember { mutableStateOf(false) }
                 var showMap by remember { mutableStateOf(false) }
                 when {
-                    state.needsSetup -> SetupScreen(onSave = viewModel::saveSetup)
+                    state.needsSetup || app.parkStateStore.myCar == null -> {
+                        var setupDone by remember { mutableStateOf(false) }
+                        if (setupDone) {
+                            MainScreen(
+                                state = state,
+                                myCar = app.parkStateStore.myCar,
+                                onSwitch = viewModel::switchTo,
+                                onRefresh = viewModel::refresh,
+                                onMessageShown = viewModel::consumeMessage,
+                                onOpenSettings = { showSettings = true },
+                                onOpenMap = { showMap = true },
+                                onConfirmBlocked = viewModel::confirmBlockedSwitch,
+                                onDismissBlocked = viewModel::dismissBlocked,
+                            )
+                        } else {
+                            SetupFlow(
+                                stateStore = app.parkStateStore,
+                                onSaveCredentials = viewModel::saveSetup,
+                                onDone = { setupDone = true },
+                            )
+                        }
+                    }
                     showSettings -> {
                         BackHandler { showSettings = false }
                         SettingsScreen(
@@ -63,6 +86,7 @@ class MainActivity : ComponentActivity() {
                     }
                     else -> MainScreen(
                         state = state,
+                        myCar = app.parkStateStore.myCar,
                         onSwitch = viewModel::switchTo,
                         onRefresh = viewModel::refresh,
                         onMessageShown = viewModel::consumeMessage,

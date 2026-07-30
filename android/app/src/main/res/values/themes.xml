@@ -1,3 +1,7 @@
 <resources>
-    <style name="Theme.PermitSwitcher" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.Handoff" parent="android:Theme.DeviceDefault.DayNight">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowActionBar">false</item>
+    </style>
 </resources>
