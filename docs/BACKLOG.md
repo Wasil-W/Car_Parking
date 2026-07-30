@@ -9,25 +9,62 @@ patch bump (`0.3.1`), releases that change behaviour get a minor bump (`0.4`).
 
 ---
 
-## v0.3.1 — layout and branding only (in progress)
+## v0.3.1 — layout and branding, shipped
 
-No functional changes. Scope:
+Shipped the identity and layout described in
+`docs/superpowers/specs/2026-07-30-phase31-ui-design.md`. No functional
+changes: detection, claiming, shared state and the collision guard are
+exactly as Phase 3 left them.
 
 - Brand identity: name **Handoff**, the two-arc mark with a travelling dot,
-  muted sage-teal (Wasil) and clay-ochre (Walid) palette, charcoal icon field.
+  flat charcoal icon field.
+- **Identity colour is slate blue for Wasil and terracotta for Walid** — not
+  the sage-teal/clay-ochre pairing an earlier draft of this file described
+  (see "Locked decisions" below for why that was rejected). Identity has
+  three roles, each with its own value per light and dark mode — nothing is
+  shared between the two palettes:
+
+  | Role | Dark | Light | Where |
+  |---|---|---|---|
+  | Wasil strong | `#5A7D9A` | `#45657F` | Lit arc, hero card border, hand-over button |
+  | Wasil container | `#1E2A33` | `#E8EDF2` | Hero card background only |
+  | Wasil on-container | `#A8C0D4` | `#2F4A5F` | Text/plate inside that card |
+  | Walid strong | `#B07B55` | `#8A5C39` | Same three uses, mirrored |
+  | Walid container | `#2C2118` | `#F3E9E0` | Hero card background only |
+  | Walid on-container | `#D9B48F` | `#6B4529` | Text/plate inside that card |
+
+  Whole-branch review (2026-07-30) found that Material's *generic* slots
+  (`primary`, `primaryContainer`, `onPrimaryContainer`, `inversePrimary`,
+  `surfaceTint`) had been wired to Wasil's blue in both colour schemes, so
+  every stock `Button`, `Switch`, `Slider`, `RadioButton`, text-field focus
+  ring and progress indicator rendered in his colour — on **both** phones.
+  Colour would have meant "interactive", not "Wasil". Fixed: those generic
+  slots are now neutral, drawn from the same warm grey/cream family as the
+  rest of the palette. Identity colour appears **only** where code asks for
+  it explicitly, via `HandoffColors.strongFor` / `containerFor` /
+  `onContainerFor` — the hand-over button is the one generic-looking control
+  that legitimately carries identity, and it does so through that API, not
+  through a ColorScheme slot.
 - Real Compose theme: light + dark colour schemes, typography, shapes,
-  replacing the bare `MaterialTheme {}` (currently baseline purple, light-only).
-- Replace the legacy `android:Theme.Material.Light.NoActionBar` XML parent.
-- Adaptive launcher icon (currently `@android:drawable/sym_def_app_icon`,
-  the stock Android robot).
+  replacing the bare `MaterialTheme {}` (previously baseline purple,
+  light-only).
+- Replaced the legacy `android:Theme.Material.Light.NoActionBar` XML parent.
+- Adaptive launcher icon (previously `@android:drawable/sym_def_app_icon`,
+  the stock Android robot), plus a redrawn notification small icon that
+  actually fills its 24x24 viewport.
 - Main screen: single "hand it over" action instead of two plate buttons,
   colour-coded hero card, icon row for map/refresh/settings.
-- Settings restructured — one-time setup moved out, see below.
-- Edge-to-edge (`enableEdgeToEdge()`), required from Android 15.
+- Settings restructured — one-time setup moved into a first-run flow; a
+  System health row set covers what that flow can skip (permissions,
+  battery, car pairing, sync configuration, home zone), and the Setup
+  summary's tick is derived from that same state rather than hard-coded.
+- Edge-to-edge (`enableEdgeToEdge()`), required from Android 15, with insets
+  handled on every screen so headings and bottom buttons stay clear of the
+  system bars.
 
 ---
 
-## Bugs
+## v0.3.2 — the two bugs
 
 ### 1. Claim fails in a retry loop when the permit is already yours — HIGH
 
@@ -56,25 +93,23 @@ notification that says retries stopped.
 
 ---
 
-## v0.4 — the functionality update
+## v0.4 — tappable notifications
 
-Confirmed 2026-07-30: the next release is where code changes land. It carries
-the two bugs above, the notification work below, and the map rework.
-
-### Tappable notifications
-
-Every notification gets a content intent so tapping it opens a full-screen
-version of the same decision, rather than only offering cramped notification
-actions. Highest value on the blocked-claim notification: show the mark with the
-dot mid-travel, the facts (when the other car parked, when it was last seen, why
-claiming is risky), and the same three choices — claim anyway, mark this spot
-free, leave it. Needs a `PendingIntent`, a screen, and ViewModel state to carry
-the decision, which is why it was cut from the layout-only v0.3.1.
+Approved in review 2026-07-30. Every notification gains a content intent, so
+tapping it opens the app to a full-screen version of the same decision
+instead of only offering the cramped notification actions. Highest value on
+the blocked-claim notification: show the mark with the dot mid-travel, the
+facts (when the other car parked, when it was last heard from, why claiming
+is risky), and the same three choices — claim anyway, mark this spot free,
+leave it. Needs a `PendingIntent`, a screen, and ViewModel state to carry the
+decision, which is why it was cut from the layout-only v0.3.1.
 
 Also here: notification small icons become state-aware, showing which arc is
-lit. v0.3.1 only swaps in a static mark icon.
+lit. v0.3.1 only ships the static mark icon (rescaled — see above).
 
-### The map becomes the home for everything location-based
+---
+
+## v0.5 — the map becomes the home for everything location-based
 
 All location actions should happen where you can see them on a map, instead of
 being buried as buttons in Settings:
@@ -87,14 +122,20 @@ being buried as buttons in Settings:
 - Show the Amsterdam tariff-area polygons as an overlay, and let a zone be
   selected or drawn by hand — including entering a tariff area code directly.
 
+Needs real interaction design before implementation — see
+`docs/superpowers/specs/2026-07-30-v04-design.md`'s open questions (drawing a
+free zone, selecting a tariff area, whether correcting the parked pin updates
+shared state, where home-zone editing lives).
+
 ---
 
 ## Later / unscheduled
 
-- Notification deep-links: every notification opens the app to a full-screen
-  version of the same decision. Highest value on the blocked-claim notification
-  (Claim anyway / free spot here / leave it). Needs a `PendingIntent` content
-  intent plus an in-app decision screen, so it is behaviour, not pure layout.
+- **Home-screen widget:** the correct way to show live state without opening
+  the app. Deliberately waits until after the map rework settles the shared
+  visual language for "who has it right now" — see
+  `docs/IDEAS.md` for early notes. Not the same as the notification-icon
+  swap in v0.3.1, which is static.
 - Bluetooth device picker: show paired devices with clearer identification
   (name, whether currently connected) instead of a plain radio list.
 - Tariff-area data refresh: the Amsterdam snapshot is bundled and manual.
@@ -109,6 +150,13 @@ being buried as buttons in Settings:
 
 ## Locked decisions — do not re-open without a reason
 
+- Identity colour is slate blue (Wasil) and terracotta (Walid). An earlier
+  sage-teal/clay-ochre pairing was tried and rejected: both are desaturated
+  toward green and amber, which collided with the status colours (fine =
+  green, alert = rust) — a Wasil card and a "success" state read as the same
+  colour. Don't reintroduce a hue close enough to `fine`/`alert` to be
+  mistaken for either; identity and state must stay separated by hue *and* by
+  scale (identity is a large fill, state is a small icon/label).
 - Auto-switch is the default, not ask-first.
 - Tariff *comparison* between the two cars was explicitly dropped: it only
   matters once the app can pay for parking. Tariff data stays informational.

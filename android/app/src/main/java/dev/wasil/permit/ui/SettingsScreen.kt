@@ -54,6 +54,7 @@ import dev.wasil.permit.parking.FreeZone
 import dev.wasil.permit.parking.FreeZoneStore
 import dev.wasil.permit.parking.MyCar
 import dev.wasil.permit.parking.ParkStateStore
+import dev.wasil.permit.parking.label
 import dev.wasil.permit.parking.android.PlayServicesSignals
 import dev.wasil.permit.parking.android.SharedSync
 import dev.wasil.permit.parking.shared.SharedStateStore
@@ -147,7 +148,11 @@ fun SettingsScreen(
                     )
                 }
                 Text(
-                    "${myCar?.name?.lowercase()?.replaceFirstChar { it.uppercase() }}'s phone",
+                    // Guarded: an unset myCar previously interpolated the
+                    // literal string "null" via the safe-call chain
+                    // ("null's phone"). Currently unreachable because of
+                    // branch ordering in MainActivity, but not guaranteed.
+                    myCar?.let { "${it.label()}'s phone" } ?: "Whose phone isn't set yet",
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Text(

@@ -1,7 +1,7 @@
-# Permit Switcher
+# Handoff
 
-Switches the shared Amsterdam visitor parking permit between Wasil's and
-Walid's cars. See `PROJECT_BRIEF.md` for the full roadmap.
+Handoff switches the shared Amsterdam visitor parking permit between Wasil's
+and Walid's cars. See `PROJECT_BRIEF.md` for the full roadmap.
 
 - `permit.py` — Phase 0 Python CLI proof of the permit API (source of truth
   for request/response shapes).
