@@ -6,10 +6,14 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -42,6 +46,17 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             HandoffTheme {
+                // Every screen must sit inside a Surface. Without one,
+                // LocalContentColor defaults to Color.Black, so any Text that
+                // doesn't set its own colour renders black — invisible on the
+                // dark background. MainScreen escaped this because its Scaffold
+                // provides a Surface; Settings, Map and the setup screens did
+                // not, and were unreadable in dark mode. Fixing it here rather
+                // than per-screen also covers every screen added later.
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background,
+                ) {
                 val state by viewModel.state.collectAsStateWithLifecycle()
                 var showSettings by remember { mutableStateOf(false) }
                 var showMap by remember { mutableStateOf(false) }
@@ -95,6 +110,7 @@ class MainActivity : ComponentActivity() {
                         onConfirmBlocked = viewModel::confirmBlockedSwitch,
                         onDismissBlocked = viewModel::dismissBlocked,
                     )
+                }
                 }
             }
         }

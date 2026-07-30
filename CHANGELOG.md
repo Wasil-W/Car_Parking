@@ -8,6 +8,39 @@ Convention from v0.3.1 onward: **visual and layout releases take a patch bump**
 
 ---
 
+## v0.3.2 — hotfix: unreadable screens in dark mode
+
+Fixes a bug that made Settings, the map and the setup screens effectively
+blank on a dark-themed phone. Reported immediately after v0.3.1 shipped:
+*"the settings part is completely dark and I can't see most of it."*
+
+**Cause.** In Compose, `LocalContentColor` falls back to plain black unless
+something up the tree provides a `Surface`. `MainScreen` had one, because its
+`Scaffold` supplies a `Surface` implicitly. Settings, the map and both setup
+screens were bare `Column`s, so all their text rendered black — on a `#171715`
+background, invisible.
+
+**This bug is older than v0.3.1.** Those screens have always lacked a
+`Surface`. It never showed because the app was permanently light-themed before
+v0.3.1, where black text on a white background looks entirely normal. Adding
+dark mode didn't create the fault; it revealed one that had been sitting there
+since Phase 2.
+
+**Fix.** One `Surface` at the root of `MainActivity`, wrapping every screen, so
+content colour is correct everywhere — including on any screen added later.
+Fixing it in one place rather than patching four screens is what stops this
+recurring.
+
+Nothing else changed. All 114 tests still pass, untouched. `versionCode` 5.
+
+Why the unit tests didn't catch it: every test in this project is pure Kotlin
+logic with no Compose rendering, and every code review reads diffs, where each
+file looked locally correct in isolation. Only running the app reveals this
+class of bug — which is the argument for on-device screenshots as a release
+gate, not an optional extra.
+
+---
+
 ## v0.3.1 — Handoff
 
 This release changes how the app looks and reads, not what it does — every
