@@ -132,7 +132,55 @@ Better: tighten `MAX_ACCURACY_M` to ~10 m so a smaller displacement is
 trustworthy, then 5 m means something. And check first whether the real problem
 is a missing permission rather than a threshold.
 
-### 4a. RDW open data investigated — it has no on-street geometry
+### 4a. FOUND IT — Amsterdam publishes street-level zone points
+
+Located 2026-07-31 by opening the council's own tariff map in a browser and
+watching what it loads. This is the `{zone_id, lat, lng}` list, at the
+granularity Q-Park shows:
+
+```
+https://amsterdam-maps.bma-collective.com/embed/parkeren/deploy_data/verkooppunt.json
+```
+
+GeoJSON `FeatureCollection`, **6,445 features**, CRS84 (plain WGS84 lon/lat).
+One feature:
+
+```json
+{
+  "properties": {
+    "DOMEIN_COD": 363,
+    "VERKOOP_PU": 16950,
+    "OMS": "Veenendaalplein 141",
+    "B_DAT_VERK": "2025-09-03",
+    "E_DAT_VERK": null
+  },
+  "geometry": { "type": "MultiPoint", "coordinates": [[4.98283, 52.30079]] }
+}
+```
+
+`VERKOOP_PU` is the code shown on the sign and typed into a parking app —
+the same identifier space as the `12671` and `19900` Wasil photographed. Both
+kinds of point are in here: real payment machines, and signs that carry only a
+phone-parking number.
+
+**`DOMEIN_COD` 363 is RDW's `areamanagerid` for Amsterdam**, so this file is the
+missing half of the crosswalk. RDW has zone IDs with no coordinates; this has
+the same IDs *with* coordinates. Joined, you get zone → position → tariff →
+paid-versus-permit.
+
+Two more files sit beside it, from the same map: `locaties.json` (garages and
+P+R) and `tarieven.json` — the last of which we already bundle, so this host is
+already a dependency rather than a new one.
+
+`B_DAT_VERK` / `E_DAT_VERK` are validity dates: points are added and retired, so
+a bundled snapshot goes stale. Fetch and cache, don't hardcode.
+
+**Caveat before building on it:** this is a URL behind a council map, not a
+documented API with a stability contract. It can move without notice. Worth
+checking whether `data.amsterdam.nl` publishes the same layer with terms we'd be
+entitled to rely on.
+
+### 4b. RDW open data — investigated and ruled out
 
 Checked 2026-07-31 against the live APIs, after a suggestion that RDW's National
 Parking Register could supply zone shapes. **It cannot.** Recorded so nobody
@@ -166,7 +214,31 @@ located some other way rather than locating anything themselves:
 - `TARIEFDEEL` holds real fare structures, better than the rates in our bundled
   snapshot.
 
-### 4b. Zone radius is the wrong tool — needs design
+### 4c. Zone radius — superseded by nearest-neighbour
+
+Wasil's correction, and he was right: the app is not testing whether a point
+falls inside a boundary. Q-Park's model is that the pins are **purchasable
+reference points** — you don't prove you are inside zone 12676, you find the
+nearest one and buy it. Proximity decides; containment never enters into it.
+
+That makes the whole circle-versus-polygon argument moot for this feature. No
+radius, no geometry, just `min(zones, key=haversine)` over a point list.
+
+It does **not** replace today's logic, and the distinction matters:
+
+| Question | Needs |
+|---|---|
+| Which zone do I buy? | nearest point — Wasil's model |
+| Does this spot need the permit at all? | paid-vs-free, which the bundled polygons already answer correctly |
+
+The permit is free, so there is nothing to buy yet. The nearest-point registry is
+the foundation of **in-app payment** — the public-product direction — not a
+rewrite of the current claim logic.
+
+Wasil's architecture note, worth keeping: the app grows two sections over one
+shared core. Permit holders switching between cars, and drivers with no permit
+paying per spot. Detect the park, find the nearest zone, act — only the final
+action differs. Design the lookup once with both in mind.
 
 *"Instead of radius, is there a way we use the parking street areas? They are
 still small and you could just press them where it is. Radius is very
