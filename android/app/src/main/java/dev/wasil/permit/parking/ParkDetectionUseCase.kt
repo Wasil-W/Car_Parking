@@ -87,14 +87,16 @@ class ParkDetectionUseCase(
     private suspend fun confirmedPark(point: GeoPoint?): ParkOutcome {
         stateStore.parked = true
         stateStore.parkedAtMs = nowMs()
-        stateStore.lastParkLocation = point
+        // Only overwrite a known position with a real one. A failed fix means
+        // "we don't know where you are now", not "the car is nowhere" — writing
+        // null here erased the pin from the map on every park without a fix.
+        point?.let { stateStore.lastParkLocation = it }
 
         if (point == null) {
             // No GPS fix: could be at home for all we know. Never claim blind,
             // never block the other phone on guesswork.
             markNotOutside()
-            notifier.askManualDecision()
-            return ParkOutcome.ManualNeeded
+            return askUnlessAlreadyMine()
         }
 
         val zone = zoneResolver.resolve(point)
@@ -111,8 +113,7 @@ class ParkDetectionUseCase(
         scheduler.requestSync()
 
         if (!stateStore.autoClaim) {
-            notifier.askManualDecision()
-            return ParkOutcome.ManualNeeded
+            return askUnlessAlreadyMine(zoneText(zone))
         }
 
         return when (val result = guardedClaim.claim(zoneText = zoneText(zone))) {
@@ -123,11 +124,35 @@ class ParkDetectionUseCase(
                 ParkOutcome.ManualNeeded
             }
             is GuardedResult.Done -> {
-                if (result.outcome == ParkOutcome.ManualNeeded) notifier.askManualDecision()
-                if (result.outcome is ParkOutcome.Claimed) scheduler.requestSync()
-                result.outcome
+                if (result.outcome == ParkOutcome.ManualNeeded) {
+                    askUnlessAlreadyMine(zoneText(zone))
+                } else {
+                    if (result.outcome is ParkOutcome.Claimed) scheduler.requestSync()
+                    result.outcome
+                }
             }
         }
+    }
+
+    /**
+     * Never ask about a permit that is already on your own car — there is
+     * nothing to decide, and being asked anyway is what made the app feel like
+     * it was ignoring auto-claim. Falls back to asking when the holder cannot
+     * be read, since an unanswerable question beats a wrong assumption.
+     */
+    private suspend fun askUnlessAlreadyMine(zoneText: String? = null): ParkOutcome {
+        val mine = guardedClaim.alreadyMine()
+        if (mine != null) {
+            val label = stateStore.myCar?.label() ?: return alsoAsk()
+            notifier.statusPermitOn(label, mine, zoneText)
+            return ParkOutcome.Claimed(mine)
+        }
+        return alsoAsk()
+    }
+
+    private fun alsoAsk(): ParkOutcome {
+        notifier.askManualDecision()
+        return ParkOutcome.ManualNeeded
     }
 
     private fun markNotOutside() {

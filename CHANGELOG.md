@@ -10,6 +10,39 @@ change as a minor.
 
 ---
 
+## v0.3.5 — three fixes from a day of driving
+
+**Your car no longer vanishes from the map.** When a park was confirmed but the
+GPS fix failed, the app wrote `null` over the location it already had. One line,
+two symptoms: the pin disappeared, *and* the app fell into its "we don't know
+where you are" branch, which asks what to do. A failed fix now means "we don't
+know where you are right now", not "the car is nowhere" — the last known
+position stays.
+
+**It no longer asks about a permit that is already yours.** If the permit is on
+your own car there is nothing to decide, but every prompt was raised without
+checking. Combined with the bug above, this is why the app felt as though it was
+ignoring auto-claim: it wasn't, it just never got that far. Auto-claim itself was
+never broken — the setting and its default were verified correct.
+
+If the holder can't be read — no network — it still asks. An unanswerable
+question beats a wrong assumption about a permit.
+
+**Walking away is recognised sooner.** The "you left the car" threshold drops
+from 10 m to 4 m. Detection only begins once the car's Bluetooth has dropped, so
+the car is already stationary and this measures you leaving it rather than the
+car moving. Not lowered further: fixes are accepted at up to 25 m accuracy, so
+two readings from a motionless phone can differ by more than a couple of metres
+on noise alone.
+
+The 5-second "sitting still" path is unchanged — it was already as quick as
+asked for, and shortening it would only have weakened the guard against a
+Bluetooth blip in traffic.
+
+119 tests, `versionCode` 8.
+
+---
+
 ## v0.3.4 — three bugs from real use
 
 No new features. Three fixes, all reported from actually driving around with

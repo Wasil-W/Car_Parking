@@ -218,6 +218,45 @@ class ParkDetectionUseCaseTest {
     }
 
     @Test
+    fun `a failed gps fix keeps the car location already on record`() = runTest {
+        val known = GeoPoint(52.4000, 4.9000, 8f)
+        val state = FakeParkStateStore().apply { lastParkLocation = known }
+        val signals = ScriptedSignals(script = mapOf(1 to stillAt6s),
+            locations = mutableListOf(null))
+        useCase(signals, state, SwitchApi()).run()
+        // Writing null here used to erase the pin from the map on every park
+        // without a fix, which is why the car "disappeared".
+        assertEquals(known, state.lastParkLocation)
+    }
+
+    @Test
+    fun `does not ask when the permit is already on my own car`() = runTest {
+        val signals = ScriptedSignals(script = mapOf(1 to stillAt6s),
+            locations = mutableListOf(paidPoint))
+        val state = FakeParkStateStore().apply { autoClaim = false }
+        val api = SwitchApi(active = "RH950F")   // already Wasil's
+        val notifier = RecordingParkNotifier()
+        val outcome = useCase(signals, state, api, notifier = notifier).run()
+
+        assertEquals(ParkOutcome.Claimed("RH950F"), outcome)
+        assertFalse("nothing to decide — must not ask", notifier.calls.contains("manual"))
+        assertEquals("RH950F", api.active)
+    }
+
+    @Test
+    fun `still asks when the permit is on the other car`() = runTest {
+        val signals = ScriptedSignals(script = mapOf(1 to stillAt6s),
+            locations = mutableListOf(paidPoint))
+        val state = FakeParkStateStore().apply { autoClaim = false }
+        val notifier = RecordingParkNotifier()
+        val outcome = useCase(signals, state, SwitchApi(active = "XX123Y"),
+            notifier = notifier).run()
+
+        assertEquals(ParkOutcome.ManualNeeded, outcome)
+        assertTrue(notifier.calls.contains("manual"))
+    }
+
+    @Test
     fun `unconfigured phone does nothing`() = runTest {
         val signals = ScriptedSignals(script = mapOf(1 to stillAt6s))
         val state = FakeParkStateStore().apply { myCar = null }
