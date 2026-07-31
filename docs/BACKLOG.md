@@ -132,102 +132,29 @@ Better: tighten `MAX_ACCURACY_M` to ~10 m so a smaller displacement is
 trustworthy, then 5 m means something. And check first whether the real problem
 is a missing permission rather than a threshold.
 
-### 4a. FOUND IT — Amsterdam publishes street-level zone points
+### 4. Zones — see `docs/v0.6-zone-registry.md`
 
-Located 2026-07-31 by opening the council's own tariff map in a browser and
-watching what it loads. This is the `{zone_id, lat, lng}` list, at the
-granularity Q-Park shows:
+The zone work outgrew a backlog entry. **Full detail lives in
+[`docs/v0.6-zone-registry.md`](v0.6-zone-registry.md)**: how the idea arrived,
+the two wrong turns, the reframing that fixed it, every data source with real
+field names, the coordinate-system traps, and how to build it.
 
-```
-https://amsterdam-maps.bma-collective.com/embed/parkeren/deploy_data/verkooppunt.json
-```
+The short version, so nobody re-litigates it here:
 
-GeoJSON `FeatureCollection`, **6,445 features**, CRS84 (plain WGS84 lon/lat).
-One feature:
+- **Not a containment problem.** Wasil's correction: parking apps let you buy the
+  *nearest* zone, they never test whether you are inside its true shape. So the
+  circle-versus-polygon argument is moot — there is no circle.
+- **RDW is a dead end for geometry.** Checked twice, two different routes. It has
+  zone IDs with no coordinates. Do not propose it again.
+- **Amsterdam publishes the real thing**, documented and versioned:
+  `api.data.amsterdam.nl/v1/parkeerzones` carries geometry, validity dates, and
+  `gebruiksdoel` — the permit-versus-paid distinction this app currently cannot
+  make at all.
+- **It does not replace today's claim logic.** The permit is free; there is
+  nothing to buy. This is the foundation of in-app payment, a later and separate
+  product section.
 
-```json
-{
-  "properties": {
-    "DOMEIN_COD": 363,
-    "VERKOOP_PU": 16950,
-    "OMS": "Veenendaalplein 141",
-    "B_DAT_VERK": "2025-09-03",
-    "E_DAT_VERK": null
-  },
-  "geometry": { "type": "MultiPoint", "coordinates": [[4.98283, 52.30079]] }
-}
-```
-
-`VERKOOP_PU` is the code shown on the sign and typed into a parking app —
-the same identifier space as the `12671` and `19900` Wasil photographed. Both
-kinds of point are in here: real payment machines, and signs that carry only a
-phone-parking number.
-
-**`DOMEIN_COD` 363 is RDW's `areamanagerid` for Amsterdam**, so this file is the
-missing half of the crosswalk. RDW has zone IDs with no coordinates; this has
-the same IDs *with* coordinates. Joined, you get zone → position → tariff →
-paid-versus-permit.
-
-Two more files sit beside it, from the same map: `locaties.json` (garages and
-P+R) and `tarieven.json` — the last of which we already bundle, so this host is
-already a dependency rather than a new one.
-
-`B_DAT_VERK` / `E_DAT_VERK` are validity dates: points are added and retired, so
-a bundled snapshot goes stale. Fetch and cache, don't hardcode.
-
-**Caveat before building on it:** this is a URL behind a council map, not a
-documented API with a stability contract. It can move without notice. Worth
-checking whether `data.amsterdam.nl` publishes the same layer with terms we'd be
-entitled to rely on.
-
-### 4b. RDW open data — investigated and ruled out
-
-Checked 2026-07-31 against the live APIs, after a suggestion that RDW's National
-Parking Register could supply zone shapes. **It cannot.** Recorded so nobody
-spends a day rediscovering this.
-
-`PARKEERGEBIED` (`opendata.rdw.nl/resource/mz4f-59fw.json`) returns exactly four
-fields and no geometry:
-
-```json
-{"areamanagerid": "599", "areaid": "0", "usageid": "BETAALDP", "uuid": "0dad07fa-…"}
-```
-
-Across the whole RDW parking family only two datasets carry coordinates, and
-both are Point-only and irrelevant here: `GEO Parkeer Garages` (`t5pc-eb34`) and
-`GEO Carpool` (`9c54-cmfx`). `GEBIED REGELING`, `PARKEERADRES`, `TARIEFDEEL`,
-`VERKOOPPUNT` and the `GELDIGHEIDS*` sets are administrative only.
-
-`npropendata.rdw.nl/parkingdata/v2` turned out to be an index of parking
-**facilities** — garages and P+R sites, each with a `staticDataUrl` — not
-on-street zones.
-
-So a point-plus-radius zone registry cannot be built from RDW: there are no
-points for on-street parking. The only source of real on-street geometry in this
-project remains the Amsterdam tariff polygons already bundled since v0.3.
-
-**Two things there are still worth having**, both ID-keyed so they enrich zones
-located some other way rather than locating anything themselves:
-
-- `usageid` separates `BETAALDP` (paid) from `VERGUNP` (**permit**) parking.
-  This app is a permit app and currently cannot tell those apart.
-- `TARIEFDEEL` holds real fare structures, better than the rates in our bundled
-  snapshot.
-
-### 4c. Zone radius — superseded by nearest-neighbour
-
-Wasil's correction, and he was right: the app is not testing whether a point
-falls inside a boundary. Q-Park's model is that the pins are **purchasable
-reference points** — you don't prove you are inside zone 12676, you find the
-nearest one and buy it. Proximity decides; containment never enters into it.
-
-That makes the whole circle-versus-polygon argument moot for this feature. No
-radius, no geometry, just `min(zones, key=haversine)` over a point list.
-
-It does **not** replace today's logic, and the distinction matters:
-
-| Question | Needs |
-|---|---|
+---|---|
 | Which zone do I buy? | nearest point — Wasil's model |
 | Does this spot need the permit at all? | paid-vs-free, which the bundled polygons already answer correctly |
 
