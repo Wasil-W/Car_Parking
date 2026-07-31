@@ -32,6 +32,11 @@ data class HandoffColors(
     // white nor the existing cream/charcoal text tokens clear 4.5:1 against
     // every strong fill in every mode.
     val onStrong: Color,
+    // Zones on the map — a third category, neither identity nor state. See
+    // Color.kt for why these are the same value in both modes.
+    val zoneHome: Color,
+    val zoneFree: Color,
+    val zoneCandidate: Color,
 ) {
     fun strongFor(car: MyCar) = if (car == MyCar.WASIL) wasilStrong else walidStrong
     fun containerFor(car: MyCar) = if (car == MyCar.WASIL) wasilContainer else walidContainer
@@ -52,6 +57,7 @@ private val DarkColors = HandoffColors(
     arcInactive = ArcInactiveDark, fine = FineDark, alert = AlertDark,
     dot = TextPrimaryDark,
     onStrong = OnIdentityStrongDark,
+    zoneHome = ZoneHome, zoneFree = ZoneFree, zoneCandidate = ZoneCandidate,
 )
 
 private val LightColors = HandoffColors(
@@ -66,6 +72,7 @@ private val LightColors = HandoffColors(
     // mode — a white dot would vanish on it.
     dot = TextPrimaryLight,
     onStrong = OnIdentityStrongLight,
+    zoneHome = ZoneHome, zoneFree = ZoneFree, zoneCandidate = ZoneCandidate,
 )
 
 // Every slot below is set explicitly so nothing falls back to Material 3's

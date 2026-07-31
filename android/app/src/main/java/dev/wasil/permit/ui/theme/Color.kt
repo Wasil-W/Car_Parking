@@ -85,3 +85,21 @@ val TextSecondaryLight = Color(0xFF6B6862)
 
 val SurfaceContainerLight = Color(0xFFF2F0E9)
 val SurfaceContainerHighLight = Color(0xFFEAE8DE)
+
+// Zones (home zone, free zones) are places, not identity or state — neither
+// brother's colour, and not fine/alert. A third, deliberately quiet neutral,
+// drawn from the same warm-grey chrome family as Hairline/TextSecondary
+// above rather than a new hue, so a zone circle can never be misread as
+// "whose car" or "is something wrong". Home is the darker, solid-ring
+// treatment (singular, permanent); free zones are the lighter, dashed-ring
+// treatment (plural, more casual); the candidate being placed is the
+// darkest and thickest of the three so it visibly "pops" as unsaved.
+//
+// These are the same value in both light and dark mode — deliberately not
+// mode-paired like identity/state above. The map tile layer itself
+// (osmdroid's MAPNIK source) doesn't change with the app's theme, so tying
+// zone colour to dark/light would risk a dark-mode value vanishing against
+// tiles that stay light regardless.
+val ZoneHome = Color(0xFF4A463D)
+val ZoneFree = Color(0xFF8C8676)
+val ZoneCandidate = Color(0xFF211E19)
