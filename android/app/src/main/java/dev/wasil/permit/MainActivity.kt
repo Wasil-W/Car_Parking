@@ -16,12 +16,21 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.wasil.permit.parking.android.ParkActionReceiver
+import dev.wasil.permit.parking.currentPendingDecision
+import dev.wasil.permit.ui.DecisionActionKind
+import dev.wasil.permit.ui.DecisionScreen
 import dev.wasil.permit.ui.HandoffTabs
 import dev.wasil.permit.ui.MainViewModel
 import dev.wasil.permit.ui.SetupFlow
 import dev.wasil.permit.ui.theme.HandoffTheme
 
 class MainActivity : ComponentActivity() {
+
+    companion object {
+        /** Carries only an id (the decision's raisedAtMs) — never its facts, which the screen re-reads from ParkStateStore. */
+        const val EXTRA_DECISION_ID = "dev.wasil.permit.EXTRA_DECISION_ID"
+    }
 
     private val viewModel: MainViewModel by viewModels {
         object : ViewModelProvider.Factory {
@@ -41,6 +50,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val app = application as PermitApp
         enableEdgeToEdge()
+        val hasDecisionExtra = intent.hasExtra(EXTRA_DECISION_ID)
         setContent {
             HandoffTheme {
                 // Every screen must sit inside a Surface. Without one,
@@ -53,30 +63,61 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,
                 ) {
-                    val state by viewModel.state.collectAsStateWithLifecycle()
-                    var setupDone by remember { mutableStateOf(false) }
-                    val needsSetup =
-                        (state.needsSetup || app.parkStateStore.myCar == null) && !setupDone
+                    // Read once at first composition: fresh from the persisted
+                    // store, never from the intent's own extras. If the decision
+                    // has since been cleared or expired this is null, and the
+                    // screen below falls through to the normal main flow.
+                    var pendingDecision by remember {
+                        mutableStateOf(
+                            if (hasDecisionExtra) app.parkStateStore.currentPendingDecision() else null,
+                        )
+                    }
+                    val decision = pendingDecision
 
-                    if (needsSetup) {
-                        SetupFlow(
-                            stateStore = app.parkStateStore,
-                            onSaveCredentials = viewModel::saveSetup,
-                            onDone = { setupDone = true },
+                    if (decision != null) {
+                        DecisionScreen(
+                            decision = decision,
+                            onChoice = { kind ->
+                                // Same call the notification's own action buttons
+                                // make — exactly one implementation per action.
+                                ParkActionReceiver.perform(this@MainActivity, actionNameFor(kind))
+                                pendingDecision = null
+                            },
                         )
                     } else {
-                        HandoffTabs(
-                            app = app,
-                            state = state,
-                            onSwitch = viewModel::switchTo,
-                            onRefresh = viewModel::refresh,
-                            onMessageShown = viewModel::consumeMessage,
-                            onConfirmBlocked = viewModel::confirmBlockedSwitch,
-                            onDismissBlocked = viewModel::dismissBlocked,
-                        )
+                        val state by viewModel.state.collectAsStateWithLifecycle()
+                        var setupDone by remember { mutableStateOf(false) }
+                        val needsSetup =
+                            (state.needsSetup || app.parkStateStore.myCar == null) && !setupDone
+
+                        if (needsSetup) {
+                            SetupFlow(
+                                stateStore = app.parkStateStore,
+                                onSaveCredentials = viewModel::saveSetup,
+                                onDone = { setupDone = true },
+                            )
+                        } else {
+                            HandoffTabs(
+                                app = app,
+                                state = state,
+                                onSwitch = viewModel::switchTo,
+                                onRefresh = viewModel::refresh,
+                                onMessageShown = viewModel::consumeMessage,
+                                onConfirmBlocked = viewModel::confirmBlockedSwitch,
+                                onDismissBlocked = viewModel::dismissBlocked,
+                            )
+                        }
                     }
                 }
             }
         }
     }
+}
+
+private fun actionNameFor(kind: DecisionActionKind): String = when (kind) {
+    DecisionActionKind.CLAIM -> ParkActionReceiver.ACTION_CLAIM
+    DecisionActionKind.CLAIM_FORCE -> ParkActionReceiver.ACTION_CLAIM_FORCE
+    DecisionActionKind.GIVE_BACK -> ParkActionReceiver.ACTION_GIVE_BACK
+    DecisionActionKind.IGNORE -> ParkActionReceiver.ACTION_IGNORE
+    DecisionActionKind.FREE_HERE -> ParkActionReceiver.ACTION_FREE_HERE
 }
