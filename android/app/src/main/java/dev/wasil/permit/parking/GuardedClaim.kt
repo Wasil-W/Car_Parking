@@ -2,6 +2,7 @@ package dev.wasil.permit.parking
 
 import dev.wasil.permit.data.PermitRepository
 import dev.wasil.permit.data.store.CredentialStore
+import dev.wasil.permit.data.store.PermitConfig
 import dev.wasil.permit.parking.shared.ClaimGuard
 import dev.wasil.permit.parking.shared.PhoneState
 import dev.wasil.permit.parking.shared.SharedStateStore
@@ -9,6 +10,9 @@ import dev.wasil.permit.parking.shared.SharedStateStore
 fun MyCar.other(): MyCar = if (this == MyCar.WASIL) MyCar.WALID else MyCar.WASIL
 fun MyCar.label(): String = if (this == MyCar.WASIL) "Wasil" else "Walid"
 fun MyCar.key(): String = name.lowercase()
+
+/** Inverse of [MyCar.label] — turns a notifier's "Wasil"/"Walid" string back into a [MyCar]. */
+fun myCarForLabel(label: String): MyCar = if (label == "Wasil") MyCar.WASIL else MyCar.WALID
 
 sealed interface GuardedResult {
     /** Guard passed or was skipped; [outcome] is the raw switch outcome. */
@@ -123,4 +127,36 @@ class GuardedClaim(
         parkedAtMs = stateStore.parkedAtMs,
         heartbeatAtMs = nowMs(),   // local state is by definition fresh
     )
+
+    /**
+     * Whether a pending decision — read from [ParkStateStore.pendingDecision]
+     * by the caller — still describes a real situation. Only BLOCKED and
+     * GIVE_BACK depend on facts that can go stale (see
+     * [dev.wasil.permit.parking.PendingDecision.stillStands] for the pure
+     * rule), so this is the only place those two network reads happen; MANUAL
+     * and TAKEOVER are answered without touching the network at all.
+     *
+     * A failed read (no network, nothing configured) keeps the decision: not
+     * being able to confirm a situation ended is not evidence that it did.
+     */
+    suspend fun stillStands(decision: PendingDecision, nowMs: Long = nowMs()): Boolean {
+        val needsFacts = decision is PendingDecision.Blocked || decision is PendingDecision.GiveBack
+        val facts = if (needsFacts) runCatching { readDecisionFacts() }.getOrNull() else null
+        return decision.stillStands(facts, nowMs)
+    }
+
+    private suspend fun readDecisionFacts(): DecisionFacts {
+        val config = credentialStore.load() ?: error("not configured")
+        val mine = stateStore.myCar ?: error("not configured")
+        val other = mine.other()
+        return DecisionFacts(
+            otherState = shared.readOther(),
+            otherPlate = other.plateIn(config),
+            myPlate = mine.plateIn(config),
+            activeVrn = repository.activePlate(),
+        )
+    }
+
+    private fun MyCar.plateIn(config: PermitConfig): String =
+        if (this == MyCar.WASIL) config.wasilPlate else config.walidPlate
 }

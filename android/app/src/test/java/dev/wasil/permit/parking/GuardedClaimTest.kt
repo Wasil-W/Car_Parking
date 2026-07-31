@@ -141,4 +141,63 @@ class GuardedClaimTest {
         val shared = FakeSharedStateStore(other = walidParkedFresh)
         assertEquals(GiveBackResult.Failed, guarded(api, shared).giveBack())
     }
+
+    // --- stillStands: read the live facts a pending decision depends on ------
+
+    @Test
+    fun `blocked still stands while walid is genuinely parked outside and holding`() = runTest {
+        val api = SwitchApi(active = "XX123Y")
+        val shared = FakeSharedStateStore(other = walidParkedFresh)
+        val decision = PendingDecision.Blocked("Walid", now, now, raisedAtMs = now)
+        assertTrue(guarded(api, shared).stillStands(decision))
+    }
+
+    @Test
+    fun `blocked lapses once walid has driven off`() = runTest {
+        val api = SwitchApi(active = "XX123Y")
+        val shared = FakeSharedStateStore(other = walidParkedFresh.copy(parkedOutside = false))
+        val decision = PendingDecision.Blocked("Walid", now, now, raisedAtMs = now)
+        assertFalse(guarded(api, shared).stillStands(decision))
+    }
+
+    @Test
+    fun `blocked keeps the decision when the network read fails`() = runTest {
+        val api = SwitchApi(active = "XX123Y")
+        val shared = FakeSharedStateStore(throwOnRead = true)
+        val decision = PendingDecision.Blocked("Walid", now, now, raisedAtMs = now)
+        assertTrue(guarded(api, shared).stillStands(decision))
+    }
+
+    @Test
+    fun `give back still stands while walid still needs it and the permit is still mine`() = runTest {
+        val api = SwitchApi(active = "RH950F")
+        val shared = FakeSharedStateStore(other = walidParkedFresh)
+        val decision = PendingDecision.GiveBack(otherLabel = "Walid", raisedAtMs = now)
+        assertTrue(guarded(api, shared).stillStands(decision))
+    }
+
+    @Test
+    fun `give back lapses once the permit has already moved off my plate`() = runTest {
+        val api = SwitchApi(active = "XX123Y")   // already Walid's - nothing left to give back
+        val shared = FakeSharedStateStore(other = walidParkedFresh)
+        val decision = PendingDecision.GiveBack(otherLabel = "Walid", raisedAtMs = now)
+        assertFalse(guarded(api, shared).stillStands(decision))
+    }
+
+    @Test
+    fun `give back keeps the decision when the network read fails`() = runTest {
+        val api = SwitchApi(active = "RH950F")
+        val shared = FakeSharedStateStore(throwOnRead = true)
+        val decision = PendingDecision.GiveBack(otherLabel = "Walid", raisedAtMs = now)
+        assertTrue(guarded(api, shared).stillStands(decision))
+    }
+
+    @Test
+    fun `manual and takeover always stand without touching the network`() = runTest {
+        val shared = FakeSharedStateStore(throwOnRead = true)
+        val guardedClaim = guarded(shared = shared)
+        assertTrue(guardedClaim.stillStands(PendingDecision.Manual(raisedAtMs = now)))
+        assertTrue(guardedClaim.stillStands(PendingDecision.Takeover(byLabel = "Walid", raisedAtMs = now)))
+        assertEquals(0, shared.readOtherCalls)
+    }
 }

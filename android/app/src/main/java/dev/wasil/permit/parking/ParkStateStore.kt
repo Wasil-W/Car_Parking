@@ -18,4 +18,10 @@ interface ParkStateStore {
     var syncUrl: String?
     /** claimedAtMs of the last permit takeover we already alerted about. */
     var lastAlertedClaimMs: Long
+    /**
+     * The one decision currently waiting on the user, if any. Raised alongside
+     * a notification, read by the tappable-notification screen, cleared when
+     * acted on. See [currentPendingDecision] for the expiry rule.
+     */
+    var pendingDecision: PendingDecision?
 }

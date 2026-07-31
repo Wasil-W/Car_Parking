@@ -1,17 +1,28 @@
 package dev.wasil.permit.ui
 
+import android.graphics.DashPathEffect
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import dev.wasil.permit.R
+import dev.wasil.permit.parking.FreeZone
 import dev.wasil.permit.parking.GeoPoint
+import dev.wasil.permit.ui.theme.LocalHandoffColors
 import org.osmdroid.config.Configuration
+import org.osmdroid.events.MapEventsReceiver
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.views.MapView
+import org.osmdroid.views.overlay.MapEventsOverlay
 import org.osmdroid.views.overlay.Marker
+import org.osmdroid.views.overlay.Polygon
+import org.osmdroid.util.GeoPoint as OsmGeoPoint
 
 /** Amsterdam centre, used only when there is nothing else to show. */
 private val FALLBACK = GeoPoint(52.3702, 4.8952, 0f)
@@ -23,6 +34,12 @@ private val FALLBACK = GeoPoint(52.3702, 4.8952, 0f)
  * [interactive] false gives a still preview: no panning, no zoom buttons, so a
  * tap on the card reaches the card's own click handler instead of the map
  * swallowing it.
+ *
+ * [homeZone], [freeZones] and [candidateZone] are drawn as circles — the same
+ * geographic things Settings used to show only as rows of text. [onMapTap]
+ * fires with the coordinates of a tap that lands on bare map (not a marker or
+ * a zone circle, both of which consume the tap themselves); panning and
+ * zooming are untouched, osmdroid still handles those itself.
  */
 @Composable
 fun MapCanvas(
@@ -31,8 +48,18 @@ fun MapCanvas(
     modifier: Modifier = Modifier,
     interactive: Boolean = true,
     zoom: Double = 16.5,
+    homeZone: FreeZone? = null,
+    freeZones: List<FreeZone> = emptyList(),
+    candidateZone: FreeZone? = null,
+    onMapTap: ((GeoPoint) -> Unit)? = null,
 ) {
     val context = LocalContext.current
+    val colors = LocalHandoffColors.current
+    // Tracks only the centre WE last set, never the map's live (possibly
+    // user-panned) position — otherwise re-centring on every recomposition
+    // would fight a pan made while placing a zone candidate or dragging the
+    // radius slider, snapping the map back under the user's finger.
+    val lastCentre = remember { mutableStateOf<GeoPoint?>(null) }
     AndroidView(
         modifier = modifier.fillMaxSize(),
         factory = { ctx ->
@@ -50,25 +77,90 @@ fun MapCanvas(
         },
         update = { map ->
             val centre = car ?: me ?: FALLBACK
-            map.controller.setCenter(org.osmdroid.util.GeoPoint(centre.lat, centre.lng))
-            map.overlays.removeAll { it is Marker }
+            if (lastCentre.value != centre) {
+                map.controller.setCenter(OsmGeoPoint(centre.lat, centre.lng))
+                lastCentre.value = centre
+            }
+
+            // Rebuilt every update from the latest parameters, same as the
+            // markers below — a stale factory-time closure would otherwise
+            // keep answering onMapTap with whatever was passed in on the very
+            // first composition.
+            map.overlays.removeAll { it is Marker || it is Polygon || it is MapEventsOverlay }
+            map.overlays.add(
+                MapEventsOverlay(object : MapEventsReceiver {
+                    override fun singleTapConfirmedHelper(p: OsmGeoPoint): Boolean {
+                        onMapTap?.invoke(GeoPoint(p.latitude, p.longitude, 0f))
+                        return false
+                    }
+                    override fun longPressHelper(p: OsmGeoPoint) = false
+                }),
+            )
+
+            homeZone?.let {
+                map.overlays.add(
+                    zoneCircle(map, it, colors.zoneHome, dashed = false, fillAlpha = 0.18f, strokeWidthPx = 4f),
+                )
+            }
+            freeZones.forEach {
+                map.overlays.add(
+                    zoneCircle(map, it, colors.zoneFree, dashed = true, fillAlpha = 0.12f, strokeWidthPx = 4f),
+                )
+            }
+            candidateZone?.let {
+                map.overlays.add(
+                    zoneCircle(map, it, colors.zoneCandidate, dashed = true, fillAlpha = 0.24f, strokeWidthPx = 6f),
+                )
+            }
+
             car?.let {
                 map.overlays.add(Marker(map).apply {
-                    position = org.osmdroid.util.GeoPoint(it.lat, it.lng)
+                    position = OsmGeoPoint(it.lat, it.lng)
                     icon = ContextCompat.getDrawable(map.context, R.drawable.ic_marker_car)
                     title = "Your car"
                     setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                    // The two markers are self-explanatory; osmdroid's stock
+                    // InfoWindow bubble is off-centre and just repeats the
+                    // title, so suppress it instead of tapping into it.
+                    setOnMarkerClickListener { _, _ -> true }
                 })
             }
             me?.let {
                 map.overlays.add(Marker(map).apply {
-                    position = org.osmdroid.util.GeoPoint(it.lat, it.lng)
+                    position = OsmGeoPoint(it.lat, it.lng)
                     icon = ContextCompat.getDrawable(map.context, R.drawable.ic_marker_me)
                     title = "You"
                     setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                    setOnMarkerClickListener { _, _ -> true }
                 })
             }
             map.invalidate()
         },
     )
+}
+
+/**
+ * A filled translucent circle with a ring at the zone's true radius.
+ * [dashed] gives free zones (plural, more casual) a ring texture distinct
+ * from the home zone's solid ring (singular, permanent) — a difference that
+ * still reads if colour alone is hard to perceive. The click listener always
+ * returns false so a tap on the circle still reaches [MapEventsOverlay]:
+ * `onMapTap` plus the tested [zoneHitAt] is the single place that decides
+ * which zone a tap hit, rather than osmdroid's own polygon geometry.
+ */
+private fun zoneCircle(
+    map: MapView,
+    zone: FreeZone,
+    color: Color,
+    dashed: Boolean,
+    fillAlpha: Float,
+    strokeWidthPx: Float,
+): Polygon = Polygon(map).apply {
+    points = Polygon.pointsAsCircle(OsmGeoPoint(zone.lat, zone.lng), zone.radiusM)
+    fillColor = color.copy(alpha = fillAlpha).toArgb()
+    strokeColor = color.toArgb()
+    strokeWidth = strokeWidthPx
+    if (dashed) outlinePaint.pathEffect = DashPathEffect(floatArrayOf(18f, 14f), 0f)
+    setOnClickListener { _, _, _ -> false }
+    infoWindow = null
 }

@@ -34,7 +34,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -50,12 +49,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
-import dev.wasil.permit.parking.FreeZone
 import dev.wasil.permit.parking.FreeZoneStore
 import dev.wasil.permit.parking.MyCar
 import dev.wasil.permit.parking.ParkStateStore
 import dev.wasil.permit.parking.label
-import dev.wasil.permit.parking.android.PlayServicesSignals
 import dev.wasil.permit.parking.android.SharedSync
 import dev.wasil.permit.parking.shared.SharedStateStore
 import dev.wasil.permit.ui.theme.LocalHandoffColors
@@ -129,6 +126,7 @@ fun SettingsScreen(
     stateStore: ParkStateStore,
     freeZoneStore: FreeZoneStore,
     sharedStore: () -> SharedStateStore,
+    onOpenMap: () -> Unit,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -144,13 +142,10 @@ fun SettingsScreen(
     var autoClaim by remember { mutableStateOf(stateStore.autoClaim) }
     var zones by remember { mutableStateOf(freeZoneStore.all()) }
     var homeZone by remember { mutableStateOf(stateStore.homeZone) }
-    var homeStatus by remember { mutableStateOf<String?>(null) }
     var syncUrl by remember { mutableStateOf(stateStore.syncUrl ?: "") }
     var syncStatus by remember { mutableStateOf<String?>(null) }
     var editing by remember { mutableStateOf(false) }
     var pickingCar by remember { mutableStateOf(false) }
-    var editingHome by remember { mutableStateOf(false) }
-    var showZones by remember { mutableStateOf(false) }
 
     // Reading `refresh` here makes permission/battery grants recompose this.
     // Computed up front (not just inside the System section further down) so
@@ -333,81 +328,24 @@ fun SettingsScreen(
             }
         }
 
-        // --- Zones ---
+        // --- Zones: geographic things, so they live on the map now. These
+        // rows are summaries only — tapping either one opens the map tab,
+        // where the zone is an actual circle you can place, move or remove. ---
         SectionHeader("Zones")
 
         SettingRow(
             label = "Home zone",
-            value = homeZone?.let { "%.0f m".format(it.radiusM) } ?: "Not set",
-            onClick = { editingHome = !editingHome },
+            // The address it was named with (or renamed to on the map) — not
+            // the radius, and never raw coordinates: an address is the thing
+            // Wasil actually recognises at a glance.
+            value = homeZone?.label?.takeIf { it.isNotBlank() } ?: "Not set",
+            onClick = onOpenMap,
         )
-        if (editingHome) {
-            RowHint("Parking inside your home zone never claims the permit.")
-            homeZone?.let { zone ->
-                Slider(
-                    value = zone.radiusM.toFloat(),
-                    onValueChange = {
-                        val updated = zone.copy(radiusM = it.toDouble())
-                        stateStore.homeZone = updated
-                        homeZone = updated
-                    },
-                    valueRange = 30f..200f,
-                    modifier = Modifier.padding(horizontal = 20.dp),
-                )
-            }
-            SettingRow(
-                label = if (homeZone == null) "Set home to current location" else "Move home here",
-                onClick = {
-                    homeStatus = "Getting location…"
-                    scope.launch {
-                        val point = PlayServicesSignals(context).currentLocation()
-                        if (point == null) {
-                            homeStatus = "Couldn't get a location — check location permission and try outdoors."
-                        } else {
-                            val zone = FreeZone(point.lat, point.lng, homeZone?.radiusM ?: 60.0, "Home")
-                            stateStore.homeZone = zone
-                            homeZone = zone
-                            homeStatus = "Home saved."
-                        }
-                    }
-                },
-            )
-            if (homeZone != null) {
-                SettingRow(
-                    label = "Clear home zone",
-                    onClick = {
-                        stateStore.homeZone = null
-                        homeZone = null
-                        homeStatus = null
-                    },
-                )
-            }
-            homeStatus?.let { RowHint(it) }
-        }
-
-        // Free zones belongs under Zones as a row, not as its own section —
-        // it is one setting, the same shape as Home zone.
         SettingRow(
             label = "Free zones",
             value = if (zones.isEmpty()) "None" else "${zones.size}",
-            onClick = { showZones = !showZones },
+            onClick = onOpenMap,
         )
-        if (showZones) {
-            if (zones.isEmpty()) {
-                RowHint("Mark one with \"Free here\" on a parking notification.")
-            }
-            zones.forEachIndexed { index, zone ->
-                SettingRow(
-                    label = zone.label.ifBlank { "%.5f, %.5f".format(zone.lat, zone.lng) },
-                    trailing = {
-                        TextButton(onClick = {
-                            freeZoneStore.removeAt(index)
-                            zones = freeZoneStore.all()
-                        }) { Text("Delete") }
-                    },
-                )
-            }
-        }
 
         // --- System: permission grants, battery optimisation, and what first-run
         // could skip — quiet when fine. `rows` is computed above, alongside the

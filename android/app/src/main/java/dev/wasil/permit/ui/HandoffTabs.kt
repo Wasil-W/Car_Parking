@@ -98,11 +98,15 @@ fun HandoffTabs(
                     onConfirmBlocked = onConfirmBlocked,
                     onDismissBlocked = onDismissBlocked,
                 )
-                Tab.MAP -> MapScreen(stateStore = app.parkStateStore)
+                Tab.MAP -> MapScreen(
+                    stateStore = app.parkStateStore,
+                    freeZoneStore = app.freeZoneStore,
+                )
                 Tab.SETTINGS -> SettingsScreen(
                     stateStore = app.parkStateStore,
                     freeZoneStore = app.freeZoneStore,
                     sharedStore = { app.sharedStateStore() },
+                    onOpenMap = { tab = Tab.MAP },
                 )
             }
         }

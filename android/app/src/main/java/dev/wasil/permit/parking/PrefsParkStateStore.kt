@@ -73,4 +73,26 @@ class PrefsParkStateStore(private val prefs: SharedPreferences) : ParkStateStore
     override var lastAlertedClaimMs: Long
         get() = prefs.getLong("last_alerted_claim_ms", 0L)
         set(value) { prefs.edit().putLong("last_alerted_claim_ms", value).apply() }
+
+    // Stored as plain Strings/Longs, never a serialized blob: the encode/decode
+    // between these primitives and PendingDecision is a pure function
+    // (PendingDecision.kt) so the round-trip is unit-testable without Android.
+    override var pendingDecision: PendingDecision?
+        get() = PendingDecisionRecord(
+            kind = prefs.getString("pending_decision_kind", null),
+            label = prefs.getString("pending_decision_label", null),
+            parkedAtMs = prefs.getLong("pending_decision_parked_at_ms", 0L),
+            heartbeatAtMs = prefs.getLong("pending_decision_heartbeat_at_ms", 0L),
+            raisedAtMs = prefs.getLong("pending_decision_raised_at_ms", 0L),
+        ).toDecision()
+        set(value) {
+            val record = value?.toRecord()
+            prefs.edit()
+                .putString("pending_decision_kind", record?.kind)
+                .putString("pending_decision_label", record?.label)
+                .putLong("pending_decision_parked_at_ms", record?.parkedAtMs ?: 0L)
+                .putLong("pending_decision_heartbeat_at_ms", record?.heartbeatAtMs ?: 0L)
+                .putLong("pending_decision_raised_at_ms", record?.raisedAtMs ?: 0L)
+                .apply()
+        }
 }

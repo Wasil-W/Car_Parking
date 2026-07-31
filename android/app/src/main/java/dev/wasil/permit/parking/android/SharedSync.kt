@@ -24,14 +24,13 @@ import dev.wasil.permit.parking.label
 import dev.wasil.permit.parking.other
 import dev.wasil.permit.parking.shared.ClaimGuard
 import dev.wasil.permit.parking.shared.PhoneState
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import dev.wasil.permit.ui.formatCoordinates
 import java.util.concurrent.TimeUnit
 
 object SharedSync {
     const val SYNC_WORK = "sync_state"
     const val HEARTBEAT_WORK = "heartbeat"
+    const val HEARTBEAT_NOW_WORK = "heartbeat_now"
     const val GIVE_BACK_WORK = "give_back"
     const val FREE_HERE_WORK = "mark_free_zone"
 
@@ -76,6 +75,25 @@ object SharedSync {
         } else {
             wm.cancelUniqueWork(HEARTBEAT_WORK)
         }
+    }
+
+    /**
+     * Runs HeartbeatWorker right now instead of waiting for its next 15-minute
+     * tick — WorkManager's periodic floor, which cannot be shortened. Called
+     * whenever the app comes to the foreground, so a forced takeover on the
+     * other phone surfaces the moment this one is looked at rather than lagging
+     * behind the schedule. A no-op (fast success) if this phone isn't parked
+     * outside. This is an approximation, not a push: a phone left fully
+     * backgrounded still waits for the periodic tick, same as before — genuinely
+     * instant delivery needs a push channel (e.g. FCM), which is out of scope.
+     */
+    fun requestImmediateHeartbeat(context: Context) {
+        val request = OneTimeWorkRequestBuilder<HeartbeatWorker>()
+            .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+            .setConstraints(connected())
+            .build()
+        WorkManager.getInstance(context)
+            .enqueueUniqueWork(HEARTBEAT_NOW_WORK, ExistingWorkPolicy.REPLACE, request)
     }
 
     /** Back in the car: any pending detection/claim/give-back is now stale. */
@@ -202,10 +220,16 @@ class MarkFreeZoneWorker(context: Context, params: WorkerParameters) :
             return Result.success()
         }
         val store = PrefsParkStateStore.from(applicationContext)
-        val date = SimpleDateFormat("d MMM HH:mm", Locale.getDefault()).format(Date())
+        // No date label: the day it was marked told you nothing about where
+        // it was. Named from a reverse geocode instead — a real address
+        // beats a timestamp — falling back to coordinates if that fails.
+        // Already in a background worker, so awaiting it here (it's
+        // internally timeout-bounded) costs nothing the UI thread would feel.
+        val label = reverseGeocodeAddress(applicationContext, point)
+            ?: formatCoordinates(point.lat, point.lng)
         PrefsFreeZoneStore(
             applicationContext.getSharedPreferences("park_state", Context.MODE_PRIVATE),
-        ).add(FreeZone(point.lat, point.lng, 60.0, "Marked $date"))
+        ).add(FreeZone(point.lat, point.lng, 60.0, label))
         store.parkedOutside = false
         store.lastZoneCode = null
         SharedSync.requestSync(applicationContext)
