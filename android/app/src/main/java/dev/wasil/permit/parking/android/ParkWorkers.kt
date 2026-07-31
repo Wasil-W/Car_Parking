@@ -24,6 +24,15 @@ object ParkWorkers {
     const val DETECTION_WORK = "park_detection"
     const val CLAIM_WORK = "claim_permit"
 
+    /**
+     * Stop retrying a claim after this many attempts. Without a cap, a
+     * persistent failure — wrong credentials, an API change — retries forever
+     * on exponential backoff and notifies on every attempt. Giving up silently
+     * would be worse than the loop, so the last attempt says plainly that the
+     * permit did not move.
+     */
+    const val MAX_CLAIM_ATTEMPTS = 5
+
     /** Detection needs no network; a failed claim is handed to enqueueClaim. */
     fun enqueueDetection(context: Context) {
         val request = OneTimeWorkRequestBuilder<ParkDetectionWorker>()
@@ -112,7 +121,13 @@ class ClaimPermitWorker(context: Context, params: WorkerParameters) :
                 Result.success()
             }
             is GuardedResult.Done -> when (result.outcome) {
-                ParkOutcome.SwitchFailed -> Result.retry()
+                ParkOutcome.SwitchFailed ->
+                    if (runAttemptCount + 1 >= ParkWorkers.MAX_CLAIM_ATTEMPTS) {
+                        notifications.switchGaveUp()
+                        Result.failure()
+                    } else {
+                        Result.retry()
+                    }
                 ParkOutcome.ManualNeeded -> {
                     notifications.askManualDecision()
                     Result.success()
