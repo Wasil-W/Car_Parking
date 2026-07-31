@@ -8,6 +8,44 @@ Convention from v0.3.1 onward: **visual and layout releases take a patch bump**
 
 ---
 
+## v0.3.3 — navigation, and Settings as it was meant to look
+
+Layout only. Detection, claiming, shared state and the collision guard are
+untouched; all 114 tests pass unedited.
+
+**Three tabs instead of three floating icons.** Map, refresh and settings used
+to sit as bare icons in the middle of the main screen, belonging to nothing.
+There is now a proper bottom navigation bar — Permit, Map, Settings — with
+labels and a selected state, so the map is permanently one tap away instead of
+a detour.
+
+**The app finally says its own name.** "Handoff" appears at the top of the main
+screen beside the mark. The design called for this and the implementation plan
+quietly dropped it, so until now the name existed only on the launcher icon.
+
+**Your car is on the main screen.** A map card shows where it is parked without
+leaving the screen, and tapping it opens the full map. It also fills the space
+the previous centred layout left conspicuously empty.
+
+**Settings looks like the prototype again.** It had shipped as verbose blocks:
+every item a large heading, an explanatory paragraph, and a full-width cream
+button, with section labels *smaller* than the items inside them — so the
+hierarchy read backwards. Items are now compact rows: label left, value right,
+chevron. `Home zone — Not set ›`. Free zones moved under Zones as a row beside
+Home zone rather than standing as its own section.
+
+**Proper map markers.** The Handoff mark for your car and a location dot for
+you, replacing osmdroid's stock pins.
+
+Caught by running the app on an emulator rather than by review: the selected-tab
+indicator had been given Wasil's identity blue, which would have made blue mean
+"selected" rather than "Wasil" — precisely the collision the palette exists to
+prevent. It reads as correct in code and is obvious on screen. This release also
+adds screenshot tests that render Compose on a device, so that class of bug has
+somewhere to be caught in future. `versionCode` 6.
+
+---
+
 ## v0.3.2 — hotfix: unreadable screens in dark mode
 
 Fixes a bug that made Settings, the map and the setup screens effectively
