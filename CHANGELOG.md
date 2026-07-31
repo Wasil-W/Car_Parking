@@ -3,8 +3,78 @@
 Every released version, newest first. Each entry is written to double as its
 GitHub release notes.
 
-Convention from v0.3.1 onward: **visual and layout releases take a patch bump**
-(0.3 → 0.3.1), **releases that change behaviour take a minor bump** (0.3 → 0.4).
+Versioning from v0.3.4 onward: **new features take a minor bump** (0.3 → 0.4);
+**everything else — bug fixes, layout, polish — takes a patch bump**
+(0.3.3 → 0.3.4). Earlier entries used a looser rule that counted any behaviour
+change as a minor.
+
+---
+
+## v0.3.5 — three fixes from a day of driving
+
+**Your car no longer vanishes from the map.** When a park was confirmed but the
+GPS fix failed, the app wrote `null` over the location it already had. One line,
+two symptoms: the pin disappeared, *and* the app fell into its "we don't know
+where you are" branch, which asks what to do. A failed fix now means "we don't
+know where you are right now", not "the car is nowhere" — the last known
+position stays.
+
+**It no longer asks about a permit that is already yours.** If the permit is on
+your own car there is nothing to decide, but every prompt was raised without
+checking. Combined with the bug above, this is why the app felt as though it was
+ignoring auto-claim: it wasn't, it just never got that far. Auto-claim itself was
+never broken — the setting and its default were verified correct.
+
+If the holder can't be read — no network — it still asks. An unanswerable
+question beats a wrong assumption about a permit.
+
+**Walking away is recognised sooner.** The "you left the car" threshold drops
+from 10 m to 4 m. Detection only begins once the car's Bluetooth has dropped, so
+the car is already stationary and this measures you leaving it rather than the
+car moving. Not lowered further: fixes are accepted at up to 25 m accuracy, so
+two readings from a motionless phone can differ by more than a couple of metres
+on noise alone.
+
+The 5-second "sitting still" path is unchanged — it was already as quick as
+asked for, and shortening it would only have weakened the guard against a
+Bluetooth blip in traffic.
+
+119 tests, `versionCode` 8.
+
+---
+
+## v0.3.4 — three bugs from real use
+
+No new features. Three fixes, all reported from actually driving around with
+this thing.
+
+**The permit switch no longer retries forever when you already hold it.** Park
+somewhere while the permit is already on your own plate and you would get a
+failure notification, then another, then another — indefinitely. The cause:
+`switchTo` always called activate, and the API rejects activating a plate that
+already holds the session. That rejection looked like a failed switch, and a
+failed switch was retried on exponential backoff with no limit.
+
+Now the app reads the current state first and, if the permit is already where
+you wanted it, reports success — which it always was. Nothing to activate,
+nothing to reject, nothing to retry.
+
+**Retries now stop.** Any switch that keeps failing — wrong credentials, an API
+change — used to retry forever and notify on every attempt. It now gives up
+after five attempts with a single notification stating plainly that the permit
+did **not** move, so you can switch it yourself. Going quiet after giving up
+would have been worse than the loop.
+
+**The car pin no longer gets left behind.** The map kept showing your previous
+parking spot for an entire drive, because the parked location was recorded when
+you parked and never cleared. It is now cleared when your car's Bluetooth
+reconnects: at that point the car is wherever you are, so the old pin is wrong
+rather than merely stale. It regains meaning the moment you walk away again.
+
+116 tests, `versionCode` 7. Two existing tests were updated deliberately —
+`switchTo` now makes two API reads where it made one, since reading first *is*
+the fix, so the tests that counted calls needed to count differently. What they
+assert about behaviour is unchanged.
 
 ---
 

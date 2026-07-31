@@ -35,6 +35,23 @@ class GuardedClaim(
     private val claimPermit: ClaimPermit,
     private val nowMs: () -> Long = System::currentTimeMillis,
 ) {
+    /**
+     * The plate, if the permit is already on this phone's own car — otherwise
+     * null, including when the answer cannot be determined.
+     *
+     * Asked before any prompt that would offer to claim, because a question you
+     * cannot answer wrongly is not worth asking: if the permit is already
+     * yours, there is nothing to decide. Returns null on failure so a network
+     * problem falls back to asking rather than silently assuming.
+     */
+    suspend fun alreadyMine(): String? {
+        val config = credentialStore.load() ?: return null
+        val mine = stateStore.myCar ?: return null
+        val myPlate = if (mine == MyCar.WASIL) config.wasilPlate else config.walidPlate
+        return runCatching { repository.activePlate() }.getOrNull()
+            ?.takeIf { it == myPlate }
+    }
+
     suspend fun claim(
         target: MyCar? = null,
         force: Boolean = false,

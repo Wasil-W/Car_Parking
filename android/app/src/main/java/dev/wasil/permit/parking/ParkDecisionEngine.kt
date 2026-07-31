@@ -15,7 +15,21 @@ sealed interface Decision {
 object ParkDecisionEngine {
     const val CONFIDENCE = 70
     const val MIN_STILL_DELAY_MS = 5_000L
-    const val WALK_DISTANCE_M = 10.0
+
+    /**
+     * How far you must move from the car before "you walked away" is believed.
+     *
+     * Lowered from 10 m: detection only starts once the car's Bluetooth has
+     * dropped, so the car is already stationary and this is measuring you
+     * leaving it, not the car moving. The remaining risk is a Bluetooth blip in
+     * traffic, and that got much cheaper — claiming is idempotent since v0.3.4,
+     * and the collision guard stops an early claim stranding the other car.
+     *
+     * Not lowered to 2 m: [MAX_ACCURACY_M] admits fixes off by up to 25 m, so
+     * two consecutive readings from a motionless phone can differ by more than
+     * that on noise alone.
+     */
+    const val WALK_DISTANCE_M = 4.0
     const val MAX_ACCURACY_M = 25f
     const val TIMEOUT_MS = 90_000L
 
