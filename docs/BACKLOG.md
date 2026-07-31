@@ -64,6 +64,102 @@ exactly as Phase 3 left them.
 
 ---
 
+## v0.4 — from real use, 2026-07-31
+
+Four things Wasil hit driving with v0.3.4 installed. The first three are one
+root cause plus one omission; the fourth is a design change.
+
+### 1. A failed GPS fix erases the car's location — HIGH
+
+`ParkDetectionUseCase.confirmedPark()` writes the location unconditionally:
+
+```kotlin
+stateStore.lastParkLocation = point   // point may be null
+if (point == null) { … askManualDecision() }
+```
+
+When the fix fails, `null` is written over a perfectly good stored location.
+Two of Wasil's complaints come from this single line:
+
+- *"Sometimes the car disappears when I left him for too long, even though the
+  location shouldn't be changed."* Every park without a fix wipes the pin.
+- *"I think we broke the auto-claim, it asks always."* Every park without a fix
+  takes the no-GPS branch, which asks — bypassing `autoClaim` entirely.
+
+**Auto-claim itself is not broken.** The Settings toggle writes to the store
+correctly and the stored default is `true` (`prefs.getBoolean("auto_claim",
+true)`). Checked, because the obvious theory pointed at the wrong fix.
+
+Fix: never overwrite a known location with `null`. A missing fix means "we don't
+know where you are now", not "the car is nowhere". Keep the previous pin and
+mark it stale if needed.
+
+### 2. It asks to claim a permit that is already yours — HIGH
+
+*"When the permit was on my name it still asked, and I genuinely thought: why
+would that happen?"*
+
+Right. None of the four paths that call `askManualDecision()` check who holds
+the permit first. If it is already on your plate there is nothing to decide.
+
+Fix: read the active plate before asking. Already yours → show the ongoing
+"permit on your car" status and ask nothing. This also removes most of the
+prompts caused by bug 1, since the common case is that you already hold it.
+
+### 3. Detection is slower than it should be — MEDIUM
+
+Current thresholds in `ParkDecisionEngine`:
+
+| Constant | Value | Path |
+|---|---|---|
+| `MIN_STILL_DELAY_MS` | 5 s | Activity Recognition says STILL |
+| `WALK_DISTANCE_M` | 10 m | you moved away from the car |
+| `MAX_ACCURACY_M` | 25 m | gate on both fixes |
+| `TIMEOUT_MS` | 90 s | neither fired → ask |
+
+Wasil asked for "instant, or 5 seconds, or 2 metres". The still path is
+**already** 5 seconds; the 10 m rule is only the fallback when Activity
+Recognition is silent — which is likely what he is hitting, since Settings
+currently reports permissions missing and `ACTIVITY_RECOGNITION` is one of them.
+
+**Do not drop `WALK_DISTANCE_M` to 2 m.** City GPS runs 5–25 m and the code
+accepts fixes up to 25 m, so two consecutive fixes from a motionless phone
+routinely differ by more than 2 m. At that threshold it would fire while still
+sitting in the car — claiming before parking, which is the failure mode that
+actually costs money.
+
+Better: tighten `MAX_ACCURACY_M` to ~10 m so a smaller displacement is
+trustworthy, then 5 m means something. And check first whether the real problem
+is a missing permission rather than a threshold.
+
+### 4. Zone radius is the wrong tool — needs design
+
+*"Instead of radius, is there a way we use the parking street areas? They are
+still small and you could just press them where it is. Radius is very
+inaccurate."*
+
+A fair complaint: a circle centred on a tap covers the wrong side of the street
+and half a canal. He wants to select a real place, not approximate one.
+
+The bundled Amsterdam tariff polygons are **not** the answer — they are
+neighbourhood-sized, so tapping one selects far too much.
+
+Options worth pricing before choosing:
+
+- **OSM parking features via Overpass** — real car parks and street segments,
+  tappable, correctly shaped. Needs a network call and an external dependency
+  the project has so far avoided.
+- **Snap to the tapped street segment** — a corridor along the road rather than
+  a circle. Closest to "press it where it is", but road geometry has to come
+  from somewhere.
+- **Keep circles, drop the slider** — pick from two or three fixed sizes
+  ("this spot" / "this street" / "this block"). Much less work, and removes the
+  radius fiddling without needing new data.
+
+**Open — Wasil's call.** The third is cheapest and might be enough.
+
+---
+
 ## v0.3.2 — the two bugs
 
 ### 1. Claim fails in a retry loop when the permit is already yours — HIGH
