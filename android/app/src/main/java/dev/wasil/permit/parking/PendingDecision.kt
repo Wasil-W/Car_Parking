@@ -1,5 +1,8 @@
 package dev.wasil.permit.parking
 
+import dev.wasil.permit.parking.shared.ClaimGuard
+import dev.wasil.permit.parking.shared.PhoneState
+
 /**
  * A decision raised by a background notification, waiting for the user to act
  * on it. Must survive the app being killed between the notification firing and
@@ -99,3 +102,59 @@ const val PENDING_DECISION_MAX_AGE_MS: Long = 12 * 60 * 60 * 1000L
  */
 fun ParkStateStore.currentPendingDecision(nowMs: Long = System.currentTimeMillis()): PendingDecision? =
     pendingDecision?.takeIf { nowMs - it.raisedAtMs <= PENDING_DECISION_MAX_AGE_MS }
+
+/**
+ * Facts read fresh (never cached) from the network, needed to judge whether a
+ * pending decision's situation still holds. Building this is the caller's
+ * job — see [dev.wasil.permit.parking.GuardedClaim.stillStands] — so this
+ * file stays plain Kotlin, testable without a device or network. [otherState]
+ * and [activeVrn] mirror what [ClaimGuard.evaluate] already reads for a live
+ * claim attempt; [otherPlate] and [myPlate] let the same freshness check run
+ * against either side.
+ */
+data class DecisionFacts(
+    val otherState: PhoneState?,
+    val otherPlate: String?,
+    val myPlate: String?,
+    val activeVrn: String?,
+)
+
+/**
+ * Whether [decision] still describes a real, actionable situation, given a
+ * fresh read of [facts]. A stale decision that can still be acted on is worse
+ * than no decision, because acting on it does something the user no longer
+ * wants.
+ *
+ * - BLOCKED and GIVE_BACK both describe the *other* car's current situation
+ *   (parked outside, holding or needing the permit), which can change out
+ *   from under the notification — the other car may have driven off, or the
+ *   permit may already have moved. Both are re-checked here.
+ * - MANUAL is about your own park, which nothing external can un-happen.
+ * - TAKEOVER reports something that already happened — reclaiming later
+ *   doesn't make the alert untrue. Neither depends on a fact that can lapse,
+ *   so both always stand.
+ *
+ * [facts] is null when the caller couldn't read them (no network, nothing
+ * configured yet). Failing to confirm a situation ended is not evidence that
+ * it did, so a null read keeps the decision rather than clearing it — the
+ * user can still choose "leave it".
+ */
+fun PendingDecision.stillStands(facts: DecisionFacts?, nowMs: Long): Boolean = when (this) {
+    is PendingDecision.Manual, is PendingDecision.Takeover -> true
+    is PendingDecision.Blocked -> blockedStillStands(facts, nowMs)
+    is PendingDecision.GiveBack -> giveBackStillStands(facts, nowMs)
+}
+
+private fun blockedStillStands(facts: DecisionFacts?, nowMs: Long): Boolean {
+    if (facts == null) return true
+    val otherPlate = facts.otherPlate ?: return true
+    return ClaimGuard.evaluate(facts.otherState, otherPlate, facts.activeVrn, nowMs) is ClaimGuard.Verdict.Blocked
+}
+
+private fun giveBackStillStands(facts: DecisionFacts?, nowMs: Long): Boolean {
+    if (facts == null) return true
+    val myPlate = facts.myPlate ?: return true
+    val other = facts.otherState ?: return false
+    val otherStillNeedsIt = other.parkedOutside && nowMs - other.heartbeatAtMs <= ClaimGuard.STALE_AFTER_MS
+    return otherStillNeedsIt && facts.activeVrn == myPlate
+}

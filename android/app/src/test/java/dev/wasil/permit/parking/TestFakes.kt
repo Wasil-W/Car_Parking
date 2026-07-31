@@ -51,8 +51,10 @@ class FakeSharedStateStore(
     val myWrites = mutableListOf<PhoneState>()
     val permitWrites = mutableListOf<PermitClaim>()
     var heartbeats = 0
+    var readOtherCalls = 0
 
     override suspend fun readOther(): PhoneState? {
+        readOtherCalls++
         if (throwOnRead) throw IOException("rtdb down")
         return other
     }
