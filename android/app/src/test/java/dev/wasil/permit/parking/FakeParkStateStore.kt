@@ -13,4 +13,5 @@ class FakeParkStateStore : ParkStateStore {
     override var homeZone: FreeZone? = null
     override var syncUrl: String? = null
     override var lastAlertedClaimMs: Long = 0
+    override var pendingDecision: PendingDecision? = null
 }
