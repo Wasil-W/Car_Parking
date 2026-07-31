@@ -24,9 +24,6 @@ import dev.wasil.permit.parking.label
 import dev.wasil.permit.parking.other
 import dev.wasil.permit.parking.shared.ClaimGuard
 import dev.wasil.permit.parking.shared.PhoneState
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 object SharedSync {
@@ -222,10 +219,12 @@ class MarkFreeZoneWorker(context: Context, params: WorkerParameters) :
             return Result.success()
         }
         val store = PrefsParkStateStore.from(applicationContext)
-        val date = SimpleDateFormat("d MMM HH:mm", Locale.getDefault()).format(Date())
+        // No label: the day it was marked told you nothing about where it
+        // was. The map now shows the actual circle, and Settings shows the
+        // count — that's the useful information, not a timestamp.
         PrefsFreeZoneStore(
             applicationContext.getSharedPreferences("park_state", Context.MODE_PRIVATE),
-        ).add(FreeZone(point.lat, point.lng, 60.0, "Marked $date"))
+        ).add(FreeZone(point.lat, point.lng, 60.0))
         store.parkedOutside = false
         store.lastZoneCode = null
         SharedSync.requestSync(applicationContext)
