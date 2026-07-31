@@ -26,6 +26,11 @@ class CarBluetoothReceiver : BroadcastReceiver() {
                 store.parked = false
                 store.parkedOutside = false
                 store.lastZoneCode = null
+                // The parked pin is now wrong, not merely old — the car is
+                // wherever you are. Leaving it behind made the map point at
+                // the previous parking spot for the whole drive. It only has
+                // meaning once you have walked away from the car again.
+                store.lastParkLocation = null
                 SharedSync.requestSync(context)
                 ParkNotifications.dismissEvents(context)
             }
