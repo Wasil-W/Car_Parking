@@ -20,6 +20,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -148,18 +149,31 @@ fun MapScreen(stateStore: ParkStateStore, freeZoneStore: FreeZoneStore) {
                         },
                         onCancel = { addingKind = null },
                     )
-                    else -> Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    // These float over map tiles, which stay light whatever the
+                    // app theme is doing. An OutlinedButton has a transparent
+                    // container, so in dark mode its near-white label rendered
+                    // straight onto pale streets and vanished. They need a
+                    // surface of their own to sit on.
+                    else -> Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surface,
+                        ),
                     ) {
-                        OutlinedButton(
-                            onClick = { addingKind = ZoneKind.HOME },
-                            modifier = Modifier.weight(1f),
-                        ) { Text(if (homeZone == null) "Set home zone" else "Move home zone") }
-                        OutlinedButton(
-                            onClick = { addingKind = ZoneKind.FREE },
-                            modifier = Modifier.weight(1f),
-                        ) { Text("Add free zone") }
+                        Row(
+                            Modifier.fillMaxWidth().padding(8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            OutlinedButton(
+                                onClick = { addingKind = ZoneKind.HOME },
+                                modifier = Modifier.weight(1f),
+                            ) { Text(if (homeZone == null) "Set home zone" else "Move home zone") }
+                            OutlinedButton(
+                                onClick = { addingKind = ZoneKind.FREE },
+                                modifier = Modifier.weight(1f),
+                            ) { Text("Add free zone") }
+                        }
                     }
                 }
 
@@ -167,6 +181,7 @@ fun MapScreen(stateStore: ParkStateStore, freeZoneStore: FreeZoneStore) {
                     Button(
                         onClick = { openWalkingDirections(context, car) },
                         modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
                     ) { Text("Walk to car") }
                 }
             }
@@ -252,10 +267,20 @@ private fun ZoneCandidateCard(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            // Explicit colours: the stock inactive track resolves to a neutral
+            // that is invisible against this card's own neutral surface, so the
+            // slider rendered as a thumb floating next to a stray dot with no
+            // track between them.
             Slider(
                 value = radiusM,
                 onValueChange = onRadiusChange,
                 valueRange = ZONE_RADIUS_MIN_M.toFloat()..ZONE_RADIUS_MAX_M.toFloat(),
+                colors = SliderDefaults.colors(
+                    thumbColor = MaterialTheme.colorScheme.onSurface,
+                    activeTrackColor = MaterialTheme.colorScheme.onSurface,
+                    inactiveTrackColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        .copy(alpha = 0.4f),
+                ),
             )
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 TextButton(onClick = onCancel) { Text("Cancel") }
