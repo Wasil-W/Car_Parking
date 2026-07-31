@@ -17,4 +17,6 @@ interface FreeZoneStore {
     fun all(): List<FreeZone>
     fun add(zone: FreeZone)
     fun removeAt(index: Int)
+    /** Rename only — position and radius are untouched. Lets a hand-typed name replace a geocoded or coordinate one. */
+    fun updateLabel(index: Int, label: String)
 }

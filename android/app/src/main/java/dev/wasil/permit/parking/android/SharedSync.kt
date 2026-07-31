@@ -24,6 +24,7 @@ import dev.wasil.permit.parking.label
 import dev.wasil.permit.parking.other
 import dev.wasil.permit.parking.shared.ClaimGuard
 import dev.wasil.permit.parking.shared.PhoneState
+import dev.wasil.permit.ui.formatCoordinates
 import java.util.concurrent.TimeUnit
 
 object SharedSync {
@@ -219,12 +220,16 @@ class MarkFreeZoneWorker(context: Context, params: WorkerParameters) :
             return Result.success()
         }
         val store = PrefsParkStateStore.from(applicationContext)
-        // No label: the day it was marked told you nothing about where it
-        // was. The map now shows the actual circle, and Settings shows the
-        // count — that's the useful information, not a timestamp.
+        // No date label: the day it was marked told you nothing about where
+        // it was. Named from a reverse geocode instead — a real address
+        // beats a timestamp — falling back to coordinates if that fails.
+        // Already in a background worker, so awaiting it here (it's
+        // internally timeout-bounded) costs nothing the UI thread would feel.
+        val label = reverseGeocodeAddress(applicationContext, point)
+            ?: formatCoordinates(point.lat, point.lng)
         PrefsFreeZoneStore(
             applicationContext.getSharedPreferences("park_state", Context.MODE_PRIVATE),
-        ).add(FreeZone(point.lat, point.lng, 60.0))
+        ).add(FreeZone(point.lat, point.lng, 60.0, label))
         store.parkedOutside = false
         store.lastZoneCode = null
         SharedSync.requestSync(applicationContext)

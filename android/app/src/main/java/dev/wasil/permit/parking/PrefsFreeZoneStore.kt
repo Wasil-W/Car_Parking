@@ -14,6 +14,9 @@ class PrefsFreeZoneStore(private val prefs: SharedPreferences) : FreeZoneStore {
 
     override fun removeAt(index: Int) = save(all().filterIndexed { i, _ -> i != index })
 
+    override fun updateLabel(index: Int, label: String) =
+        save(all().mapIndexed { i, zone -> if (i == index) zone.copy(label = label) else zone })
+
     private fun save(zones: List<FreeZone>) {
         prefs.edit().putString("free_zones", PermitJson.encodeToString(zones)).apply()
     }

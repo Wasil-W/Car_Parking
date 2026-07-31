@@ -19,6 +19,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
@@ -29,6 +30,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,9 +42,11 @@ import dev.wasil.permit.parking.FreeZoneStore
 import dev.wasil.permit.parking.GeoPoint
 import dev.wasil.permit.parking.ParkStateStore
 import dev.wasil.permit.parking.android.PlayServicesSignals
+import dev.wasil.permit.parking.android.reverseGeocodeAddress
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 /** Which kind of zone the map is currently placing a candidate point for. */
 private enum class ZoneKind { HOME, FREE }
@@ -57,6 +61,7 @@ private enum class ZoneKind { HOME, FREE }
 @Composable
 fun MapScreen(stateStore: ParkStateStore, freeZoneStore: FreeZoneStore) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var me by remember { mutableStateOf<GeoPoint?>(null) }
     LaunchedEffect(Unit) {
         // One-shot read while the screen is open; no tracking.
@@ -72,7 +77,8 @@ fun MapScreen(stateStore: ParkStateStore, freeZoneStore: FreeZoneStore) {
     var addingKind by remember { mutableStateOf<ZoneKind?>(null) }
     var candidatePoint by remember { mutableStateOf<GeoPoint?>(null) }
     var candidateRadius by remember { mutableFloatStateOf(ZONE_RADIUS_DEFAULT_M.toFloat()) }
-    var removalTarget by remember { mutableStateOf<ZoneRef?>(null) }
+    // Tapping an existing zone opens the rename/remove dialog below.
+    var zoneDialogTarget by remember { mutableStateOf<ZoneRef?>(null) }
 
     val candidateZone = candidatePoint?.let { FreeZone(it.lat, it.lng, candidateRadius.toDouble()) }
 
@@ -100,7 +106,7 @@ fun MapScreen(stateStore: ParkStateStore, freeZoneStore: FreeZoneStore) {
                     if (addingKind != null) {
                         candidatePoint = point
                     } else {
-                        removalTarget = zoneHitAt(point, homeZone, freeZones)
+                        zoneDialogTarget = zoneHitAt(point, homeZone, freeZones)
                     }
                 },
                 modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(18.dp)),
@@ -125,15 +131,41 @@ fun MapScreen(stateStore: ParkStateStore, freeZoneStore: FreeZoneStore) {
                         onConfirm = {
                             candidatePoint?.let { point ->
                                 val radius = clampZoneRadius(candidateRadius.toDouble())
+                                // Save immediately with the coordinates as a
+                                // placeholder name — geocoding must never
+                                // delay or risk the save itself — then
+                                // upgrade it to a real address in the
+                                // background once (if) one comes back.
+                                val placeholder = formatCoordinates(point.lat, point.lng)
                                 when (addingKind) {
                                     ZoneKind.HOME -> {
-                                        val zone = FreeZone(point.lat, point.lng, radius, "Home")
+                                        val zone = FreeZone(point.lat, point.lng, radius, placeholder)
                                         stateStore.homeZone = zone
                                         homeZone = zone
+                                        scope.launch {
+                                            val address = reverseGeocodeAddress(context, point) ?: return@launch
+                                            // Only apply if nothing else changed the home zone meanwhile.
+                                            if (stateStore.homeZone == zone) {
+                                                val named = zone.copy(label = address)
+                                                stateStore.homeZone = named
+                                                homeZone = named
+                                            }
+                                        }
                                     }
                                     ZoneKind.FREE, null -> {
-                                        freeZoneStore.add(FreeZone(point.lat, point.lng, radius))
+                                        val zone = FreeZone(point.lat, point.lng, radius, placeholder)
+                                        freeZoneStore.add(zone)
                                         freeZones = freeZoneStore.all()
+                                        val index = freeZones.lastIndex
+                                        scope.launch {
+                                            val address = reverseGeocodeAddress(context, point) ?: return@launch
+                                            // Only apply if that slot still holds this same placeholder zone.
+                                            val current = freeZoneStore.all()
+                                            if (index in current.indices && current[index] == zone) {
+                                                freeZoneStore.updateLabel(index, address)
+                                                freeZones = freeZoneStore.all()
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -195,21 +227,34 @@ fun MapScreen(stateStore: ParkStateStore, freeZoneStore: FreeZoneStore) {
         )
     }
 
-    removalTarget?.let { target ->
-        AlertDialog(
-            onDismissRequest = { removalTarget = null },
-            title = { Text("Remove this zone?") },
-            text = {
-                Text(
+    zoneDialogTarget?.let { target ->
+        val currentZone = when (target) {
+            ZoneRef.Home -> homeZone
+            is ZoneRef.Free -> freeZones.getOrNull(target.index)
+        }
+        if (currentZone == null) {
+            // Removed some other way (e.g. Settings) between the tap and now.
+            zoneDialogTarget = null
+        } else {
+            ZoneEditDialog(
+                target = target,
+                zone = currentZone,
+                onDismiss = { zoneDialogTarget = null },
+                onSave = { newLabel ->
                     when (target) {
-                        ZoneRef.Home ->
-                            "This clears your home zone. Parking there will start claiming the permit again."
-                        is ZoneRef.Free -> "This free zone will no longer be recognised."
-                    },
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
+                        ZoneRef.Home -> {
+                            val updated = currentZone.copy(label = newLabel)
+                            stateStore.homeZone = updated
+                            homeZone = updated
+                        }
+                        is ZoneRef.Free -> {
+                            freeZoneStore.updateLabel(target.index, newLabel)
+                            freeZones = freeZoneStore.all()
+                        }
+                    }
+                    zoneDialogTarget = null
+                },
+                onRemove = {
                     when (target) {
                         ZoneRef.Home -> {
                             stateStore.homeZone = null
@@ -220,12 +265,63 @@ fun MapScreen(stateStore: ParkStateStore, freeZoneStore: FreeZoneStore) {
                             freeZones = freeZoneStore.all()
                         }
                     }
-                    removalTarget = null
-                }) { Text("Remove") }
-            },
-            dismissButton = { TextButton(onClick = { removalTarget = null }) { Text("Cancel") } },
-        )
+                    zoneDialogTarget = null
+                },
+            )
+        }
     }
+}
+
+/**
+ * Rename or remove a tapped zone. A hand-typed name (e.g. "Mum's street")
+ * beats any geocoded address, so this is offered right where the zone lives
+ * on the map rather than buried in Settings. Saving a blank name falls back
+ * to the zone's coordinates rather than leaving it empty.
+ */
+@Composable
+private fun ZoneEditDialog(
+    target: ZoneRef,
+    zone: FreeZone,
+    onDismiss: () -> Unit,
+    onSave: (String) -> Unit,
+    onRemove: () -> Unit,
+) {
+    var name by remember(target) { mutableStateOf(zone.label) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (target == ZoneRef.Home) "Home zone" else "Free zone") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text(
+                    when (target) {
+                        ZoneRef.Home ->
+                            "Removing clears your home zone — parking there will start claiming the permit again."
+                        is ZoneRef.Free -> "Removing means this spot is no longer recognised as free."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                onSave(name.trim().ifBlank { formatCoordinates(zone.lat, zone.lng) })
+            }) { Text("Save") }
+        },
+        dismissButton = {
+            Row {
+                TextButton(onClick = onRemove) { Text("Remove") }
+                TextButton(onClick = onDismiss) { Text("Cancel") }
+            }
+        },
+    )
 }
 
 @Composable

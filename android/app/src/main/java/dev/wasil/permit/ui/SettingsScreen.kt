@@ -335,7 +335,10 @@ fun SettingsScreen(
 
         SettingRow(
             label = "Home zone",
-            value = homeZone?.let { "%.0f m".format(it.radiusM) } ?: "Not set",
+            // The address it was named with (or renamed to on the map) — not
+            // the radius, and never raw coordinates: an address is the thing
+            // Wasil actually recognises at a glance.
+            value = homeZone?.label?.takeIf { it.isNotBlank() } ?: "Not set",
             onClick = onOpenMap,
         )
         SettingRow(
