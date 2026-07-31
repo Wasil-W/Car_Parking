@@ -3,8 +3,45 @@
 Every released version, newest first. Each entry is written to double as its
 GitHub release notes.
 
-Convention from v0.3.1 onward: **visual and layout releases take a patch bump**
-(0.3 → 0.3.1), **releases that change behaviour take a minor bump** (0.3 → 0.4).
+Versioning from v0.3.4 onward: **new features take a minor bump** (0.3 → 0.4);
+**everything else — bug fixes, layout, polish — takes a patch bump**
+(0.3.3 → 0.3.4). Earlier entries used a looser rule that counted any behaviour
+change as a minor.
+
+---
+
+## v0.3.4 — three bugs from real use
+
+No new features. Three fixes, all reported from actually driving around with
+this thing.
+
+**The permit switch no longer retries forever when you already hold it.** Park
+somewhere while the permit is already on your own plate and you would get a
+failure notification, then another, then another — indefinitely. The cause:
+`switchTo` always called activate, and the API rejects activating a plate that
+already holds the session. That rejection looked like a failed switch, and a
+failed switch was retried on exponential backoff with no limit.
+
+Now the app reads the current state first and, if the permit is already where
+you wanted it, reports success — which it always was. Nothing to activate,
+nothing to reject, nothing to retry.
+
+**Retries now stop.** Any switch that keeps failing — wrong credentials, an API
+change — used to retry forever and notify on every attempt. It now gives up
+after five attempts with a single notification stating plainly that the permit
+did **not** move, so you can switch it yourself. Going quiet after giving up
+would have been worse than the loop.
+
+**The car pin no longer gets left behind.** The map kept showing your previous
+parking spot for an entire drive, because the parked location was recorded when
+you parked and never cleared. It is now cleared when your car's Bluetooth
+reconnects: at that point the car is wherever you are, so the old pin is wrong
+rather than merely stale. It regains meaning the moment you walk away again.
+
+116 tests, `versionCode` 7. Two existing tests were updated deliberately —
+`switchTo` now makes two API reads where it made one, since reading first *is*
+the fix, so the tests that counted calls needed to count differently. What they
+assert about behaviour is unchanged.
 
 ---
 

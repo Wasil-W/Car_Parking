@@ -128,6 +128,24 @@ class ParkNotifications(private val context: Context) : ParkNotifier {
             .addAction(action(ParkActionReceiver.ACTION_FREE_HERE, "Free here")))
     }
 
+    /**
+     * The last attempt has failed and retrying has stopped. Says so plainly:
+     * going quiet after giving up would leave the permit on the wrong car with
+     * nothing to indicate it.
+     */
+    fun switchGaveUp() {
+        notify(EVENT_ID, NotificationCompat.Builder(context, CHANNEL_EVENTS)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle("Gave up switching the permit")
+            .setContentText(
+                "Tried ${ParkWorkers.MAX_CLAIM_ATTEMPTS} times and stopped. " +
+                    "The permit did NOT move — switch it yourself.",
+            )
+            .setAutoCancel(true)
+            .addAction(action(ParkActionReceiver.ACTION_CLAIM, "Try again"))
+            .addAction(action(ParkActionReceiver.ACTION_IGNORE, "Ignore")))
+    }
+
     override fun switchFailed(reason: String?) {
         notify(EVENT_ID, NotificationCompat.Builder(context, CHANNEL_EVENTS)
             .setSmallIcon(R.drawable.ic_notification)
