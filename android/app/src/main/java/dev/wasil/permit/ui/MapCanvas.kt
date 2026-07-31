@@ -58,6 +58,10 @@ fun MapCanvas(
                     icon = ContextCompat.getDrawable(map.context, R.drawable.ic_marker_car)
                     title = "Your car"
                     setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                    // The two markers are self-explanatory; osmdroid's stock
+                    // InfoWindow bubble is off-centre and just repeats the
+                    // title, so suppress it instead of tapping into it.
+                    setOnMarkerClickListener { _, _ -> true }
                 })
             }
             me?.let {
@@ -66,6 +70,7 @@ fun MapCanvas(
                     icon = ContextCompat.getDrawable(map.context, R.drawable.ic_marker_me)
                     title = "You"
                     setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                    setOnMarkerClickListener { _, _ -> true }
                 })
             }
             map.invalidate()
