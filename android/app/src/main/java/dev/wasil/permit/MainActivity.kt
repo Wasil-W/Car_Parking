@@ -17,6 +17,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.wasil.permit.parking.android.ParkActionReceiver
+import dev.wasil.permit.parking.android.SharedSync
 import dev.wasil.permit.parking.currentPendingDecision
 import dev.wasil.permit.ui.DecisionActionKind
 import dev.wasil.permit.ui.DecisionScreen
@@ -44,6 +45,16 @@ class MainActivity : ComponentActivity() {
                 ) as T
             }
         }
+    }
+
+    /**
+     * A shorter check than the 15-minute heartbeat floor: whenever the app is
+     * looked at, ask right away whether the other phone has taken the permit,
+     * instead of waiting for the next scheduled tick.
+     */
+    override fun onStart() {
+        super.onStart()
+        SharedSync.requestImmediateHeartbeat(this)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
