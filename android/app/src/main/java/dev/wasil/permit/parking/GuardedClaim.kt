@@ -11,6 +11,9 @@ fun MyCar.other(): MyCar = if (this == MyCar.WASIL) MyCar.WALID else MyCar.WASIL
 fun MyCar.label(): String = if (this == MyCar.WASIL) "Wasil" else "Walid"
 fun MyCar.key(): String = name.lowercase()
 
+/** Inverse of [MyCar.label] — turns a notifier's "Wasil"/"Walid" string back into a [MyCar]. */
+fun myCarForLabel(label: String): MyCar = if (label == "Wasil") MyCar.WASIL else MyCar.WALID
+
 sealed interface GuardedResult {
     /** Guard passed or was skipped; [outcome] is the raw switch outcome. */
     data class Done(val outcome: ParkOutcome, val guardSkippedNote: String? = null) : GuardedResult

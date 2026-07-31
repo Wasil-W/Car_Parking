@@ -13,6 +13,8 @@ import dev.wasil.permit.parking.ParkNotifier
 import dev.wasil.permit.parking.ParkStateStore
 import dev.wasil.permit.parking.PendingDecision
 import dev.wasil.permit.parking.PrefsParkStateStore
+import dev.wasil.permit.parking.myCarForLabel
+import dev.wasil.permit.parking.other
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -97,7 +99,7 @@ class ParkNotifications(private val context: Context) : ParkNotifier {
             zoneText?.let { append(" · $it") }
         }
         notify(STATUS_ID, NotificationCompat.Builder(context, CHANNEL_STATUS)
-            .setSmallIcon(R.drawable.ic_notification)
+            .setSmallIcon(notificationIconFor(myCarForLabel(label)))
             .setContentTitle("Permit on $label's car ($vrn)")
             .setContentText(text)
             .setOngoing(true)
@@ -118,8 +120,10 @@ class ParkNotifications(private val context: Context) : ParkNotifier {
 
     override fun askGiveBack(otherLabel: String) {
         val decision = PendingDecision.GiveBack(otherLabel, raisedAtMs = System.currentTimeMillis())
+        // Only raised when the permit is on my own plate right now (see
+        // GiveBackWorker) - the holder is mine, not otherLabel's.
         notify(EVENT_ID, NotificationCompat.Builder(context, CHANNEL_EVENTS)
-            .setSmallIcon(R.drawable.ic_notification)
+            .setSmallIcon(notificationIconFor(store.myCar))
             .setContentTitle("Give the permit back to $otherLabel?")
             .setContentText("You parked free; $otherLabel's car is parked outside and the permit is still on yours.")
             .setAutoCancel(true)
@@ -132,8 +136,9 @@ class ParkNotifications(private val context: Context) : ParkNotifier {
         val decision = PendingDecision.Blocked(
             otherLabel, parkedAtMs, heartbeatAtMs, raisedAtMs = System.currentTimeMillis(),
         )
+        // The permit is what's blocking the claim, so it's on the other car.
         notify(EVENT_ID, NotificationCompat.Builder(context, CHANNEL_EVENTS)
-            .setSmallIcon(R.drawable.ic_notification)
+            .setSmallIcon(notificationIconFor(store.myCar?.other()))
             .setContentTitle("$otherLabel's car is parked — permit NOT claimed")
             .setContentText("$otherLabel parked at ${time(parkedAtMs)} (last seen ${time(heartbeatAtMs)}). Claiming would leave their car unpermitted.")
             .setAutoCancel(true)
@@ -144,8 +149,9 @@ class ParkNotifications(private val context: Context) : ParkNotifier {
 
     override fun takeover(byLabel: String) {
         val decision = PendingDecision.Takeover(byLabel, raisedAtMs = System.currentTimeMillis())
+        // byLabel is always the other car - it took the permit from mine.
         notify(EVENT_ID, NotificationCompat.Builder(context, CHANNEL_EVENTS)
-            .setSmallIcon(R.drawable.ic_notification)
+            .setSmallIcon(notificationIconFor(store.myCar?.other()))
             .setContentTitle("$byLabel took the permit")
             .setContentText("Your car is parked WITHOUT a permit. Move it or reclaim.")
             .setAutoCancel(true)
