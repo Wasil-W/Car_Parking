@@ -10,6 +10,58 @@ change as a minor.
 
 ---
 
+## v0.4 — notifications you can tap, and zones you can see
+
+The first release since the rebrand that adds capability rather than fixing or
+restyling.
+
+**Every notification opens the app.** Tapping one no longer just dismisses it —
+it opens a full-screen version of the same question, with the same choices. The
+blocked-claim case is the one that matters: the mark with the permit mid-travel,
+when the other car parked, when it was last heard from, and why claiming now
+would be a fine. The notification's buttons and the screen's buttons run
+literally the same code, so they cannot drift apart.
+
+The decision is written to storage rather than carried in the notification, so
+it survives the app being killed between the notification arriving and you
+tapping it.
+
+**A stale question is now discarded rather than asked.** "Walid is parked, claim
+anyway?" stops being a live question the moment Walid drives off — but it used to
+sit there, still tappable, still able to do something you no longer wanted. The
+situation is re-checked before the question is shown, using the same rule a real
+claim uses. Two of the four kinds can go stale this way; "Walid took the permit"
+reports something that already happened, so it never expires.
+
+If that check cannot reach the network, the question is **kept**. Failing to
+confirm a situation ended is not evidence that it ended.
+
+**Notification icons show who holds the permit** — the dot sits against your arc
+or his, matching the mark in the app.
+
+**Zones live on the map.** Home and free zones are drawn as circles you can see
+against the street, created by tapping the map, and removed or renamed by tapping
+the circle. They used to exist only as rows of coordinates in Settings.
+
+**Zones have addresses.** A new zone is named from its location — "Damstraat 14"
+rather than `52.37021, 4.89516` — and you can rename it to whatever you actually
+call the place. If the lookup fails, it falls back to coordinates rather than
+failing to save.
+
+**Walking directions back to the car**, handed to your maps app.
+
+**The map's own pins are ours now**, and tapping one no longer pops the stock
+off-centre bubble.
+
+One honest limit: a takeover alert is not instant and cannot be without push
+notifications. The app now checks the moment you open it, on top of the
+fifteen-minute floor Android enforces on background work. A phone left in a
+pocket still waits.
+
+185 tests, `versionCode` 9.
+
+---
+
 ## v0.3.5 — three fixes from a day of driving
 
 **Your car no longer vanishes from the map.** When a park was confirmed but the
