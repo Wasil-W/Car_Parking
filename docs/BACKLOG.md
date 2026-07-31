@@ -132,7 +132,41 @@ Better: tighten `MAX_ACCURACY_M` to ~10 m so a smaller displacement is
 trustworthy, then 5 m means something. And check first whether the real problem
 is a missing permission rather than a threshold.
 
-### 4. Zone radius is the wrong tool — needs design
+### 4a. RDW open data investigated — it has no on-street geometry
+
+Checked 2026-07-31 against the live APIs, after a suggestion that RDW's National
+Parking Register could supply zone shapes. **It cannot.** Recorded so nobody
+spends a day rediscovering this.
+
+`PARKEERGEBIED` (`opendata.rdw.nl/resource/mz4f-59fw.json`) returns exactly four
+fields and no geometry:
+
+```json
+{"areamanagerid": "599", "areaid": "0", "usageid": "BETAALDP", "uuid": "0dad07fa-…"}
+```
+
+Across the whole RDW parking family only two datasets carry coordinates, and
+both are Point-only and irrelevant here: `GEO Parkeer Garages` (`t5pc-eb34`) and
+`GEO Carpool` (`9c54-cmfx`). `GEBIED REGELING`, `PARKEERADRES`, `TARIEFDEEL`,
+`VERKOOPPUNT` and the `GELDIGHEIDS*` sets are administrative only.
+
+`npropendata.rdw.nl/parkingdata/v2` turned out to be an index of parking
+**facilities** — garages and P+R sites, each with a `staticDataUrl` — not
+on-street zones.
+
+So a point-plus-radius zone registry cannot be built from RDW: there are no
+points for on-street parking. The only source of real on-street geometry in this
+project remains the Amsterdam tariff polygons already bundled since v0.3.
+
+**Two things there are still worth having**, both ID-keyed so they enrich zones
+located some other way rather than locating anything themselves:
+
+- `usageid` separates `BETAALDP` (paid) from `VERGUNP` (**permit**) parking.
+  This app is a permit app and currently cannot tell those apart.
+- `TARIEFDEEL` holds real fare structures, better than the rates in our bundled
+  snapshot.
+
+### 4b. Zone radius is the wrong tool — needs design
 
 *"Instead of radius, is there a way we use the parking street areas? They are
 still small and you could just press them where it is. Radius is very
@@ -208,7 +242,30 @@ notification that says retries stopped.
 
 ---
 
-## v0.4 — tappable notifications
+## v0.4 — tappable notifications  *(built, on branch `v04-bugs-notifications`)*
+
+Done and committed: a persisted pending decision, every notification carrying a
+content intent, a full-screen decision view, an immediate takeover check when
+the app is foregrounded, zones drawn and managed on the map, walking directions,
+and the marker info-window suppressed.
+
+**Still open before it can ship:**
+
+- **Addresses instead of coordinates.** Home reads `52.37021, 4.89516` and free
+  zones are named after the day they were marked. Android's built-in `Geocoder`
+  is free and needs no key. Open question from `ROADMAP.md`: store the address
+  when the zone is created, or look it up each time? Stored is fast and works
+  offline but goes stale.
+- **Tell the other phone when you take the permit.** Wasil asked for this
+  explicitly, and explicitly *not* as a silent alert — both of them are often at
+  work with the phone charging in the car. Today the other phone finds out on its
+  next heartbeat, up to 15 minutes later; foregrounding the app now checks
+  immediately, but a backgrounded phone still waits. Genuinely instant needs FCM.
+- **State-aware notification icons** — deferred during the notification work.
+- **Clear a pending decision when its situation lapses** — the other car drove
+  off, so "claim anyway?" is now a question about nothing. This is a correctness
+  problem, not tidiness: a stale decision is still actionable.
+
 
 Approved in review 2026-07-30. Every notification gains a content intent, so
 tapping it opens the app to a full-screen version of the same decision
