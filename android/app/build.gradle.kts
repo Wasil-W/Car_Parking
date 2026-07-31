@@ -13,8 +13,9 @@ android {
         applicationId = "dev.wasil.permit"
         minSdk = 26
         targetSdk = 35
-        versionCode = 5
-        versionName = "0.3.2"
+        versionCode = 6
+        versionName = "0.3.3"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
@@ -55,4 +56,14 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.okhttp.mockwebserver)
+
+    // Screenshot tests. These render real Compose on a device/emulator and
+    // write PNGs, catching the class of bug that diffs and unit tests cannot —
+    // black-on-black text, an invisible arc, a clipped icon. androidTest only,
+    // so none of this ships in the APK.
+    androidTestImplementation(libs.junit)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(platform(libs.compose.bom))
+    androidTestImplementation(libs.compose.ui.test.junit4)
+    debugImplementation(libs.compose.ui.test.manifest)
 }

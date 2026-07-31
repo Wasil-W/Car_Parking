@@ -25,8 +25,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -64,12 +64,71 @@ import kotlinx.coroutines.launch
 private fun granted(context: Context, permission: String): Boolean =
     ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
 
+/**
+ * One line per setting: label on the left, current value and/or a trailing
+ * control on the right, chevron only when the row itself is tappable. This is
+ * the only shape a settings item takes on this screen — no titled blocks, no
+ * full-width buttons.
+ */
+@Composable
+private fun SettingRow(
+    label: String,
+    value: String? = null,
+    onClick: (() -> Unit)? = null,
+    trailing: @Composable (() -> Unit)? = null,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .let { if (onClick != null) it.clickable(onClick = onClick) else it }
+            .padding(horizontal = 20.dp, vertical = 11.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+        value?.let {
+            Text(
+                it,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        trailing?.invoke()
+        if (onClick != null) {
+            Icon(
+                Icons.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SectionHeader(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = 20.dp, top = 24.dp, bottom = 4.dp),
+    )
+}
+
+/** bodySmall hint under a row, for the rare case where the row's meaning genuinely isn't obvious. */
+@Composable
+private fun RowHint(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 4.dp),
+    )
+}
+
 @Composable
 fun SettingsScreen(
     stateStore: ParkStateStore,
     freeZoneStore: FreeZoneStore,
     sharedStore: () -> SharedStateStore,
-    onBack: () -> Unit,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -89,6 +148,9 @@ fun SettingsScreen(
     var syncUrl by remember { mutableStateOf(stateStore.syncUrl ?: "") }
     var syncStatus by remember { mutableStateOf<String?>(null) }
     var editing by remember { mutableStateOf(false) }
+    var pickingCar by remember { mutableStateOf(false) }
+    var editingHome by remember { mutableStateOf(false) }
+    var showZones by remember { mutableStateOf(false) }
 
     // Reading `refresh` here makes permission/battery grants recompose this.
     // Computed up front (not just inside the System section further down) so
@@ -114,24 +176,28 @@ fun SettingsScreen(
         homeZoneSet = homeZone != null,
     )
     val setupOk = rows.all { it.ok }
+    val bluetoothGranted = granted(context, Manifest.permission.BLUETOOTH_CONNECT)
 
     Column(
-        modifier = Modifier.fillMaxSize()
+        modifier = Modifier
+            .fillMaxSize()
             .windowInsetsPadding(WindowInsets.safeDrawing)
-            .padding(24.dp)
             .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("Settings", style = MaterialTheme.typography.headlineSmall)
+        Text(
+            "Settings",
+            style = MaterialTheme.typography.headlineSmall,
+            modifier = Modifier.padding(start = 20.dp, top = 20.dp, bottom = 8.dp),
+        )
 
         // --- Setup summary: the set-once questions (whose phone, sync URL), collapsed. ---
         Card(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         ) {
             Column(
                 modifier = Modifier.fillMaxWidth().padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -144,20 +210,19 @@ fun SettingsScreen(
                     )
                     Text(
                         if (setupOk) "Setup complete" else "Setup incomplete",
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.weight(1f),
                     )
+                    TextButton(onClick = { editing = !editing }) { Text(if (editing) "Done" else "Edit") }
                 }
                 Text(
                     // Guarded: an unset myCar previously interpolated the
                     // literal string "null" via the safe-call chain
                     // ("null's phone"). Currently unreachable because of
                     // branch ordering in MainActivity, but not guaranteed.
-                    myCar?.let { "${it.label()}'s phone" } ?: "Whose phone isn't set yet",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                Text(
-                    (if (syncUrl.isNotBlank()) "Sync configured" else "Sync not set up") +
-                        " · " + (if (carMac != null) "car paired" else "no car paired"),
+                    (myCar?.let { "${it.label()}'s phone" } ?: "Whose phone isn't set yet") + " · " +
+                        (if (syncUrl.isNotBlank()) "sync configured" else "sync not set up") + " · " +
+                        (if (carMac != null) "car paired" else "no car paired"),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -165,7 +230,7 @@ fun SettingsScreen(
                 if (editing) {
                     HorizontalDivider()
 
-                    Text("Whose phone is this?", style = MaterialTheme.typography.titleMedium)
+                    Text("Whose phone is this?", style = MaterialTheme.typography.bodyLarge)
                     Row {
                         MyCar.entries.forEach { option ->
                             Row(Modifier.clickable {
@@ -182,10 +247,11 @@ fun SettingsScreen(
                         }
                     }
 
-                    Text("Shared state (Firebase)", style = MaterialTheme.typography.titleMedium)
+                    Text("Shared state (Firebase)", style = MaterialTheme.typography.bodyLarge)
                     Text(
                         "Database URL from SETUP_FIREBASE.md. Both phones must use the same URL.",
                         style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     OutlinedTextField(
                         value = syncUrl,
@@ -194,7 +260,7 @@ fun SettingsScreen(
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Row {
-                        Button(onClick = {
+                        TextButton(onClick = {
                             stateStore.syncUrl = syncUrl.trim().ifBlank { null }
                             syncStatus = "Saved."
                             SharedSync.requestSync(context)
@@ -209,168 +275,193 @@ fun SettingsScreen(
                     }
                     syncStatus?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                 }
-
-                TextButton(
-                    onClick = { editing = !editing },
-                    modifier = Modifier.align(Alignment.End),
-                ) { Text(if (editing) "Done" else "Edit") }
             }
         }
 
         // --- Detection: options you might occasionally change. ---
-        Text("Detection", style = MaterialTheme.typography.labelSmall)
+        SectionHeader("Detection")
 
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("Auto-claim permit on park", Modifier.padding(top = 12.dp))
-            Switch(checked = autoClaim, onCheckedChange = {
-                stateStore.autoClaim = it
-                autoClaim = it
-            })
-        }
-
-        Text("Car Bluetooth device", style = MaterialTheme.typography.titleMedium)
-        Text(
-            carName?.let { "Selected: $it ($carMac)" } ?: "No car selected yet",
-            style = MaterialTheme.typography.bodyMedium,
+        SettingRow(
+            label = "Auto-claim permit on park",
+            trailing = {
+                Switch(checked = autoClaim, onCheckedChange = {
+                    stateStore.autoClaim = it
+                    autoClaim = it
+                })
+            },
         )
-        if (granted(context, Manifest.permission.BLUETOOTH_CONNECT)) {
+
+        SettingRow(
+            label = "Car Bluetooth device",
+            value = carName ?: "Not set",
+            onClick = if (bluetoothGranted) {
+                { pickingCar = !pickingCar }
+            } else null,
+            trailing = if (!bluetoothGranted) {
+                {
+                    TextButton(onClick = {
+                        permissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
+                    }) { Text("Grant") }
+                }
+            } else null,
+        )
+        if (pickingCar && bluetoothGranted) {
             val bonded = remember(refresh) {
                 runCatching {
                     context.getSystemService(BluetoothManager::class.java)
                         ?.adapter?.bondedDevices?.toList().orEmpty()
                 }.getOrDefault(emptyList())
             }
-            if (bonded.isEmpty()) Text("No paired Bluetooth devices found.")
+            if (bonded.isEmpty()) {
+                RowHint("No paired Bluetooth devices found.")
+            }
             bonded.forEach { device ->
                 val name = runCatching { device.name }.getOrNull() ?: "Unknown"
-                Text(
-                    "• $name",
-                    modifier = Modifier.fillMaxWidth().clickable {
+                SettingRow(
+                    label = name,
+                    onClick = {
                         stateStore.carMac = device.address
                         stateStore.carName = name
                         carMac = device.address
                         carName = name
-                    }.padding(vertical = 6.dp),
+                        pickingCar = false
+                    },
+                    trailing = if (device.address == carMac) {
+                        { Icon(Icons.Filled.Check, contentDescription = null, tint = colors.fine) }
+                    } else null,
                 )
             }
-        } else {
-            Button(onClick = { permissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT) }) {
-                Text("Grant Bluetooth permission to pick your car")
-            }
         }
-        HorizontalDivider()
 
         // --- Zones ---
-        Text("Zones", style = MaterialTheme.typography.labelSmall)
+        SectionHeader("Zones")
 
-        Text("Home zone", style = MaterialTheme.typography.titleMedium)
-        Text(
-            homeZone?.let { "Home set: %.5f, %.5f (radius %.0f m)".format(it.lat, it.lng, it.radiusM) }
-                ?: "Not set. Parking inside your home zone never claims the permit.",
-            style = MaterialTheme.typography.bodyMedium,
+        SettingRow(
+            label = "Home zone",
+            value = homeZone?.let { "%.0f m".format(it.radiusM) } ?: "Not set",
+            onClick = { editingHome = !editingHome },
         )
-        homeZone?.let { zone ->
-            Text("Radius: %.0f m".format(zone.radiusM))
-            Slider(
-                value = zone.radiusM.toFloat(),
-                onValueChange = {
-                    val updated = zone.copy(radiusM = it.toDouble())
-                    stateStore.homeZone = updated
-                    homeZone = updated
+        if (editingHome) {
+            RowHint("Parking inside your home zone never claims the permit.")
+            homeZone?.let { zone ->
+                Slider(
+                    value = zone.radiusM.toFloat(),
+                    onValueChange = {
+                        val updated = zone.copy(radiusM = it.toDouble())
+                        stateStore.homeZone = updated
+                        homeZone = updated
+                    },
+                    valueRange = 30f..200f,
+                    modifier = Modifier.padding(horizontal = 20.dp),
+                )
+            }
+            SettingRow(
+                label = if (homeZone == null) "Set home to current location" else "Move home here",
+                onClick = {
+                    homeStatus = "Getting location…"
+                    scope.launch {
+                        val point = PlayServicesSignals(context).currentLocation()
+                        if (point == null) {
+                            homeStatus = "Couldn't get a location — check location permission and try outdoors."
+                        } else {
+                            val zone = FreeZone(point.lat, point.lng, homeZone?.radiusM ?: 60.0, "Home")
+                            stateStore.homeZone = zone
+                            homeZone = zone
+                            homeStatus = "Home saved."
+                        }
+                    }
                 },
-                valueRange = 30f..200f,
             )
-        }
-        Button(onClick = {
-            homeStatus = "Getting location…"
-            scope.launch {
-                val point = PlayServicesSignals(context).currentLocation()
-                if (point == null) {
-                    homeStatus = "Couldn't get a location — check location permission and try outdoors."
-                } else {
-                    val zone = FreeZone(point.lat, point.lng, homeZone?.radiusM ?: 60.0, "Home")
-                    stateStore.homeZone = zone
-                    homeZone = zone
-                    homeStatus = "Home saved."
-                }
+            if (homeZone != null) {
+                SettingRow(
+                    label = "Clear home zone",
+                    onClick = {
+                        stateStore.homeZone = null
+                        homeZone = null
+                        homeStatus = null
+                    },
+                )
             }
-        }) { Text(if (homeZone == null) "Set home to current location" else "Move home here") }
-        if (homeZone != null) {
-            TextButton(onClick = {
-                stateStore.homeZone = null
-                homeZone = null
-                homeStatus = null
-            }) { Text("Clear home zone") }
+            homeStatus?.let { RowHint(it) }
         }
-        homeStatus?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-        HorizontalDivider()
 
-        Text("Free zones", style = MaterialTheme.typography.titleMedium)
-        if (zones.isEmpty()) Text("None marked. Use \"Free here\" on a parking notification.")
-        zones.forEachIndexed { index, zone ->
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(zone.label.ifBlank { "%.5f, %.5f".format(zone.lat, zone.lng) },
-                    Modifier.padding(top = 12.dp))
-                TextButton(onClick = {
-                    freeZoneStore.removeAt(index)
-                    zones = freeZoneStore.all()
-                }) { Text("Delete") }
+        // Free zones belongs under Zones as a row, not as its own section —
+        // it is one setting, the same shape as Home zone.
+        SettingRow(
+            label = "Free zones",
+            value = if (zones.isEmpty()) "None" else "${zones.size}",
+            onClick = { showZones = !showZones },
+        )
+        if (showZones) {
+            if (zones.isEmpty()) {
+                RowHint("Mark one with \"Free here\" on a parking notification.")
+            }
+            zones.forEachIndexed { index, zone ->
+                SettingRow(
+                    label = zone.label.ifBlank { "%.5f, %.5f".format(zone.lat, zone.lng) },
+                    trailing = {
+                        TextButton(onClick = {
+                            freeZoneStore.removeAt(index)
+                            zones = freeZoneStore.all()
+                        }) { Text("Delete") }
+                    },
+                )
             }
         }
-        HorizontalDivider()
 
         // --- System: permission grants, battery optimisation, and what first-run
         // could skip — quiet when fine. `rows` is computed above, alongside the
         // Setup summary card, so both read the same facts. ---
-        Text("System", style = MaterialTheme.typography.labelSmall)
+        SectionHeader("System")
 
         rows.forEach { row ->
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Icon(
-                        if (row.ok) Icons.Filled.Check else Icons.Filled.Warning,
-                        contentDescription = null,
-                        tint = if (row.ok) colors.fine else colors.alert,
-                    )
-                    Text(row.label, Modifier.padding(top = 12.dp))
-                }
-                row.fixLabel?.let { fix ->
-                    TextButton(onClick = {
-                        when (fix) {
-                            "Grant" -> needed.firstOrNull { !granted(context, it) }
-                                ?.let { permissionLauncher.launch(it) }
-                            else -> {
-                                context.startActivity(
-                                    Intent(
-                                        Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-                                        Uri.parse("package:${context.packageName}"),
-                                    ),
-                                )
-                                refresh++
-                            }
+            SettingRow(
+                label = row.label,
+                trailing = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Icon(
+                            if (row.ok) Icons.Filled.Check else Icons.Filled.Warning,
+                            contentDescription = null,
+                            tint = if (row.ok) colors.fine else colors.alert,
+                        )
+                        row.fixLabel?.let { fix ->
+                            TextButton(onClick = {
+                                when (fix) {
+                                    "Grant" -> needed.firstOrNull { !granted(context, it) }
+                                        ?.let { permissionLauncher.launch(it) }
+                                    else -> {
+                                        context.startActivity(
+                                            Intent(
+                                                Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                                                Uri.parse("package:${context.packageName}"),
+                                            ),
+                                        )
+                                        refresh++
+                                    }
+                                }
+                            }) { Text(fix) }
                         }
-                    }) { Text(fix) }
-                }
-            }
+                    }
+                },
+            )
         }
-        Text(
+        SettingRow(
+            label = "Open app settings",
+            onClick = {
+                context.startActivity(
+                    Intent(
+                        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        Uri.fromParts("package", context.packageName, null),
+                    ),
+                )
+            },
+        )
+        RowHint(
             "Background location must be set to \"Allow all the time\" in system settings " +
                 "for detection to work with the screen off.",
-            style = MaterialTheme.typography.bodySmall,
         )
-        Button(onClick = {
-            context.startActivity(
-                Intent(
-                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                    Uri.fromParts("package", context.packageName, null),
-                ),
-            )
-        }) { Text("Open app settings") }
-        HorizontalDivider()
-
-        TextButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Back") }
     }
 }
