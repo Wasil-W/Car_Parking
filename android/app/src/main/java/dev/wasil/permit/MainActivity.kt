@@ -2,7 +2,6 @@ package dev.wasil.permit
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
@@ -17,10 +16,8 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import dev.wasil.permit.ui.MainScreen
+import dev.wasil.permit.ui.HandoffTabs
 import dev.wasil.permit.ui.MainViewModel
-import dev.wasil.permit.ui.MapScreen
-import dev.wasil.permit.ui.SettingsScreen
 import dev.wasil.permit.ui.SetupFlow
 import dev.wasil.permit.ui.theme.HandoffTheme
 
@@ -49,68 +46,35 @@ class MainActivity : ComponentActivity() {
                 // Every screen must sit inside a Surface. Without one,
                 // LocalContentColor defaults to Color.Black, so any Text that
                 // doesn't set its own colour renders black — invisible on the
-                // dark background. MainScreen escaped this because its Scaffold
-                // provides a Surface; Settings, Map and the setup screens did
-                // not, and were unreadable in dark mode. Fixing it here rather
+                // dark background. This is what made Settings, the map and the
+                // setup screens unreadable before v0.3.2; fixing it here rather
                 // than per-screen also covers every screen added later.
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,
                 ) {
-                val state by viewModel.state.collectAsStateWithLifecycle()
-                var showSettings by remember { mutableStateOf(false) }
-                var showMap by remember { mutableStateOf(false) }
-                when {
-                    state.needsSetup || app.parkStateStore.myCar == null -> {
-                        var setupDone by remember { mutableStateOf(false) }
-                        if (setupDone) {
-                            MainScreen(
-                                state = state,
-                                myCar = app.parkStateStore.myCar,
-                                onSwitch = viewModel::switchTo,
-                                onRefresh = viewModel::refresh,
-                                onMessageShown = viewModel::consumeMessage,
-                                onOpenSettings = { showSettings = true },
-                                onOpenMap = { showMap = true },
-                                onConfirmBlocked = viewModel::confirmBlockedSwitch,
-                                onDismissBlocked = viewModel::dismissBlocked,
-                            )
-                        } else {
-                            SetupFlow(
-                                stateStore = app.parkStateStore,
-                                onSaveCredentials = viewModel::saveSetup,
-                                onDone = { setupDone = true },
-                            )
-                        }
-                    }
-                    showSettings -> {
-                        BackHandler { showSettings = false }
-                        SettingsScreen(
+                    val state by viewModel.state.collectAsStateWithLifecycle()
+                    var setupDone by remember { mutableStateOf(false) }
+                    val needsSetup =
+                        (state.needsSetup || app.parkStateStore.myCar == null) && !setupDone
+
+                    if (needsSetup) {
+                        SetupFlow(
                             stateStore = app.parkStateStore,
-                            freeZoneStore = app.freeZoneStore,
-                            sharedStore = { app.sharedStateStore() },
-                            onBack = { showSettings = false },
+                            onSaveCredentials = viewModel::saveSetup,
+                            onDone = { setupDone = true },
+                        )
+                    } else {
+                        HandoffTabs(
+                            app = app,
+                            state = state,
+                            onSwitch = viewModel::switchTo,
+                            onRefresh = viewModel::refresh,
+                            onMessageShown = viewModel::consumeMessage,
+                            onConfirmBlocked = viewModel::confirmBlockedSwitch,
+                            onDismissBlocked = viewModel::dismissBlocked,
                         )
                     }
-                    showMap -> {
-                        BackHandler { showMap = false }
-                        MapScreen(
-                            stateStore = app.parkStateStore,
-                            onBack = { showMap = false },
-                        )
-                    }
-                    else -> MainScreen(
-                        state = state,
-                        myCar = app.parkStateStore.myCar,
-                        onSwitch = viewModel::switchTo,
-                        onRefresh = viewModel::refresh,
-                        onMessageShown = viewModel::consumeMessage,
-                        onOpenSettings = { showSettings = true },
-                        onOpenMap = { showMap = true },
-                        onConfirmBlocked = viewModel::confirmBlockedSwitch,
-                        onDismissBlocked = viewModel::dismissBlocked,
-                    )
-                }
                 }
             }
         }

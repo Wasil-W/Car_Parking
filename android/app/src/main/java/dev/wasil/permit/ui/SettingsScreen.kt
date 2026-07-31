@@ -81,7 +81,7 @@ private fun SettingRow(
         modifier = Modifier
             .fillMaxWidth()
             .let { if (onClick != null) it.clickable(onClick = onClick) else it }
-            .padding(horizontal = 20.dp, vertical = 14.dp),
+            .padding(horizontal = 20.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
@@ -150,6 +150,7 @@ fun SettingsScreen(
     var editing by remember { mutableStateOf(false) }
     var pickingCar by remember { mutableStateOf(false) }
     var editingHome by remember { mutableStateOf(false) }
+    var showZones by remember { mutableStateOf(false) }
 
     // Reading `refresh` here makes permission/battery grants recompose this.
     // Computed up front (not just inside the System section further down) so
@@ -340,8 +341,8 @@ fun SettingsScreen(
             value = homeZone?.let { "%.0f m".format(it.radiusM) } ?: "Not set",
             onClick = { editingHome = !editingHome },
         )
-        RowHint("Parking inside your home zone never claims the permit.")
         if (editingHome) {
+            RowHint("Parking inside your home zone never claims the permit.")
             homeZone?.let { zone ->
                 Slider(
                     value = zone.radiusM.toFloat(),
@@ -384,20 +385,28 @@ fun SettingsScreen(
             homeStatus?.let { RowHint(it) }
         }
 
-        SectionHeader("Free zones")
-        if (zones.isEmpty()) {
-            RowHint("None marked. Use \"Free here\" on a parking notification.")
-        }
-        zones.forEachIndexed { index, zone ->
-            SettingRow(
-                label = zone.label.ifBlank { "%.5f, %.5f".format(zone.lat, zone.lng) },
-                trailing = {
-                    TextButton(onClick = {
-                        freeZoneStore.removeAt(index)
-                        zones = freeZoneStore.all()
-                    }) { Text("Delete") }
-                },
-            )
+        // Free zones belongs under Zones as a row, not as its own section —
+        // it is one setting, the same shape as Home zone.
+        SettingRow(
+            label = "Free zones",
+            value = if (zones.isEmpty()) "None" else "${zones.size}",
+            onClick = { showZones = !showZones },
+        )
+        if (showZones) {
+            if (zones.isEmpty()) {
+                RowHint("Mark one with \"Free here\" on a parking notification.")
+            }
+            zones.forEachIndexed { index, zone ->
+                SettingRow(
+                    label = zone.label.ifBlank { "%.5f, %.5f".format(zone.lat, zone.lng) },
+                    trailing = {
+                        TextButton(onClick = {
+                            freeZoneStore.removeAt(index)
+                            zones = freeZoneStore.all()
+                        }) { Text("Delete") }
+                    },
+                )
+            }
         }
 
         // --- System: permission grants, battery optimisation, and what first-run
