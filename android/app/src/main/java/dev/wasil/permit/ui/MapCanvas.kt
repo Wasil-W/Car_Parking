@@ -26,6 +26,15 @@ import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polygon
 import org.osmdroid.util.GeoPoint as OsmGeoPoint
 
+/**
+ * Far enough out that tariff-area boundaries are on screen.
+ *
+ * The area covering Waterlooplein is 3.1 km by 2.7 km; at the map's normal
+ * zoom the entire viewport sits inside one polygon, so the overlay renders a
+ * uniform 7% tint and looks broken. Found by looking at it (v0.5.1).
+ */
+private const val OVERVIEW_ZOOM = 12.5
+
 /** Amsterdam centre, used only when there is nothing else to show. */
 private val FALLBACK = GeoPoint(52.3702, 4.8952, 0f)
 
@@ -61,6 +70,13 @@ fun MapCanvas(
     ghostCar: GeoPoint? = null,
     /** Tapping the car marker; null leaves the marker inert as before. */
     onCarTap: (() -> Unit)? = null,
+    /**
+     * Bumped by the caller to ask for a pull-back to [OVERVIEW_ZOOM]. A counter
+     * rather than a zoom value so that repeated requests still fire, and so a
+     * user who zooms back in afterwards is never fought on recomposition — the
+     * same reasoning as [lastCentre] below.
+     */
+    overviewRequest: Int = 0,
     onMapTap: ((GeoPoint) -> Unit)? = null,
 ) {
     val context = LocalContext.current
@@ -72,6 +88,7 @@ fun MapCanvas(
     // would be the one genuinely expensive thing on the screen. Built once and
     // re-added. Identity comparison suffices: PermitApp holds a single list.
     val tariffCache = remember { mutableStateOf<Pair<List<TariffArea>, List<Polygon>>?>(null) }
+    val lastOverviewRequest = remember { mutableStateOf(overviewRequest) }
     // Tracks only the centre WE last set, never the map's live (possibly
     // user-panned) position — otherwise re-centring on every recomposition
     // would fight a pan made while placing a zone candidate or dragging the
@@ -93,6 +110,11 @@ fun MapCanvas(
             }
         },
         update = { map ->
+            if (overviewRequest != lastOverviewRequest.value) {
+                lastOverviewRequest.value = overviewRequest
+                map.controller.setZoom(OVERVIEW_ZOOM)
+            }
+
             val centre = car ?: me ?: FALLBACK
             if (lastCentre.value != centre) {
                 map.controller.setCenter(OsmGeoPoint(centre.lat, centre.lng))
