@@ -10,6 +10,43 @@ change as a minor.
 
 ---
 
+## v0.4.1 — quieter
+
+Layout and colour only. Nothing about detection, claiming or the shared state
+changed, and no new capability arrived. The brief was "professional, sleek, and
+something that doesn't scream for attention" — so this is a subtraction release.
+
+**Type that has a system behind it.** The old scale set font sizes and nothing
+else: no line height, no letter spacing. That single omission is most of why the
+app read as unstyled, because default leading is what stock Android looks like.
+Body text now sits at roughly 1.45 line height, headings are tighter with
+negative tracking, section labels get positive tracking, and the largest
+heading came down from 30sp to 26sp — it was competing with the thing it
+labelled.
+
+**The hand-over button stopped shouting.** It was filled with the same colour
+the identity arcs use. That value is tuned to read brightly as a thin stroke on
+a card; stretched across a full-width slab it was the loudest thing on screen,
+and it was light enough to force black label text — white measured only 4.34:1
+on it. Two deeper fills now carry white at 7.1:1 and 6.8:1: better contrast from
+a quieter colour.
+
+**The snackbar is no longer a white slab.** Material's default uses the inverse
+surface, which in a dark app means a brilliant white rectangle. It now sits on
+the same near-black family as everything else.
+
+**The auto-claim switch stopped glowing.** It filled its track with the
+near-white generic accent, making a settings row the brightest element on the
+screen.
+
+**Two corner radii instead of six.** Corners had drifted to 14, 16, 18 and 22dp
+— each reasonable alone, the set of them reading as unconsidered.
+
+**The empty map card no longer reserves half the screen** when there is no
+parked location to show.
+
+---
+
 ## v0.4 — notifications you can tap, and zones you can see
 
 The first release since the rebrand that adds capability rather than fixing or
