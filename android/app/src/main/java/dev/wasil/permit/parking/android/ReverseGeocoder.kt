@@ -7,6 +7,7 @@ import android.os.Build
 import dev.wasil.permit.parking.GeoPoint
 import dev.wasil.permit.ui.GeocodedAddress
 import dev.wasil.permit.ui.formatAddress
+import dev.wasil.permit.ui.formatAreaName
 import kotlin.coroutines.resume
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -27,6 +28,15 @@ import kotlinx.coroutines.withTimeoutOrNull
  * blocking call, but pushed onto [Dispatchers.IO]. Bounded by a short timeout
  * so a slow or hanging provider can't stall a zone save indefinitely.
  */
+/** The neighbourhood a point sits in, for naming a tariff area. */
+suspend fun reverseGeocodeAreaName(context: Context, point: GeoPoint): String? {
+    if (!Geocoder.isPresent()) return null
+    val address = withTimeoutOrNull(GEOCODE_TIMEOUT_MS) {
+        runCatching { firstAddress(Geocoder(context), point) }.getOrNull()
+    } ?: return null
+    return address?.let { formatAreaName(it.toGeocodedAddress()) }
+}
+
 suspend fun reverseGeocodeAddress(context: Context, point: GeoPoint): String? {
     if (!Geocoder.isPresent()) return null
     val address = withTimeoutOrNull(GEOCODE_TIMEOUT_MS) {
@@ -56,4 +66,5 @@ private fun Address.toGeocodedAddress() = GeocodedAddress(
     subThoroughfare = subThoroughfare,
     locality = locality,
     firstAddressLine = if (maxAddressLineIndex >= 0) getAddressLine(0) else null,
+    subLocality = subLocality,
 )

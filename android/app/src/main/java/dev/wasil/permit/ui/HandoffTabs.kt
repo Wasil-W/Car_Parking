@@ -19,6 +19,7 @@ import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import android.annotation.SuppressLint
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -27,7 +28,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import dev.wasil.permit.PermitApp
+import dev.wasil.permit.parking.GeoPoint
+import dev.wasil.permit.parking.android.PlayServicesSignals
 import dev.wasil.permit.ui.theme.HandoffShapes
 import dev.wasil.permit.ui.theme.LocalHandoffColors
 
@@ -43,6 +47,7 @@ private enum class Tab(val label: String, val icon: ImageVector) {
  * get a surface, labels and a selected state, and the map becomes one tap away
  * rather than a detour.
  */
+@SuppressLint("MissingPermission")
 @Composable
 fun HandoffTabs(
     app: PermitApp,
@@ -54,6 +59,12 @@ fun HandoffTabs(
     onDismissBlocked: () -> Unit,
 ) {
     var tab by remember { mutableStateOf(Tab.PERMIT) }
+    // Read once, here rather than inside MapScreen, so the preview map on the
+    // Permit tab can frame both pins too — Wasil's ask was that neither screen
+    // make him go hunting for the car.
+    val context = LocalContext.current
+    var me by remember { mutableStateOf<GeoPoint?>(null) }
+    LaunchedEffect(Unit) { me = PlayServicesSignals(context).currentLocation() }
     val snackbar = remember { SnackbarHostState() }
     val colors = LocalHandoffColors.current
 
@@ -110,6 +121,7 @@ fun HandoffTabs(
                     state = state,
                     myCar = app.parkStateStore.myCar,
                     car = app.parkStateStore.lastParkLocation,
+                    me = me,
                     onSwitch = onSwitch,
                     onRefresh = onRefresh,
                     onOpenMap = { tab = Tab.MAP },
@@ -119,6 +131,7 @@ fun HandoffTabs(
                 Tab.MAP -> MapScreen(
                     stateStore = app.parkStateStore,
                     freeZoneStore = app.freeZoneStore,
+                    me = me,
                     // null when the bundled asset is missing or corrupt — the
                     // overlay then simply has nothing to draw, mirroring how
                     // ZoneResolver falls back to "assume paid".

@@ -129,3 +129,12 @@ val ZoneCandidate = Color(0xFF211E19)
 // overlay is up, which is why the fill is drawn at 0.07 alpha: enough to tell
 // one region from its neighbour, not enough to bury a zone circle.
 val TariffBoundary = Color(0xFF5B6B7A)
+
+// The selected part, which has to win against 28 others drawn in TariffBoundary
+// plus whatever the map tiles are doing underneath. The first attempt reused
+// TariffBoundary at a heavier stroke and was, in Wasil's words, "almost not
+// noticable" — a weight change alone does not survive a busy tile layer.
+// Near-black with a blue cast: unmistakably the same family, several steps
+// darker, and far from either brother's identity hue so a selected region can
+// never be misread as "whose car".
+val TariffSelected = Color(0xFF16222B)

@@ -83,10 +83,27 @@ class MapZonesTest {
     @Test
     fun `a tap on a tariff area with no zone under it hits the tariff area`() {
         val tap = GeoPoint(52.3650, 4.8850, 0f)
-        assertEquals(
-            MapHit.Tariff(paidArea),
-            mapHitAt(tap, home, listOf(zoneA, zoneB), listOf(paidArea)),
+        val hit = mapHitAt(tap, home, listOf(zoneA, zoneB), listOf(paidArea))
+        assertEquals(paidArea, (hit as MapHit.Tariff).hit.area)
+    }
+
+    @Test
+    fun `a multi-part area yields only the part the point is in`() {
+        // 21 of the 29 real areas are multi-part; T13B alone is 16 disjoint
+        // pieces. Highlighting the whole area lit up every piece at once.
+        val far = ZonePolygon(
+            listOf(
+                LatLng(52.4000, 4.9500),
+                LatLng(52.4000, 4.9600),
+                LatLng(52.4100, 4.9600),
+                LatLng(52.4100, 4.9500),
+            ),
         )
+        val twoPart = paidArea.copy(polygons = paidArea.polygons + far)
+        val hit = tariffHitAt(GeoPoint(52.3650, 4.8850, 0f), listOf(twoPart))!!
+        assertEquals(twoPart, hit.area)
+        assertEquals(paidArea.polygons[0], hit.ring)
+        assertTrue(hit.ring != far)
     }
 
     @Test
@@ -124,6 +141,25 @@ class MapZonesTest {
     @Test
     fun `tariff summary omits a missing rate rather than showing a stray separator`() {
         assertEquals("Basistarief TC3 ma-za 09-24", tariffSummary(paidArea.copy(tariffText = "")))
+    }
+
+    @Test
+    fun `the compact form drops the rate-class prefix and keeps the schedule`() {
+        assertEquals("€5,37/h · ma-za 09-24", tariffShort(paidArea))
+        assertEquals("ma-za 09-24", tariffHours(paidArea))
+    }
+
+    @Test
+    fun `an area with no schedule in its name keeps the whole name`() {
+        val odd = paidArea.copy(name = "Tarief 4 start tarief 7")
+        assertEquals("Tarief 4 start tarief 7", tariffHours(odd))
+    }
+
+    @Test
+    fun `every bundled area produces a compact form no longer than its summary`() {
+        val areas = TariffAreas.parse(java.io.File("src/main/assets/amsterdam_tarieven.json").readText())
+        assertTrue(areas.all { tariffShort(it).length <= tariffSummary(it).length })
+        assertTrue(areas.all { tariffShort(it).isNotBlank() })
     }
 
     @Test

@@ -10,6 +10,56 @@ change as a minor.
 
 ---
 
+## v0.5.2 — the map screen, tidied
+
+All from Wasil driving and tapping at v0.5.1, 2026-08-02.
+
+### The correction cap could be walked around
+
+*"It is literally possible to keep clicking and then bring the car all the way
+to somewhere else."* Correct, and the cause was that the 300 m limit measured
+from the **current** pin. Confirm a move, tap the marker again, and the cap
+re-anchored to where you just put it — so the car could cross the city 300 m at
+a time. A cap that resets is not a cap.
+
+Corrections are now measured from where *detection* put the car, which never
+moves. Total drift can never exceed 300 m from the real fix, however many
+corrections you make.
+
+### Tapping one region lit up half the city
+
+*"When I press 1 section multiple other sections light up."* Nearly right about
+the cause — not the price, the code. **21 of the 29 tariff areas are made of
+several disjoint pieces**, and `T13B` alone is 16 of them scattered across
+Amsterdam. Highlighting an *area* highlighted every piece that shared its code.
+Only the piece you actually tapped highlights now.
+
+### The highlight was hard to see
+
+It reused the boundary colour at a heavier stroke, which does not survive a busy
+map underneath. Selected regions now use a near-black of their own, with a fill.
+
+### Real place names instead of codes
+
+*"Don't use codes like T14B, use their real names."* The tariff file genuinely
+has no place names in it — its description field is a rate class, not a
+neighbourhood — so the name is now geocoded: **"Amsterdam-Centrum"** rather than
+`T11V`. The code remains as the fallback when there is no network.
+
+### The map frames the car and you together
+
+Opening either map used to centre on the car alone and leave you off screen, or
+the reverse. Both pins are now framed at once — on the Permit tab's preview as
+well as the full map — so neither has to be hunted for.
+
+### Less of the map spent on controls
+
+The three-button stack over the map became one row, and the zone information
+moved up into header space that was sitting empty. The map is the screen; every
+card stacked on it was rent.
+
+---
+
 ## v0.5.1 — the tariff overlay actually shows you something
 
 v0.5.0's overlay worked exactly as written and was useless in practice. Caught
