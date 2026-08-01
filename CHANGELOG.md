@@ -10,6 +10,31 @@ change as a minor.
 
 ---
 
+## v0.5.1 — the tariff overlay actually shows you something
+
+v0.5.0's overlay worked exactly as written and was useless in practice. Caught
+by putting it on a screen and looking at it, which is the only thing that has
+ever caught this class of bug here.
+
+**The mistake was an assumption, not a line of code.** The design said the
+question "why did it claim here?" is answered by *seeing the boundary* of the
+area your car is in. It is not. Amsterdam's tariff areas are neighbourhood-sized
+— the one covering Waterlooplein is 3.1 km by 2.7 km — so at the zoom you park
+at, the entire screen sits inside a single polygon. Its boundary is kilometres
+away, and all the overlay drew was a uniform 7% tint. Switching it on looked
+like it did nothing at all.
+
+**The question is answered by the label.** The map now names the area your car
+is standing in, under the map, whether or not the overlay is on: *"Your car is
+in T11V — €8,05/h · Basistarief TC1 ma-zo 00-24"*. That is the whole answer, in
+one line, with no geometry required.
+
+**Switching the overlay on now pulls the map out** to a zoom where boundaries
+exist on screen. You see the patchwork across the city, and can tap any region
+for its code, rate and hours.
+
+---
+
 ## v0.5.0 — what the app thinks, and how to correct it
 
 The app has always held two beliefs it never showed you: where your car is, and

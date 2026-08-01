@@ -28,6 +28,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -104,11 +105,20 @@ fun MapScreen(
 
     val candidateZone = candidatePoint?.let { FreeZone(it.lat, it.lng, candidateRadius.toDouble()) }
 
-    // Off by default: only the area the car is in, outlined. That is the state
-    // that answers "why did it claim here?" without changing what the map looks
-    // like. The chip reveals the other 28.
+    // Off by default: the car's own area is named in a card below and outlined
+    // on the map, without 29 filled polygons burying the zone circles. The
+    // button reveals the other 28, and pulls the zoom out far enough for their
+    // boundaries to exist on screen at all.
     val visibleTariffAreas = if (showTariff) tariffAreas else emptyList()
-    val highlightArea = selectedArea ?: car?.let { tariffAreaAt(it, tariffAreas) }
+    val carArea = car?.let { tariffAreaAt(it, tariffAreas) }
+    val highlightArea = selectedArea ?: carArea
+
+    // Bumped whenever the overlay is switched on, to pull the map out to a
+    // zoom where boundaries actually exist on screen. Amsterdam's tariff areas
+    // are neighbourhood-sized — the one containing Waterlooplein is 3.1 km by
+    // 2.7 km — so at parking zoom the whole viewport sits inside a single
+    // polygon and the overlay looks like it did nothing at all.
+    var overviewRequest by remember { mutableIntStateOf(0) }
 
     Column(Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
         Text("Map", style = MaterialTheme.typography.titleMedium)
@@ -133,6 +143,7 @@ fun MapScreen(
                 tariffAreas = visibleTariffAreas,
                 highlightArea = highlightArea,
                 ghostCar = pending?.point,
+                overviewRequest = overviewRequest,
                 onCarTap = {
                     if (car != null && stateStore.parked) {
                         movingPin = true
@@ -300,7 +311,7 @@ fun MapScreen(
                             OutlinedButton(
                                 onClick = {
                                     showTariff = !showTariff
-                                    if (!showTariff) selectedArea = null
+                                    if (showTariff) overviewRequest++ else selectedArea = null
                                 },
                                 modifier = Modifier.fillMaxWidth(),
                                 enabled = tariffAreas.isNotEmpty(),
@@ -313,21 +324,35 @@ fun MapScreen(
                     }
                 }
 
-                selectedArea?.let { area ->
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = HandoffShapes.Control,
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surface,
-                        ),
-                    ) {
-                        Column(Modifier.fillMaxWidth().padding(14.dp)) {
-                            Text(area.code, style = MaterialTheme.typography.titleMedium)
-                            Text(
-                                tariffSummary(area),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+                // Shown for the tapped area, and — with no tap — for whichever
+                // area the car is standing in. The outline alone cannot carry
+                // this: a 3 km boundary is never on screen at parking zoom, so
+                // "why did it claim here?" is answered by the label, not the
+                // geometry. That was the wrong assumption in the v0.5.0 design.
+                if (addingKind == null && candidatePoint == null && !movingPin) {
+                    highlightArea?.let { area ->
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = HandoffShapes.Control,
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surface,
+                            ),
+                        ) {
+                            Column(Modifier.fillMaxWidth().padding(14.dp)) {
+                                Text(
+                                    if (selectedArea == null) {
+                                        "Your car is in ${area.code}"
+                                    } else {
+                                        area.code
+                                    },
+                                    style = MaterialTheme.typography.titleMedium,
+                                )
+                                Text(
+                                    tariffSummary(area),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
                         }
                     }
                 }
