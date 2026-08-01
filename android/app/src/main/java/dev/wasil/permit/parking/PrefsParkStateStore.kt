@@ -46,6 +46,20 @@ class PrefsParkStateStore(private val prefs: SharedPreferences) : ParkStateStore
                 .apply()
         }
 
+    override var detectedParkLocation: GeoPoint?
+        get() {
+            val lat = prefs.getString("detected_lat", null)?.toDoubleOrNull() ?: return null
+            val lng = prefs.getString("detected_lng", null)?.toDoubleOrNull() ?: return null
+            return GeoPoint(lat, lng, prefs.getFloat("detected_acc", 0f))
+        }
+        set(value) {
+            prefs.edit()
+                .putString("detected_lat", value?.lat?.toString())
+                .putString("detected_lng", value?.lng?.toString())
+                .putFloat("detected_acc", value?.accuracyM ?: 0f)
+                .apply()
+        }
+
     override var parkedOutside: Boolean
         get() = prefs.getBoolean("parked_outside", false)
         set(value) { prefs.edit().putBoolean("parked_outside", value).apply() }

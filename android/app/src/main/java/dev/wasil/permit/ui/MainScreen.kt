@@ -49,6 +49,7 @@ fun MainScreen(
     state: UiState,
     myCar: MyCar?,
     car: GeoPoint?,
+    me: GeoPoint?,
     onSwitch: (PlateOption) -> Unit,
     onRefresh: () -> Unit,
     onOpenMap: () -> Unit,
@@ -190,7 +191,7 @@ fun MainScreen(
                 )
             } else {
                 Box(Modifier.fillMaxSize().clip(HandoffShapes.Card)) {
-                    MapCanvas(car = car, me = null, interactive = false, zoom = 16.0)
+                    MapCanvas(car = car, me = me, interactive = false, zoom = 16.0)
                 }
             }
         }

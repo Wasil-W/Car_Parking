@@ -16,7 +16,24 @@ data class GeocodedAddress(
     val subThoroughfare: String? = null,
     val locality: String? = null,
     val firstAddressLine: String? = null,
+    /** Neighbourhood or district — "Nieuwmarkt", "Oud-West". */
+    val subLocality: String? = null,
 )
+
+/**
+ * A place name for a whole area rather than a doorstep: "Nieuwmarkt", falling
+ * back to the city.
+ *
+ * Wasil, 2026-08-02: "dont use codes like t14b and so use their real names of
+ * the areas". The bundled tariff file genuinely has no place names in it — its
+ * `description` is a rate class ("Basistarief TC1 ma-zo 00-24"), not a
+ * neighbourhood — so the name has to come from geocoding a point inside the
+ * area. Deliberately not [formatAddress]: a street and house number names a
+ * doorstep, and these regions are kilometres across.
+ */
+fun formatAreaName(address: GeocodedAddress): String? =
+    address.subLocality?.takeIf { it.isNotBlank() }
+        ?: address.locality?.takeIf { it.isNotBlank() }
 
 /**
  * A short, human place name from a reverse-geocode result — "Damstraat 14"

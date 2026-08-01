@@ -5,6 +5,7 @@ import dev.wasil.permit.parking.GeoPoint
 import dev.wasil.permit.parking.distanceMeters
 import dev.wasil.permit.parking.zones.LatLng
 import dev.wasil.permit.parking.zones.TariffArea
+import dev.wasil.permit.parking.zones.ZonePolygon
 import dev.wasil.permit.parking.zones.pointInPolygon
 
 /** The smallest and largest a zone circle can be, and the size a fresh one starts at.
@@ -58,8 +59,18 @@ private fun FreeZone.centre(): GeoPoint = GeoPoint(lat, lng, 0f)
  */
 sealed interface MapHit {
     data class Zone(val ref: ZoneRef) : MapHit
-    data class Tariff(val area: TariffArea) : MapHit
+    data class Tariff(val hit: TariffHit) : MapHit
 }
+
+/**
+ * A tariff area *and the single part of it* the point fell in.
+ *
+ * The part matters. 21 of Amsterdam's 29 tariff areas are multi-part — T13B
+ * alone is 16 disjoint pieces scattered across the city — so highlighting a
+ * whole [TariffArea] lit up every piece sharing its code at once. Reported
+ * 2026-08-02: "when i press 1 section multiple other sections light up".
+ */
+data class TariffHit(val area: TariffArea, val ring: ZonePolygon)
 
 /**
  * The single precedence rule for a tap on bare map:
@@ -84,7 +95,17 @@ fun mapHitAt(
     tariffAreas: List<TariffArea>,
 ): MapHit? {
     zoneHitAt(point, home, freeZones)?.let { return MapHit.Zone(it) }
-    return tariffAreaAt(point, tariffAreas)?.let { MapHit.Tariff(it) }
+    return tariffHitAt(point, tariffAreas)?.let { MapHit.Tariff(it) }
+}
+
+/** The area *and part* containing [point]. */
+fun tariffHitAt(point: GeoPoint, areas: List<TariffArea>): TariffHit? {
+    val p = LatLng(point.lat, point.lng)
+    for (area in areas) {
+        area.polygons.firstOrNull { pointInPolygon(p, it) }
+            ?.let { return TariffHit(area, it) }
+    }
+    return null
 }
 
 /**
@@ -92,10 +113,8 @@ fun mapHitAt(
  * [dev.wasil.permit.parking.zones.ZoneResolver] picks one, so the map can never
  * disagree with the claim decision about which area you are in.
  */
-fun tariffAreaAt(point: GeoPoint, areas: List<TariffArea>): TariffArea? {
-    val p = LatLng(point.lat, point.lng)
-    return areas.firstOrNull { area -> area.polygons.any { pointInPolygon(p, it) } }
-}
+fun tariffAreaAt(point: GeoPoint, areas: List<TariffArea>): TariffArea? =
+    tariffHitAt(point, areas)?.area
 
 /**
  * Rate first, then the description that carries the hours — the rate is the
@@ -103,3 +122,22 @@ fun tariffAreaAt(point: GeoPoint, areas: List<TariffArea>): TariffArea? {
  */
 fun tariffSummary(area: TariffArea): String =
     listOf(area.tariffText, area.name).filter { it.isNotBlank() }.joinToString(" · ")
+
+/**
+ * When the schedule starts inside an area's name. Amsterdam prefixes every one
+ * with its rate class — "Basistarief TC1 ma-zo 00-24" — which is the part the
+ * rate already tells you, and which pushed the map header onto three lines.
+ */
+private val SCHEDULE = Regex("""\b(ma|di|wo|do|vr|za|zo)[- ]""")
+
+/**
+ * Just the days and hours: "ma-zo 00-24". Falls back to the whole name when no
+ * schedule can be found, since a few areas carry none at all (`T14_UA01` is
+ * "Tarief 4 start tarief 7") and showing something beats showing nothing.
+ */
+fun tariffHours(area: TariffArea): String =
+    SCHEDULE.find(area.name)?.let { area.name.substring(it.range.first) } ?: area.name
+
+/** Rate and schedule only — the compact form used in the map header. */
+fun tariffShort(area: TariffArea): String =
+    listOf(area.tariffText, tariffHours(area)).filter { it.isNotBlank() }.joinToString(" · ")

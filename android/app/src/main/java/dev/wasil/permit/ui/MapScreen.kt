@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -37,6 +38,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import dev.wasil.permit.ui.theme.HandoffShapes
 import dev.wasil.permit.parking.FreeZone
@@ -48,8 +50,8 @@ import dev.wasil.permit.parking.android.ParkActionReceiver
 import dev.wasil.permit.parking.android.SharedSync
 import dev.wasil.permit.parking.zones.TariffArea
 import dev.wasil.permit.parking.zones.ZoneResolver
-import dev.wasil.permit.parking.android.PlayServicesSignals
 import dev.wasil.permit.parking.android.reverseGeocodeAddress
+import dev.wasil.permit.parking.android.reverseGeocodeAreaName
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -69,6 +71,7 @@ private enum class ZoneKind { HOME, FREE }
 fun MapScreen(
     stateStore: ParkStateStore,
     freeZoneStore: FreeZoneStore,
+    me: GeoPoint?,
     tariffAreas: List<TariffArea>,
     // A factory, not an instance: the resolver closes over the home zone and
     // the free-zone list, both of which this very screen can change.
@@ -76,11 +79,6 @@ fun MapScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var me by remember { mutableStateOf<GeoPoint?>(null) }
-    LaunchedEffect(Unit) {
-        // One-shot read while the screen is open; no tracking.
-        me = PlayServicesSignals(context).currentLocation()
-    }
     val car = stateStore.lastParkLocation
     val parkedAt = stateStore.parkedAtMs.takeIf { it > 0 && stateStore.parked }
         ?.let { SimpleDateFormat("d MMM HH:mm", Locale.getDefault()).format(Date(it)) }
@@ -95,7 +93,12 @@ fun MapScreen(
     var zoneDialogTarget by remember { mutableStateOf<ZoneRef?>(null) }
 
     var showTariff by remember { mutableStateOf(false) }
-    var selectedArea by remember { mutableStateOf<TariffArea?>(null) }
+    var selectedHit by remember { mutableStateOf<TariffHit?>(null) }
+    // The point inside the highlighted part to ask the geocoder about: the tap
+    // itself, or the car. A ring's centroid can fall outside a concave shape,
+    // and these shapes are very concave.
+    var namePoint by remember { mutableStateOf<GeoPoint?>(null) }
+    var areaName by remember { mutableStateOf<String?>(null) }
 
     // Moving the car pin: tap the marker, tap the true spot, confirm.
     var movingPin by remember { mutableStateOf(false) }
@@ -105,13 +108,14 @@ fun MapScreen(
 
     val candidateZone = candidatePoint?.let { FreeZone(it.lat, it.lng, candidateRadius.toDouble()) }
 
-    // Off by default: the car's own area is named in a card below and outlined
-    // on the map, without 29 filled polygons burying the zone circles. The
-    // button reveals the other 28, and pulls the zoom out far enough for their
+    // Off by default: the car's own area is named in the header and outlined on
+    // the map, without 29 filled polygons burying the zone circles. The button
+    // reveals the other 28, and pulls the zoom out far enough for their
     // boundaries to exist on screen at all.
     val visibleTariffAreas = if (showTariff) tariffAreas else emptyList()
-    val carArea = car?.let { tariffAreaAt(it, tariffAreas) }
-    val highlightArea = selectedArea ?: carArea
+    val carHit = car?.let { tariffHitAt(it, tariffAreas) }
+    val highlight = selectedHit ?: carHit
+    val highlightArea = highlight?.area
 
     // Bumped whenever the overlay is switched on, to pull the map out to a
     // zoom where boundaries actually exist on screen. Amsterdam's tariff areas
@@ -120,18 +124,70 @@ fun MapScreen(
     // polygon and the overlay looks like it did nothing at all.
     var overviewRequest by remember { mutableIntStateOf(0) }
 
+    // Codes like "T14B" mean nothing to anyone. The tariff file has no place
+    // names in it at all, so the name is geocoded from a point inside the
+    // highlighted part. Falls back to the code when the lookup fails or there
+    // is no network — a code beats a blank.
+    val lookupPoint = namePoint.takeIf { selectedHit != null } ?: car
+    LaunchedEffect(highlight, lookupPoint) {
+        areaName = null
+        val at = lookupPoint ?: return@LaunchedEffect
+        if (highlight == null) return@LaunchedEffect
+        areaName = reverseGeocodeAreaName(context, at)
+    }
+
     Column(Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
-        Text("Map", style = MaterialTheme.typography.titleMedium)
-        Text(
-            when {
-                car == null -> "No parked location recorded yet."
-                parkedAt != null -> "Car parked $parkedAt."
-                else -> "Last known car position."
-            },
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 12.dp),
-        )
+        // The zone lives up here, in space the header was wasting, rather than
+        // in a card stacked over the map. Every card in that bottom stack costs
+        // map, and the map is the screen.
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("Map", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    when {
+                        car == null -> "No parked location recorded yet."
+                        parkedAt != null -> "Car parked $parkedAt."
+                        else -> "Last known car position."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            // Given its own surface rather than left as bare text. Moving it out
+            // of a card reclaimed the map, but it also lost the thing that made
+            // it read as a distinct piece of information — Wasil: "it just
+            // doesn't stand out so much as before". A tint and a corner is
+            // enough separation without spending map again.
+            highlightArea?.let { area ->
+                Card(
+                    modifier = Modifier.weight(1f).padding(start = 12.dp),
+                    shape = HandoffShapes.Control,
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    ),
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                        horizontalAlignment = Alignment.End,
+                    ) {
+                        Text(
+                            areaName ?: area.code,
+                            style = MaterialTheme.typography.titleMedium,
+                            textAlign = TextAlign.End,
+                        )
+                        Text(
+                            tariffShort(area),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.End,
+                        )
+                    }
+                }
+            }
+        }
 
         Box(Modifier.fillMaxWidth().weight(1f)) {
             MapCanvas(
@@ -141,13 +197,13 @@ fun MapScreen(
                 freeZones = freeZones,
                 candidateZone = candidateZone,
                 tariffAreas = visibleTariffAreas,
-                highlightArea = highlightArea,
+                highlightRing = highlight?.ring,
                 ghostCar = pending?.point,
                 overviewRequest = overviewRequest,
                 onCarTap = {
                     if (car != null && stateStore.parked) {
                         movingPin = true
-                        selectedArea = null
+                        selectedHit = null
                     }
                 },
                 // Placing modes come first and win outright: while a candidate
@@ -157,7 +213,11 @@ fun MapScreen(
                     when {
                         addingKind != null -> candidatePoint = point
                         movingPin && car != null -> {
-                            when (val r = correctionFor(car, point, stateStore.parkedOutside, zoneResolver())) {
+                            // Anchored to where detection put the car, not to
+                            // the current pin: measuring from the pin let a
+                            // confirmed move become the origin of the next one.
+                            val anchor = stateStore.detectedParkLocation ?: car
+                            when (val r = correctionFor(anchor, point, stateStore.parkedOutside, zoneResolver())) {
                                 is CorrectionResult.TooFar -> {
                                     tooFarM = r.distanceM
                                     pending = null
@@ -170,8 +230,11 @@ fun MapScreen(
                         }
                         else -> when (val hit = mapHitAt(point, homeZone, freeZones, visibleTariffAreas)) {
                             is MapHit.Zone -> zoneDialogTarget = hit.ref
-                            is MapHit.Tariff -> selectedArea = hit.area
-                            null -> selectedArea = null
+                            is MapHit.Tariff -> {
+                                selectedHit = hit.hit
+                                namePoint = point
+                            }
+                            null -> selectedHit = null
                         }
                     }
                 },
@@ -187,7 +250,8 @@ fun MapScreen(
             ) {
                 when {
                     pending != null -> MovePinCard(
-                        distanceM = car?.let { distanceMeters(it, pending!!.point) } ?: 0.0,
+                        distanceM = (stateStore.detectedParkLocation ?: car)
+                            ?.let { distanceMeters(it, pending!!.point) } ?: 0.0,
                         flip = pending!!.flip,
                         onCancel = {
                             pending = null
@@ -288,71 +352,32 @@ fun MapScreen(
                             containerColor = MaterialTheme.colorScheme.surface,
                         ),
                     ) {
-                        Column(
+                        // One row, short labels. Three full sentences stacked
+                        // over two rows ate a third of the map for controls
+                        // used seconds at a time.
+                        Row(
                             Modifier.fillMaxWidth().padding(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            Row(
-                                Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                OutlinedButton(
-                                    onClick = { addingKind = ZoneKind.HOME },
-                                    modifier = Modifier.weight(1f),
-                                ) { Text(if (homeZone == null) "Set home zone" else "Move home zone") }
-                                OutlinedButton(
-                                    onClick = { addingKind = ZoneKind.FREE },
-                                    modifier = Modifier.weight(1f),
-                                ) { Text("Add free zone") }
-                            }
-                            // Its own row rather than a third button above:
-                            // three of these labels side by side on a phone
-                            // wrap to two lines each and stop being readable.
+                            OutlinedButton(
+                                onClick = { addingKind = ZoneKind.HOME },
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
+                                modifier = Modifier.weight(1f),
+                            ) { Text(if (homeZone == null) "Set home" else "Home") }
+                            OutlinedButton(
+                                onClick = { addingKind = ZoneKind.FREE },
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
+                                modifier = Modifier.weight(1f),
+                            ) { Text("Free zone") }
                             OutlinedButton(
                                 onClick = {
                                     showTariff = !showTariff
-                                    if (showTariff) overviewRequest++ else selectedArea = null
+                                    if (showTariff) overviewRequest++ else selectedHit = null
                                 },
-                                modifier = Modifier.fillMaxWidth(),
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
+                                modifier = Modifier.weight(1f),
                                 enabled = tariffAreas.isNotEmpty(),
-                            ) {
-                                Text(
-                                    if (showTariff) "Hide tariff areas" else "Show tariff areas",
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // Shown for the tapped area, and — with no tap — for whichever
-                // area the car is standing in. The outline alone cannot carry
-                // this: a 3 km boundary is never on screen at parking zoom, so
-                // "why did it claim here?" is answered by the label, not the
-                // geometry. That was the wrong assumption in the v0.5.0 design.
-                if (addingKind == null && candidatePoint == null && !movingPin) {
-                    highlightArea?.let { area ->
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = HandoffShapes.Control,
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surface,
-                            ),
-                        ) {
-                            Column(Modifier.fillMaxWidth().padding(14.dp)) {
-                                Text(
-                                    if (selectedArea == null) {
-                                        "Your car is in ${area.code}"
-                                    } else {
-                                        area.code
-                                    },
-                                    style = MaterialTheme.typography.titleMedium,
-                                )
-                                Text(
-                                    tariffSummary(area),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
+                            ) { Text(if (showTariff) "Hide areas" else "Tariffs") }
                         }
                     }
                 }

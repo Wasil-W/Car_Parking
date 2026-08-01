@@ -14,6 +14,7 @@ import androidx.core.content.ContextCompat
 import dev.wasil.permit.R
 import dev.wasil.permit.parking.FreeZone
 import dev.wasil.permit.parking.GeoPoint
+import dev.wasil.permit.parking.distanceMeters
 import dev.wasil.permit.parking.zones.TariffArea
 import dev.wasil.permit.parking.zones.ZonePolygon
 import dev.wasil.permit.ui.theme.LocalHandoffColors
@@ -24,6 +25,7 @@ import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.MapEventsOverlay
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polygon
+import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint as OsmGeoPoint
 
 /**
@@ -34,6 +36,16 @@ import org.osmdroid.util.GeoPoint as OsmGeoPoint
  * uniform 7% tint and looks broken. Found by looking at it (v0.5.1).
  */
 private const val OVERVIEW_ZOOM = 12.5
+
+/**
+ * Below this the car and your own position are close enough that fitting a box
+ * around them would zoom absurdly far in — at which point centring on one of
+ * them at the normal zoom is what you actually want.
+ */
+private const val MIN_SPREAD_M = 40.0
+
+/** Breathing room around the fitted box, so neither pin sits on the edge. */
+private const val FRAME_PADDING_PX = 150
 
 /** Amsterdam centre, used only when there is nothing else to show. */
 private val FALLBACK = GeoPoint(52.3702, 4.8952, 0f)
@@ -64,8 +76,13 @@ fun MapCanvas(
     candidateZone: FreeZone? = null,
     /** Every tariff area to draw as a boundary. Empty means the overlay is off. */
     tariffAreas: List<TariffArea> = emptyList(),
-    /** Outlined above the rest — the area the car is in, or a tapped one. */
-    highlightArea: TariffArea? = null,
+    /**
+     * The single part outlined above the rest — the piece the car is in, or the
+     * piece that was tapped. Deliberately one ring and not a whole
+     * [TariffArea]: most areas are many disjoint pieces, and highlighting all
+     * of them lit up half the city at once.
+     */
+    highlightRing: ZonePolygon? = null,
     /** The proposed new car position while a correction is being confirmed. */
     ghostCar: GeoPoint? = null,
     /** Tapping the car marker; null leaves the marker inert as before. */
@@ -74,7 +91,7 @@ fun MapCanvas(
      * Bumped by the caller to ask for a pull-back to [OVERVIEW_ZOOM]. A counter
      * rather than a zoom value so that repeated requests still fire, and so a
      * user who zooms back in afterwards is never fought on recomposition — the
-     * same reasoning as [lastCentre] below.
+     * same reasoning as the framing guard below.
      */
     overviewRequest: Int = 0,
     onMapTap: ((GeoPoint) -> Unit)? = null,
@@ -93,7 +110,7 @@ fun MapCanvas(
     // user-panned) position — otherwise re-centring on every recomposition
     // would fight a pan made while placing a zone candidate or dragging the
     // radius slider, snapping the map back under the user's finger.
-    val lastCentre = remember { mutableStateOf<GeoPoint?>(null) }
+    val lastFraming = remember { mutableStateOf<Pair<List<GeoPoint>, Boolean>?>(null) }
     AndroidView(
         modifier = modifier.fillMaxSize(),
         factory = { ctx ->
@@ -115,10 +132,36 @@ fun MapCanvas(
                 map.controller.setZoom(OVERVIEW_ZOOM)
             }
 
-            val centre = car ?: me ?: FALLBACK
-            if (lastCentre.value != centre) {
-                map.controller.setCenter(OsmGeoPoint(centre.lat, centre.lng))
-                lastCentre.value = centre
+            // Frame everything worth seeing — the car and you — rather than
+            // centring on one and leaving the other off screen to be hunted
+            // for. With only one of them, or with the two effectively on top
+            // of each other, fall back to centring at the normal zoom.
+            val focus = listOfNotNull(car, me)
+            val framing = focus to interactive
+            if (lastFraming.value != framing) {
+                lastFraming.value = framing
+                when {
+                    focus.size == 2 && distanceMeters(focus[0], focus[1]) > MIN_SPREAD_M -> {
+                        val box = BoundingBox(
+                            maxOf(focus[0].lat, focus[1].lat),
+                            maxOf(focus[0].lng, focus[1].lng),
+                            minOf(focus[0].lat, focus[1].lat),
+                            minOf(focus[0].lng, focus[1].lng),
+                        )
+                        // osmdroid cannot fit a box before the view has been
+                        // measured, and silently does nothing if asked early.
+                        map.post {
+                            runCatching {
+                                map.zoomToBoundingBox(box, false, FRAME_PADDING_PX)
+                            }
+                        }
+                    }
+                    else -> {
+                        val centre = focus.firstOrNull() ?: FALLBACK
+                        map.controller.setCenter(OsmGeoPoint(centre.lat, centre.lng))
+                        map.controller.setZoom(zoom)
+                    }
+                }
             }
 
             // Rebuilt every update from the latest parameters, same as the
@@ -151,9 +194,9 @@ fun MapCanvas(
                 }
                 polys.forEach { map.overlays.add(it) }
             }
-            highlightArea?.polygons?.forEach { ring ->
+            highlightRing?.let { ring ->
                 map.overlays.add(
-                    tariffPolygon(map, ring, colors.tariffBoundary, fillAlpha = 0f, strokeWidthPx = 5f),
+                    tariffPolygon(map, ring, colors.tariffSelected, fillAlpha = 0.16f, strokeWidthPx = 7f),
                 )
             }
 

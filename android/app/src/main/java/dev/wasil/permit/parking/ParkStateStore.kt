@@ -10,6 +10,16 @@ interface ParkStateStore {
     var parked: Boolean
     var lastParkLocation: GeoPoint?
 
+    /**
+     * Where *detection* put the car, before any hand correction.
+     *
+     * Kept apart from [lastParkLocation] so the correction distance cap has a
+     * fixed anchor. Measuring from the current pin let a correction be
+     * confirmed and then corrected again, 300 m at a time, walking the car
+     * anywhere on the map — a cap that resets is not a cap.
+     */
+    var detectedParkLocation: GeoPoint?
+
     /** True only when confirmed parked in a PAID zone — the state that blocks the other phone. */
     var parkedOutside: Boolean
     var parkedAtMs: Long
