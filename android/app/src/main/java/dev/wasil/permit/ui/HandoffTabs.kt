@@ -13,6 +13,9 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.unit.dp
+import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -25,6 +28,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import dev.wasil.permit.PermitApp
+import dev.wasil.permit.ui.theme.HandoffShapes
 import dev.wasil.permit.ui.theme.LocalHandoffColors
 
 private enum class Tab(val label: String, val icon: ImageVector) {
@@ -61,7 +65,21 @@ fun HandoffTabs(
     }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbar) },
+        // Material's default snackbar uses the *inverse* surface for contrast,
+        // which in a dark app means a stark white slab — the loudest thing on
+        // any screen it appears on, for a message that is usually incidental.
+        // A raised surface of our own reads as part of the app.
+        snackbarHost = {
+            SnackbarHost(snackbar) { data ->
+                Snackbar(
+                    snackbarData = data,
+                    shape = HandoffShapes.Control,
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                    actionColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
         containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
             NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceVariant) {

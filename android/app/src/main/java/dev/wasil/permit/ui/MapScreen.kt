@@ -37,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import dev.wasil.permit.ui.theme.HandoffShapes
 import dev.wasil.permit.parking.FreeZone
 import dev.wasil.permit.parking.FreeZoneStore
 import dev.wasil.permit.parking.GeoPoint
@@ -109,7 +110,7 @@ fun MapScreen(stateStore: ParkStateStore, freeZoneStore: FreeZoneStore) {
                         zoneDialogTarget = zoneHitAt(point, homeZone, freeZones)
                     }
                 },
-                modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(18.dp)),
+                modifier = Modifier.fillMaxSize().clip(HandoffShapes.Card),
             )
 
             Column(
@@ -188,7 +189,7 @@ fun MapScreen(stateStore: ParkStateStore, freeZoneStore: FreeZoneStore) {
                     // surface of their own to sit on.
                     else -> Card(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
+                        shape = HandoffShapes.Control,
                         colors = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.surface,
                         ),
@@ -213,7 +214,7 @@ fun MapScreen(stateStore: ParkStateStore, freeZoneStore: FreeZoneStore) {
                     Button(
                         onClick = { openWalkingDirections(context, car) },
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
+                        shape = HandoffShapes.Control,
                     ) { Text("Walk to car") }
                 }
             }

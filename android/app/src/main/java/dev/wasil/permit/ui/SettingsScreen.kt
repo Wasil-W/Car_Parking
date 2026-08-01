@@ -35,6 +35,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -279,10 +280,26 @@ fun SettingsScreen(
         SettingRow(
             label = "Auto-claim permit on park",
             trailing = {
-                Switch(checked = autoClaim, onCheckedChange = {
-                    stateStore.autoClaim = it
-                    autoClaim = it
-                })
+                // Material's default switch fills its track with `primary`,
+                // which is near-white in our neutralised scheme — the brightest
+                // object on the screen, for a setting touched about once. On
+                // and off stay obvious through track lightness and thumb
+                // contrast rather than through glare.
+                Switch(
+                    checked = autoClaim,
+                    onCheckedChange = {
+                        stateStore.autoClaim = it
+                        autoClaim = it
+                    },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = MaterialTheme.colorScheme.surface,
+                        checkedTrackColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        checkedBorderColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        uncheckedTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        uncheckedBorderColor = MaterialTheme.colorScheme.outline,
+                    ),
+                )
             },
         )
 

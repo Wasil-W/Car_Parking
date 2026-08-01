@@ -20,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import dev.wasil.permit.ui.theme.HandoffShapes
 import dev.wasil.permit.parking.PendingDecision
 
 /**
@@ -60,7 +61,7 @@ fun DecisionScreen(decision: PendingDecision, onChoice: (DecisionActionKind) -> 
                 Button(
                     onClick = { onChoice(choice.kind) },
                     modifier = Modifier.fillMaxWidth().height(54.dp),
-                    shape = RoundedCornerShape(16.dp),
+                    shape = HandoffShapes.Control,
                 ) {
                     Text(choice.label, style = MaterialTheme.typography.titleMedium)
                 }
@@ -68,7 +69,7 @@ fun DecisionScreen(decision: PendingDecision, onChoice: (DecisionActionKind) -> 
                 OutlinedButton(
                     onClick = { onChoice(choice.kind) },
                     modifier = Modifier.fillMaxWidth().height(54.dp),
-                    shape = RoundedCornerShape(16.dp),
+                    shape = HandoffShapes.Control,
                 ) {
                     Text(choice.label, style = MaterialTheme.typography.titleMedium)
                 }

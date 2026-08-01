@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import dev.wasil.permit.parking.GeoPoint
 import dev.wasil.permit.parking.MyCar
 import dev.wasil.permit.parking.label
+import dev.wasil.permit.ui.theme.HandoffShapes
 import dev.wasil.permit.ui.theme.LocalHandoffColors
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -57,9 +58,12 @@ fun MainScreen(
     val colors = LocalHandoffColors.current
     val holder = holderFor(state.activeVrn, state.options)
 
+    // Rhythm rather than a uniform gap: the card and its action belong
+    // together (12dp), everything else is a separate thought (24dp). Uniform
+    // spacing reads as a list of unrelated things.
     Column(
         modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -88,7 +92,7 @@ fun MainScreen(
 
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(22.dp),
+            shape = HandoffShapes.Card,
             border = BorderStroke(
                 1.dp,
                 holder?.let(colors::strongFor) ?: MaterialTheme.colorScheme.outline,
@@ -128,15 +132,15 @@ fun MainScreen(
                 onClick = { target?.let(onSwitch) },
                 enabled = target != null && state.switching == null,
                 modifier = Modifier.fillMaxWidth().height(54.dp),
-                shape = RoundedCornerShape(16.dp),
+                shape = HandoffShapes.Control,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = colors.strongFor(action.target),
-                    contentColor = colors.onStrong,
+                    containerColor = colors.actionFor(action.target),
+                    contentColor = colors.onAction,
                 ),
             ) {
                 Text(
                     if (state.switching != null) "Switching…" else action.label,
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.labelLarge,
                 )
             }
         }
@@ -144,7 +148,7 @@ fun MainScreen(
         state.otherStatus?.let { status ->
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(14.dp),
+                shape = HandoffShapes.Control,
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant,
                 ),
@@ -162,27 +166,30 @@ fun MainScreen(
         // The car's location without leaving this screen — tap opens the map
         // tab. Takes the remaining height so the screen fills rather than
         // trailing off into empty space.
+        // Fills the screen when there is a map to show; shrinks to a single
+        // quiet line when there isn't. Reserving half a screen to announce that
+        // nothing has happened makes absence the loudest thing on it.
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f)
-                .padding(bottom = 16.dp)
+                .then(if (car == null) Modifier else Modifier.weight(1f))
+                .padding(top = 12.dp, bottom = 16.dp)
                 .clickable(onClick = onOpenMap),
-            shape = RoundedCornerShape(18.dp),
+            shape = HandoffShapes.Card,
             colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surfaceVariant,
             ),
         ) {
             if (car == null) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(
-                        "No parked location yet",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                Text(
+                    "No parked location yet",
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 18.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
             } else {
-                Box(Modifier.fillMaxSize().clip(RoundedCornerShape(18.dp))) {
+                Box(Modifier.fillMaxSize().clip(HandoffShapes.Card)) {
                     MapCanvas(car = car, me = null, interactive = false, zoom = 16.0)
                 }
             }
