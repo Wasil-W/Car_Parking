@@ -55,6 +55,22 @@ class PinCorrectionTest {
     }
 
     @Test
+    fun `successive corrections are measured from detection, never from the last one`() {
+        // Reported 2026-08-02: "it is literally possible to keep clicking and
+        // then bring the car all the way to somewhere else". Confirming a move
+        // and starting another used to re-anchor the cap to the new pin, so the
+        // car could walk the city 300 m at a time. A cap that resets is not a
+        // cap — callers must always pass the detected position as `from`.
+        val detected = inFree
+        val first = northOf(detected, 250.0)
+        assertTrue(correctionFor(detected, first, false, resolver) is CorrectionResult.Ok)
+
+        // Only 250 m beyond the first correction, but 500 m from detection.
+        val second = northOf(detected, 500.0)
+        assertTrue(correctionFor(detected, second, false, resolver) is CorrectionResult.TooFar)
+    }
+
+    @Test
     fun `correcting from a free zone onto a paid street flips to paid`() {
         val result = correctionFor(inFree, inPaid, false, resolver) as CorrectionResult.Ok
         assertEquals(inPaid, result.point)

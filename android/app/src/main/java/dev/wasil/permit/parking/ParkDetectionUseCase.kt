@@ -90,7 +90,13 @@ class ParkDetectionUseCase(
         // Only overwrite a known position with a real one. A failed fix means
         // "we don't know where you are now", not "the car is nowhere" — writing
         // null here erased the pin from the map on every park without a fix.
-        point?.let { stateStore.lastParkLocation = it }
+        point?.let {
+            stateStore.lastParkLocation = it
+            // The anchor a hand correction is measured against. Written only
+            // here, never by a correction, so the 300 m cap cannot be reset by
+            // confirming one move and starting another.
+            stateStore.detectedParkLocation = it
+        }
 
         if (point == null) {
             // No GPS fix: could be at home for all we know. Never claim blind,
