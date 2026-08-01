@@ -10,6 +10,40 @@ change as a minor.
 
 ---
 
+## v0.5.0 — what the app thinks, and how to correct it
+
+The app has always held two beliefs it never showed you: where your car is, and
+what that place costs. This release makes both visible, and lets you fix the
+first one.
+
+**Correct the parked pin.** Tap the car marker, tap where the car really is,
+confirm. GPS is accurate to about 25 m at best, which is enough to put the car
+on the wrong side of the street and send "Walk to car" the wrong way. There was
+no way to override it.
+
+**The correction re-checks whether that spot is paid parking**, because 40 m is
+the difference between a paid street and the free zone around the corner. If
+the answer changes, the app asks about the permit — it never decides for you.
+You are standing next to the car and have just told it something it did not
+know; that is the moment to ask, not to act.
+
+**Corrections further than 300 m are refused.** That is not a correction, it is
+a different parking spot, and detection will pick that up on its own. The guard
+matters because a mis-tap landing inside a free zone would tell the other phone
+it is free to claim while the car sits on a paid street with no permit.
+
+**The corrected position reaches the other phone**, so it is not just your view.
+
+**Tariff areas on the map.** Amsterdam's 29 paid-parking regions have been
+silently deciding whether the permit gets claimed since v0.2, and you could not
+see them. Now you can: the area your car is in is always outlined, and a button
+shows the other 28. Tap one for its code, rate and hours.
+
+Nothing about the claim rules changed. This release shows the existing decision
+and corrects one of its inputs.
+
+---
+
 ## v0.4.2 — the car has a location again
 
 One bug, three symptoms, all reported from real use on 2026-08-01.

@@ -280,10 +280,16 @@ lit. v0.3.1 only ships the static mark icon (rescaled — see above).
 
 ---
 
-## v0.5 — the map becomes the home for everything location-based
+## v0.5 — the map becomes the home for everything location-based, built
 
-**Designed — see `docs/superpowers/specs/2026-08-01-v05-design.md`.** Awaiting
-Wasil's review of the three questions that spec marks as his.
+**Built on branch `v05-design`, not yet released** — it needs looking at on a
+real screen first, and the emulator's system image is gone. Spec:
+`docs/superpowers/specs/2026-08-01-v05-design.md`. Plan:
+`docs/superpowers/plans/2026-08-01-v05-map-beliefs.md`.
+
+Wasil's three decisions, all recorded 2026-08-01: a correction **does** write
+through to the other phone; the 300 m cap stands; the overlay ships whole
+rather than shrunk, because he wants to use it before judging it.
 
 Half of what was listed here shipped in v0.4: the home zone and free zones are
 already circles you place, rename and remove on the map, and Settings keeps only
