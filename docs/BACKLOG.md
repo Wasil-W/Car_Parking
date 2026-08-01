@@ -314,6 +314,55 @@ only earns its place once a manual override needs one.
 
 ---
 
+## v0.6.0 — the app stands on its own again
+
+Wasil's framing, 2026-08-02: he wants the app to be a parking app that happens
+to know about a shared permit, not a permit switcher that happens to show a
+map. Both halves stay; they just stop getting in each other's way.
+
+**The line that separates them:** an obligation is not a settlement. *Where you
+parked* decides whether you owe anything; *what you own* decides how that gets
+paid. Today `ParkDetectionUseCase` fuses the two — it resolves the zone and
+then assumes the only possible answer is "claim the shared permit". Removing
+that assumption is the release.
+
+Once separated, the permit becomes one settlement method among several — a
+peculiar one, in that it is free and there is exactly one of it — and someone
+with no permit at all still gets a working app.
+
+**The concrete win** is the case that has no good answer today: both cars in
+paid areas, one permit. Right now the second brother's only options are to
+strand the first or do nothing. Paying is the third answer, and it is the right
+one.
+
+**Every situation and its action now lives in [`USE-CASES.md`](USE-CASES.md)** —
+built, planned and blocked alike. Write the row before the code.
+
+**This release and the zone registry are the same release.** The nearest-payment-machine
+work in [`v0.6-zone-registry.md`](v0.6-zone-registry.md) is not a competing
+v0.6 — it is the foundation this one stands on, because you cannot offer to pay
+without knowing which zone and which machine. Registry first, standalone mode
+on top.
+
+**Three things must be answered first**, all detailed in `USE-CASES.md`:
+
+1. **How permit scope varies.** Wasil's covers all of Amsterdam and switches
+   plates freely; that may be unusual. A district-limited or plate-locked
+   permit changes what the settlement layer may offer.
+2. **Which zones are permit-only versus pay-only** — Amsterdam's `gebruiksdoel`
+   field. The bundled tariff file cannot tell them apart.
+3. **Whether a paid session can be started programmatically at all.** The
+   biggest unknown by far, and the difference between v0.6.0 being a release
+   and being a document. Real money and real liability, unlike the permit.
+
+**On test subjects:** the ideal one both holds a permit and pays for parking in
+Noord, so they can answer 1 and 2 from a single trip. The questions are about
+how their permit *behaves* — scope, plate-locking, hour budget, activation cost
+— and none of them requires anyone's login. No credentials should change hands
+to answer any of this.
+
+---
+
 ## Later / unscheduled
 
 - **Home-screen widget:** the correct way to show live state without opening
