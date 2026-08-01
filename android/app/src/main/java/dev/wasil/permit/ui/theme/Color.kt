@@ -138,3 +138,10 @@ val TariffBoundary = Color(0xFF5B6B7A)
 // darker, and far from either brother's identity hue so a selected region can
 // never be misread as "whose car".
 val TariffSelected = Color(0xFF16222B)
+
+// The walking line back to the car. The one map colour allowed to be assertive
+// — it is transient, it only appears when asked for, and its whole job is to be
+// followed at a glance in the street. Still not either brother's hue: a route
+// is a direction, not a person. Dashed, because it is a suggestion rather than
+// a boundary, and the same value in both modes like every other map colour.
+val WalkRoute = Color(0xFF2E7D6B)

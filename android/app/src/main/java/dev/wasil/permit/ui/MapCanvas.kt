@@ -25,6 +25,7 @@ import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.MapEventsOverlay
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polygon
+import org.osmdroid.views.overlay.Polyline
 import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint as OsmGeoPoint
 
@@ -87,6 +88,8 @@ fun MapCanvas(
     ghostCar: GeoPoint? = null,
     /** Tapping the car marker; null leaves the marker inert as before. */
     onCarTap: (() -> Unit)? = null,
+    /** The walking line back to the car, drawn above everything else. */
+    walkRoute: List<GeoPoint> = emptyList(),
     /**
      * Bumped by the caller to ask for a pull-back to [OVERVIEW_ZOOM]. A counter
      * rather than a zoom value so that repeated requests still fire, and so a
@@ -168,7 +171,9 @@ fun MapCanvas(
             // markers below — a stale factory-time closure would otherwise
             // keep answering onMapTap with whatever was passed in on the very
             // first composition.
-            map.overlays.removeAll { it is Marker || it is Polygon || it is MapEventsOverlay }
+            map.overlays.removeAll {
+                it is Marker || it is Polygon || it is Polyline || it is MapEventsOverlay
+            }
             map.overlays.add(
                 MapEventsOverlay(object : MapEventsReceiver {
                     override fun singleTapConfirmedHelper(p: OsmGeoPoint): Boolean {
@@ -213,6 +218,20 @@ fun MapCanvas(
             candidateZone?.let {
                 map.overlays.add(
                     zoneCircle(map, it, colors.zoneCandidate, dashed = true, fillAlpha = 0.24f, strokeWidthPx = 6f),
+                )
+            }
+
+            // Above the zones but below the markers, so neither end of the
+            // route is ever hidden by the line that leads to it.
+            if (walkRoute.size >= 2) {
+                map.overlays.add(
+                    Polyline(map).apply {
+                        setPoints(walkRoute.map { OsmGeoPoint(it.lat, it.lng) })
+                        outlinePaint.color = colors.walkRoute.toArgb()
+                        outlinePaint.strokeWidth = 12f
+                        outlinePaint.pathEffect = DashPathEffect(floatArrayOf(26f, 18f), 0f)
+                        infoWindow = null
+                    },
                 )
             }
 

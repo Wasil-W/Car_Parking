@@ -49,6 +49,9 @@ import dev.wasil.permit.parking.distanceMeters
 import dev.wasil.permit.parking.android.ParkActionReceiver
 import dev.wasil.permit.parking.android.SharedSync
 import dev.wasil.permit.parking.zones.TariffArea
+import dev.wasil.permit.parking.route.WalkRoute
+import dev.wasil.permit.parking.route.fetchWalkRoute
+import dev.wasil.permit.parking.route.walkSummary
 import dev.wasil.permit.parking.zones.ZoneResolver
 import dev.wasil.permit.parking.android.reverseGeocodeAddress
 import dev.wasil.permit.parking.android.reverseGeocodeAreaName
@@ -56,6 +59,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.launch
+import okhttp3.OkHttpClient
 
 /** Which kind of zone the map is currently placing a candidate point for. */
 private enum class ZoneKind { HOME, FREE }
@@ -76,6 +80,7 @@ fun MapScreen(
     // A factory, not an instance: the resolver closes over the home zone and
     // the free-zone list, both of which this very screen can change.
     zoneResolver: () -> ZoneResolver,
+    routeClient: OkHttpClient,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -123,6 +128,13 @@ fun MapScreen(
     // 2.7 km — so at parking zoom the whole viewport sits inside a single
     // polygon and the overlay looks like it did nothing at all.
     var overviewRequest by remember { mutableIntStateOf(0) }
+
+    // Walking route, drawn in the app rather than by handing off to Google
+    // Maps. Cleared whenever the car moves so a stale line can never point at
+    // where the car used to be.
+    var route by remember { mutableStateOf<WalkRoute?>(null) }
+    var routing by remember { mutableStateOf(false) }
+    LaunchedEffect(car) { route = null }
 
     // Codes like "T14B" mean nothing to anyone. The tariff file has no place
     // names in it at all, so the name is geocoded from a point inside the
@@ -199,6 +211,7 @@ fun MapScreen(
                 tariffAreas = visibleTariffAreas,
                 highlightRing = highlight?.ring,
                 ghostCar = pending?.point,
+                walkRoute = route?.points.orEmpty(),
                 overviewRequest = overviewRequest,
                 onCarTap = {
                     if (car != null && stateStore.parked) {
@@ -383,11 +396,35 @@ fun MapScreen(
                 }
 
                 if (car != null && addingKind == null && candidatePoint == null && !movingPin) {
+                    val here = me
                     Button(
-                        onClick = { openWalkingDirections(context, car) },
+                        onClick = {
+                            when {
+                                route != null -> route = null
+                                here == null -> openWalkingDirections(context, car)
+                                else -> scope.launch {
+                                    routing = true
+                                    route = fetchWalkRoute(routeClient, here, car)
+                                    routing = false
+                                }
+                            }
+                        },
+                        enabled = !routing,
                         modifier = Modifier.fillMaxWidth(),
                         shape = HandoffShapes.Control,
-                    ) { Text("Walk to car") }
+                    ) {
+                        Text(
+                            when {
+                                routing -> "Finding the way…"
+                                route != null -> "Hide route · ${walkSummary(route!!)}"
+                                // Without a position of our own there is no
+                                // route to draw, so this stays the old hand-off
+                                // rather than a button that does nothing.
+                                here == null -> "Open walk in Maps"
+                                else -> "Walk to car"
+                            },
+                        )
+                    }
                 }
             }
         }
