@@ -12,6 +12,7 @@ import dev.wasil.permit.parking.ActivitySample
 import dev.wasil.permit.parking.ActivityType
 import dev.wasil.permit.parking.DetectionSignals
 import dev.wasil.permit.parking.GeoPoint
+import dev.wasil.permit.parking.cachedFixIfFresh
 import kotlin.coroutines.resume
 import kotlinx.coroutines.suspendCancellableCoroutine
 
@@ -77,8 +78,25 @@ class PlayServicesSignals(private val context: Context) : DetectionSignals {
         else -> ActivityType.OTHER
     }
 
+    /**
+     * A fresh fix if one can be had, otherwise the phone's cached one.
+     *
+     * The fallback is the whole point. `getCurrentLocation` asks the GPS for a
+     * new high-accuracy fix and returns null when it cannot get one — which is
+     * precisely what happens indoors, and parking at home and walking inside is
+     * the single most common thing this app does. Reported from real use on
+     * 2026-08-01: the car's pin never appeared, and the app asked about the
+     * permit while sitting in the home zone. Both were this one null.
+     *
+     * The cached fix costs nothing (it is whatever the phone already knew) and
+     * at the moment the car's Bluetooth drops it is, in practice, the parking
+     * spot itself. [cachedFixIfFresh] is what keeps a much older one out.
+     */
     @SuppressLint("MissingPermission")
-    override suspend fun currentLocation(): GeoPoint? = runCatching {
+    override suspend fun currentLocation(): GeoPoint? = freshFix() ?: cachedFix()
+
+    @SuppressLint("MissingPermission")
+    private suspend fun freshFix(): GeoPoint? = runCatching {
         suspendCancellableCoroutine<GeoPoint?> { cont ->
             val cts = CancellationTokenSource()
             cont.invokeOnCancellation { cts.cancel() }
@@ -86,6 +104,22 @@ class PlayServicesSignals(private val context: Context) : DetectionSignals {
                 .getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, cts.token)
                 .addOnSuccessListener { loc ->
                     cont.resume(loc?.let { GeoPoint(it.latitude, it.longitude, it.accuracy) })
+                }
+                .addOnFailureListener { cont.resume(null) }
+        }
+    }.getOrNull()
+
+    @SuppressLint("MissingPermission")
+    private suspend fun cachedFix(): GeoPoint? = runCatching {
+        suspendCancellableCoroutine<GeoPoint?> { cont ->
+            LocationServices.getFusedLocationProviderClient(context).lastLocation
+                .addOnSuccessListener { loc ->
+                    cont.resume(
+                        cachedFixIfFresh(
+                            loc?.let { GeoPoint(it.latitude, it.longitude, it.accuracy) },
+                            ageMs = loc?.let { System.currentTimeMillis() - it.time } ?: Long.MAX_VALUE,
+                        ),
+                    )
                 }
                 .addOnFailureListener { cont.resume(null) }
         }

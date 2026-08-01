@@ -10,6 +10,39 @@ change as a minor.
 
 ---
 
+## v0.4.2 — the car has a location again
+
+One bug, three symptoms, all reported from real use on 2026-08-01.
+
+Parking at home produced no car pin on the map, an empty card on the Permit
+screen, and a "do you want to claim the permit?" prompt while sitting inside
+the home zone.
+
+**All three were the same missing fallback.** When a park is detected, the app
+asks the GPS for a fresh high-accuracy fix. That request returns nothing when
+it can't see the sky — which is exactly the situation when you park at home and
+walk indoors. With no position:
+
+- the car's location was never recorded, so the map had nothing to draw;
+- the Permit screen's map card had nothing to draw either;
+- and the zone check was skipped entirely, so the app never got as far as
+  noticing it was at home, and fell through to asking.
+
+It was not ignoring the home zone. It never had a position to compare against
+it.
+
+**The fix:** fall back to the position the phone already knows. It costs
+nothing, and at the moment your car's Bluetooth drops it is, in practice, the
+parking spot itself.
+
+**A cached fix older than two minutes is still refused.** The tightness is
+deliberate. A stale fix from the start of a journey would resolve to the home
+zone and quietly decide no permit was needed — while the car sat in town
+collecting a fine. When nothing usable is available the app asks, exactly as
+before.
+
+---
+
 ## v0.4.1 — quieter
 
 Layout and colour only. Nothing about detection, claiming or the shared state
