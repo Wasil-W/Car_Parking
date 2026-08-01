@@ -42,6 +42,11 @@ import dev.wasil.permit.parking.FreeZone
 import dev.wasil.permit.parking.FreeZoneStore
 import dev.wasil.permit.parking.GeoPoint
 import dev.wasil.permit.parking.ParkStateStore
+import dev.wasil.permit.parking.distanceMeters
+import dev.wasil.permit.parking.android.ParkActionReceiver
+import dev.wasil.permit.parking.android.SharedSync
+import dev.wasil.permit.parking.zones.TariffArea
+import dev.wasil.permit.parking.zones.ZoneResolver
 import dev.wasil.permit.parking.android.PlayServicesSignals
 import dev.wasil.permit.parking.android.reverseGeocodeAddress
 import java.text.SimpleDateFormat
@@ -60,7 +65,14 @@ private enum class ZoneKind { HOME, FREE }
  */
 @SuppressLint("MissingPermission")
 @Composable
-fun MapScreen(stateStore: ParkStateStore, freeZoneStore: FreeZoneStore) {
+fun MapScreen(
+    stateStore: ParkStateStore,
+    freeZoneStore: FreeZoneStore,
+    tariffAreas: List<TariffArea>,
+    // A factory, not an instance: the resolver closes over the home zone and
+    // the free-zone list, both of which this very screen can change.
+    zoneResolver: () -> ZoneResolver,
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var me by remember { mutableStateOf<GeoPoint?>(null) }
@@ -81,7 +93,22 @@ fun MapScreen(stateStore: ParkStateStore, freeZoneStore: FreeZoneStore) {
     // Tapping an existing zone opens the rename/remove dialog below.
     var zoneDialogTarget by remember { mutableStateOf<ZoneRef?>(null) }
 
+    var showTariff by remember { mutableStateOf(false) }
+    var selectedArea by remember { mutableStateOf<TariffArea?>(null) }
+
+    // Moving the car pin: tap the marker, tap the true spot, confirm.
+    var movingPin by remember { mutableStateOf(false) }
+    var pending by remember { mutableStateOf<CorrectionResult.Ok?>(null) }
+    var tooFarM by remember { mutableStateOf<Double?>(null) }
+    var flipToConfirm by remember { mutableStateOf<Flip?>(null) }
+
     val candidateZone = candidatePoint?.let { FreeZone(it.lat, it.lng, candidateRadius.toDouble()) }
+
+    // Off by default: only the area the car is in, outlined. That is the state
+    // that answers "why did it claim here?" without changing what the map looks
+    // like. The chip reveals the other 28.
+    val visibleTariffAreas = if (showTariff) tariffAreas else emptyList()
+    val highlightArea = selectedArea ?: car?.let { tariffAreaAt(it, tariffAreas) }
 
     Column(Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
         Text("Map", style = MaterialTheme.typography.titleMedium)
@@ -103,11 +130,38 @@ fun MapScreen(stateStore: ParkStateStore, freeZoneStore: FreeZoneStore) {
                 homeZone = homeZone,
                 freeZones = freeZones,
                 candidateZone = candidateZone,
+                tariffAreas = visibleTariffAreas,
+                highlightArea = highlightArea,
+                ghostCar = pending?.point,
+                onCarTap = {
+                    if (car != null && stateStore.parked) {
+                        movingPin = true
+                        selectedArea = null
+                    }
+                },
+                // Placing modes come first and win outright: while a candidate
+                // is being placed or the pin moved, every tap is a placement.
+                // Below them, mapHitAt is the single precedence rule.
                 onMapTap = { point ->
-                    if (addingKind != null) {
-                        candidatePoint = point
-                    } else {
-                        zoneDialogTarget = zoneHitAt(point, homeZone, freeZones)
+                    when {
+                        addingKind != null -> candidatePoint = point
+                        movingPin && car != null -> {
+                            when (val r = correctionFor(car, point, stateStore.parkedOutside, zoneResolver())) {
+                                is CorrectionResult.TooFar -> {
+                                    tooFarM = r.distanceM
+                                    pending = null
+                                }
+                                is CorrectionResult.Ok -> {
+                                    pending = r
+                                    tooFarM = null
+                                }
+                            }
+                        }
+                        else -> when (val hit = mapHitAt(point, homeZone, freeZones, visibleTariffAreas)) {
+                            is MapHit.Zone -> zoneDialogTarget = hit.ref
+                            is MapHit.Tariff -> selectedArea = hit.area
+                            null -> selectedArea = null
+                        }
                     }
                 },
                 modifier = Modifier.fillMaxSize().clip(HandoffShapes.Card),
@@ -121,6 +175,35 @@ fun MapScreen(stateStore: ParkStateStore, freeZoneStore: FreeZoneStore) {
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 when {
+                    pending != null -> MovePinCard(
+                        distanceM = car?.let { distanceMeters(it, pending!!.point) } ?: 0.0,
+                        flip = pending!!.flip,
+                        onCancel = {
+                            pending = null
+                            movingPin = false
+                        },
+                        onConfirm = {
+                            val result = pending!!
+                            stateStore.lastParkLocation = result.point
+                            stateStore.lastZoneCode = result.zoneCode
+                            stateStore.parkedOutside = result.parkedOutside
+                            // The other phone learns the corrected position via
+                            // the path that already exists — SyncStateWorker
+                            // reads exactly these three fields.
+                            SharedSync.requestSync(context)
+                            flipToConfirm = result.flip.takeIf { it != Flip.NONE }
+                            pending = null
+                            movingPin = false
+                        },
+                    )
+                    movingPin -> ZoneHintCard(
+                        text = tooFarM?.let { "%.0f m away — too far to be a correction".format(it) }
+                            ?: "Tap where the car really is",
+                        onCancel = {
+                            movingPin = false
+                            tooFarM = null
+                        },
+                    )
                     candidatePoint != null -> ZoneCandidateCard(
                         kind = addingKind ?: ZoneKind.FREE,
                         radiusM = candidateRadius,
@@ -194,23 +277,62 @@ fun MapScreen(stateStore: ParkStateStore, freeZoneStore: FreeZoneStore) {
                             containerColor = MaterialTheme.colorScheme.surface,
                         ),
                     ) {
-                        Row(
+                        Column(
                             Modifier.fillMaxWidth().padding(8.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                OutlinedButton(
+                                    onClick = { addingKind = ZoneKind.HOME },
+                                    modifier = Modifier.weight(1f),
+                                ) { Text(if (homeZone == null) "Set home zone" else "Move home zone") }
+                                OutlinedButton(
+                                    onClick = { addingKind = ZoneKind.FREE },
+                                    modifier = Modifier.weight(1f),
+                                ) { Text("Add free zone") }
+                            }
+                            // Its own row rather than a third button above:
+                            // three of these labels side by side on a phone
+                            // wrap to two lines each and stop being readable.
                             OutlinedButton(
-                                onClick = { addingKind = ZoneKind.HOME },
-                                modifier = Modifier.weight(1f),
-                            ) { Text(if (homeZone == null) "Set home zone" else "Move home zone") }
-                            OutlinedButton(
-                                onClick = { addingKind = ZoneKind.FREE },
-                                modifier = Modifier.weight(1f),
-                            ) { Text("Add free zone") }
+                                onClick = {
+                                    showTariff = !showTariff
+                                    if (!showTariff) selectedArea = null
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                enabled = tariffAreas.isNotEmpty(),
+                            ) {
+                                Text(
+                                    if (showTariff) "Hide tariff areas" else "Show tariff areas",
+                                )
+                            }
                         }
                     }
                 }
 
-                if (car != null && addingKind == null && candidatePoint == null) {
+                selectedArea?.let { area ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = HandoffShapes.Control,
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surface,
+                        ),
+                    ) {
+                        Column(Modifier.fillMaxWidth().padding(14.dp)) {
+                            Text(area.code, style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                tariffSummary(area),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+
+                if (car != null && addingKind == null && candidatePoint == null && !movingPin) {
                     Button(
                         onClick = { openWalkingDirections(context, car) },
                         modifier = Modifier.fillMaxWidth(),
@@ -269,6 +391,88 @@ fun MapScreen(stateStore: ParkStateStore, freeZoneStore: FreeZoneStore) {
                     zoneDialogTarget = null
                 },
             )
+        }
+    }
+
+    // Never automatic. Detection auto-switches because the app is the only
+    // party that noticed anything happened; a correction is the opposite — the
+    // user is standing next to the car and has just told the app something it
+    // did not know. Asking costs one tap and removes the whole class of "it
+    // did something because I mis-tapped".
+    flipToConfirm?.let { flip ->
+        AlertDialog(
+            onDismissRequest = { flipToConfirm = null },
+            title = {
+                Text(if (flip == Flip.NOW_PAID) "This spot is paid parking" else "This spot is free")
+            },
+            text = {
+                Text(
+                    if (flip == Flip.NOW_PAID) {
+                        "The corrected position is in a paid area. Claim the permit for your car?"
+                    } else {
+                        "The corrected position is not in a paid area. Hand the permit back?"
+                    },
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    ParkActionReceiver.perform(
+                        context,
+                        if (flip == Flip.NOW_PAID) {
+                            ParkActionReceiver.ACTION_CLAIM
+                        } else {
+                            ParkActionReceiver.ACTION_GIVE_BACK
+                        },
+                    )
+                    flipToConfirm = null
+                }) { Text(if (flip == Flip.NOW_PAID) "Claim" else "Hand back") }
+            },
+            dismissButton = {
+                TextButton(onClick = { flipToConfirm = null }) { Text("Not now") }
+            },
+        )
+    }
+}
+
+/**
+ * Confirms a pin correction, and says plainly when it would change the answer
+ * to "is this paid parking?" — because that answer is what decides whether the
+ * permit should be here at all.
+ */
+@Composable
+private fun MovePinCard(
+    distanceM: Double,
+    flip: Flip,
+    onCancel: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = HandoffShapes.Control,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Column(Modifier.fillMaxWidth().padding(14.dp)) {
+            Text("Move the car pin", style = MaterialTheme.typography.bodyLarge)
+            Text(
+                "%.0f m from where it was detected".format(distanceM),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (flip != Flip.NONE) {
+                Text(
+                    when (flip) {
+                        Flip.NOW_PAID -> "This spot is paid parking. You will be asked about the permit."
+                        Flip.NOW_FREE -> "This spot is not paid parking. You will be asked about the permit."
+                        Flip.NONE -> ""
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                TextButton(onClick = onCancel) { Text("Cancel") }
+                TextButton(onClick = onConfirm) { Text("Confirm") }
+            }
         }
     }
 }
