@@ -8,6 +8,19 @@ import androidx.compose.ui.graphics.Color
  * text on them reaches ~6:1; reusing the dark mid-tones gave only 3.16:1 for
  * text sitting on the fill. See the spec's "How the light palette was derived".
  */
+/**
+ * The hand-over button's fill — deliberately deeper than `*Strong`.
+ *
+ * A button is not an arc. `*Strong` is tuned to read brightly as a thin stroke
+ * on a card; the same value across a full-width slab is the loudest thing on
+ * the screen, and it forced black label text (white measured only 4.34:1 on it),
+ * which shouts twice over. These deeper fills carry white at 7.1:1 and 6.8:1 —
+ * better contrast from a quieter colour.
+ */
+val WasilActionDark = Color(0xFF3F5B72)
+val WalidActionDark = Color(0xFF7A5238)
+val OnActionAll = Color(0xFFFFFFFF)
+
 val WasilStrongDark = Color(0xFF5A7D9A)
 val WasilContainerDark = Color(0xFF1E2A33)
 val WasilOnContainerDark = Color(0xFFA8C0D4)

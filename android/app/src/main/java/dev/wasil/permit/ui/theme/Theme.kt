@@ -37,7 +37,13 @@ data class HandoffColors(
     val zoneHome: Color,
     val zoneFree: Color,
     val zoneCandidate: Color,
+    // The hand-over button's fill, deliberately deeper than `*Strong` — see
+    // Color.kt for why a slab and a stroke want different values.
+    val wasilAction: Color,
+    val walidAction: Color,
+    val onAction: Color,
 ) {
+    fun actionFor(car: MyCar) = if (car == MyCar.WASIL) wasilAction else walidAction
     fun strongFor(car: MyCar) = if (car == MyCar.WASIL) wasilStrong else walidStrong
     fun containerFor(car: MyCar) = if (car == MyCar.WASIL) wasilContainer else walidContainer
     fun onContainerFor(car: MyCar) = if (car == MyCar.WASIL) wasilOnContainer else walidOnContainer
@@ -57,6 +63,7 @@ private val DarkColors = HandoffColors(
     arcInactive = ArcInactiveDark, fine = FineDark, alert = AlertDark,
     dot = TextPrimaryDark,
     onStrong = OnIdentityStrongDark,
+    wasilAction = WasilActionDark, walidAction = WalidActionDark, onAction = OnActionAll,
     zoneHome = ZoneHome, zoneFree = ZoneFree, zoneCandidate = ZoneCandidate,
 )
 
@@ -72,6 +79,7 @@ private val LightColors = HandoffColors(
     // mode — a white dot would vanish on it.
     dot = TextPrimaryLight,
     onStrong = OnIdentityStrongLight,
+    wasilAction = WasilStrongLight, walidAction = WalidStrongLight, onAction = OnActionAll,
     zoneHome = ZoneHome, zoneFree = ZoneFree, zoneCandidate = ZoneCandidate,
 )
 
