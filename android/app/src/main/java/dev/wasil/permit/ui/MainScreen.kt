@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import dev.wasil.permit.parking.GeoPoint
 import dev.wasil.permit.parking.MyCar
 import dev.wasil.permit.parking.label
+import dev.wasil.permit.ui.theme.HandoffShapes
 import dev.wasil.permit.ui.theme.LocalHandoffColors
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -91,7 +92,7 @@ fun MainScreen(
 
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(22.dp),
+            shape = HandoffShapes.Card,
             border = BorderStroke(
                 1.dp,
                 holder?.let(colors::strongFor) ?: MaterialTheme.colorScheme.outline,
@@ -131,7 +132,7 @@ fun MainScreen(
                 onClick = { target?.let(onSwitch) },
                 enabled = target != null && state.switching == null,
                 modifier = Modifier.fillMaxWidth().height(54.dp),
-                shape = RoundedCornerShape(16.dp),
+                shape = HandoffShapes.Control,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = colors.actionFor(action.target),
                     contentColor = colors.onAction,
@@ -147,7 +148,7 @@ fun MainScreen(
         state.otherStatus?.let { status ->
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(14.dp),
+                shape = HandoffShapes.Control,
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant,
                 ),
@@ -174,7 +175,7 @@ fun MainScreen(
                 .then(if (car == null) Modifier else Modifier.weight(1f))
                 .padding(top = 12.dp, bottom = 16.dp)
                 .clickable(onClick = onOpenMap),
-            shape = RoundedCornerShape(18.dp),
+            shape = HandoffShapes.Card,
             colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surfaceVariant,
             ),
@@ -188,7 +189,7 @@ fun MainScreen(
                     textAlign = TextAlign.Center,
                 )
             } else {
-                Box(Modifier.fillMaxSize().clip(RoundedCornerShape(18.dp))) {
+                Box(Modifier.fillMaxSize().clip(HandoffShapes.Card)) {
                     MapCanvas(car = car, me = null, interactive = false, zoom = 16.0)
                 }
             }

@@ -28,6 +28,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import dev.wasil.permit.PermitApp
+import dev.wasil.permit.ui.theme.HandoffShapes
 import dev.wasil.permit.ui.theme.LocalHandoffColors
 
 private enum class Tab(val label: String, val icon: ImageVector) {
@@ -72,7 +73,7 @@ fun HandoffTabs(
             SnackbarHost(snackbar) { data ->
                 Snackbar(
                     snackbarData = data,
-                    shape = RoundedCornerShape(14.dp),
+                    shape = HandoffShapes.Control,
                     containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                     contentColor = MaterialTheme.colorScheme.onSurface,
                     actionColor = MaterialTheme.colorScheme.onSurfaceVariant,
