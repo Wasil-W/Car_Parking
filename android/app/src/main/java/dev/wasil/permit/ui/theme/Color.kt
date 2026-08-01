@@ -116,3 +116,16 @@ val SurfaceContainerHighLight = Color(0xFFEAE8DE)
 val ZoneHome = Color(0xFF4A463D)
 val ZoneFree = Color(0xFF8C8676)
 val ZoneCandidate = Color(0xFF211E19)
+
+// Tariff-area boundaries: Amsterdam's own paid-parking regions, a fourth map
+// category beside the three zone colours above. Named TariffBoundary and not
+// TariffArea because dev.wasil.permit.parking.zones.TariffArea is a data class
+// and the two are imported together.
+//
+// Same reasoning as the zone colours — one value for both modes, because the
+// MAPNIK tiles underneath stay light whatever the app theme does. A grey-blue
+// kept clear of both brothers' identity hues, so a boundary can never be
+// misread as "whose car". Twenty-nine of these are on screen at once when the
+// overlay is up, which is why the fill is drawn at 0.07 alpha: enough to tell
+// one region from its neighbour, not enough to bury a zone circle.
+val TariffBoundary = Color(0xFF5B6B7A)

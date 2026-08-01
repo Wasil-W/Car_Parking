@@ -14,6 +14,8 @@ import androidx.core.content.ContextCompat
 import dev.wasil.permit.R
 import dev.wasil.permit.parking.FreeZone
 import dev.wasil.permit.parking.GeoPoint
+import dev.wasil.permit.parking.zones.TariffArea
+import dev.wasil.permit.parking.zones.ZonePolygon
 import dev.wasil.permit.ui.theme.LocalHandoffColors
 import org.osmdroid.config.Configuration
 import org.osmdroid.events.MapEventsReceiver
@@ -51,10 +53,25 @@ fun MapCanvas(
     homeZone: FreeZone? = null,
     freeZones: List<FreeZone> = emptyList(),
     candidateZone: FreeZone? = null,
+    /** Every tariff area to draw as a boundary. Empty means the overlay is off. */
+    tariffAreas: List<TariffArea> = emptyList(),
+    /** Outlined above the rest — the area the car is in, or a tapped one. */
+    highlightArea: TariffArea? = null,
+    /** The proposed new car position while a correction is being confirmed. */
+    ghostCar: GeoPoint? = null,
+    /** Tapping the car marker; null leaves the marker inert as before. */
+    onCarTap: (() -> Unit)? = null,
     onMapTap: ((GeoPoint) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val colors = LocalHandoffColors.current
+    // The tariff polygons are 170 rings and ~17,500 vertices. Everything else on
+    // this canvas is rebuilt on every update pass, deliberately, so that a stale
+    // factory-time closure cannot keep answering taps with the first
+    // composition's parameters — but these never change, and rebuilding them
+    // would be the one genuinely expensive thing on the screen. Built once and
+    // re-added. Identity comparison suffices: PermitApp holds a single list.
+    val tariffCache = remember { mutableStateOf<Pair<List<TariffArea>, List<Polygon>>?>(null) }
     // Tracks only the centre WE last set, never the map's live (possibly
     // user-panned) position — otherwise re-centring on every recomposition
     // would fight a pan made while placing a zone candidate or dragging the
@@ -97,6 +114,27 @@ fun MapCanvas(
                 }),
             )
 
+            // Underneath the zone circles and markers: these are the ambient
+            // layer, and nothing placed by hand should ever be hidden by them.
+            if (tariffAreas.isNotEmpty()) {
+                val cached = tariffCache.value
+                val polys = if (cached != null && cached.first === tariffAreas) {
+                    cached.second
+                } else {
+                    tariffAreas.flatMap { area ->
+                        area.polygons.map { ring ->
+                            tariffPolygon(map, ring, colors.tariffBoundary, fillAlpha = 0.07f, strokeWidthPx = 2f)
+                        }
+                    }.also { tariffCache.value = tariffAreas to it }
+                }
+                polys.forEach { map.overlays.add(it) }
+            }
+            highlightArea?.polygons?.forEach { ring ->
+                map.overlays.add(
+                    tariffPolygon(map, ring, colors.tariffBoundary, fillAlpha = 0f, strokeWidthPx = 5f),
+                )
+            }
+
             homeZone?.let {
                 map.overlays.add(
                     zoneCircle(map, it, colors.zoneHome, dashed = false, fillAlpha = 0.18f, strokeWidthPx = 4f),
@@ -119,9 +157,25 @@ fun MapCanvas(
                     icon = ContextCompat.getDrawable(map.context, R.drawable.ic_marker_car)
                     title = "Your car"
                     setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                    // The two markers are self-explanatory; osmdroid's stock
-                    // InfoWindow bubble is off-centre and just repeats the
-                    // title, so suppress it instead of tapping into it.
+                    // Consumes the tap either way: osmdroid's stock InfoWindow
+                    // bubble is off-centre and just repeats the title, so it is
+                    // suppressed whether or not anyone is listening. When
+                    // someone is, this is the entry point to moving the pin.
+                    setOnMarkerClickListener { _, _ ->
+                        onCarTap?.invoke()
+                        true
+                    }
+                })
+            }
+            ghostCar?.let {
+                map.overlays.add(Marker(map).apply {
+                    position = OsmGeoPoint(it.lat, it.lng)
+                    icon = ContextCompat.getDrawable(map.context, R.drawable.ic_marker_car)
+                    // Half strength so it reads as "proposed", not "there are
+                    // two cars" — the same unsaved-candidate idea as the zone
+                    // candidate circle, which says it with weight instead.
+                    alpha = 0.5f
+                    setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
                     setOnMarkerClickListener { _, _ -> true }
                 })
             }
@@ -148,6 +202,30 @@ fun MapCanvas(
  * `onMapTap` plus the tested [zoneHitAt] is the single place that decides
  * which zone a tap hit, rather than osmdroid's own polygon geometry.
  */
+/**
+ * One ring of a tariff area.
+ *
+ * Holes are ignored. osmdroid's Polygon does support them, but a boundary drawn
+ * at 0.07 alpha reads the same either way, and the app's own point-in-polygon
+ * test — which does honour holes — is what actually decides anything. Returns
+ * false from its click listener for the same reason [zoneCircle] does:
+ * [mapHitAt] is the single place that decides what a tap hit.
+ */
+private fun tariffPolygon(
+    map: MapView,
+    ring: ZonePolygon,
+    color: Color,
+    fillAlpha: Float,
+    strokeWidthPx: Float,
+): Polygon = Polygon(map).apply {
+    points = ring.outer.map { OsmGeoPoint(it.lat, it.lng) }
+    fillColor = color.copy(alpha = fillAlpha).toArgb()
+    strokeColor = color.toArgb()
+    strokeWidth = strokeWidthPx
+    setOnClickListener { _, _, _ -> false }
+    infoWindow = null
+}
+
 private fun zoneCircle(
     map: MapView,
     zone: FreeZone,

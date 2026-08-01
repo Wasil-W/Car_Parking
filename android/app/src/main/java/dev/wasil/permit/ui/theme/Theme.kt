@@ -37,6 +37,9 @@ data class HandoffColors(
     val zoneHome: Color,
     val zoneFree: Color,
     val zoneCandidate: Color,
+    // Amsterdam's paid-parking region boundaries. Same mode-independence as the
+    // zone colours above, and for the same reason: the map tiles never change.
+    val tariffBoundary: Color,
     // The hand-over button's fill, deliberately deeper than `*Strong` — see
     // Color.kt for why a slab and a stroke want different values.
     val wasilAction: Color,
@@ -65,6 +68,7 @@ private val DarkColors = HandoffColors(
     onStrong = OnIdentityStrongDark,
     wasilAction = WasilActionDark, walidAction = WalidActionDark, onAction = OnActionAll,
     zoneHome = ZoneHome, zoneFree = ZoneFree, zoneCandidate = ZoneCandidate,
+    tariffBoundary = TariffBoundary,
 )
 
 private val LightColors = HandoffColors(
@@ -81,6 +85,7 @@ private val LightColors = HandoffColors(
     onStrong = OnIdentityStrongLight,
     wasilAction = WasilStrongLight, walidAction = WalidStrongLight, onAction = OnActionAll,
     zoneHome = ZoneHome, zoneFree = ZoneFree, zoneCandidate = ZoneCandidate,
+    tariffBoundary = TariffBoundary,
 )
 
 // Every slot below is set explicitly so nothing falls back to Material 3's
