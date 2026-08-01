@@ -137,6 +137,7 @@ fun HandoffTabs(
                     // ZoneResolver falls back to "assume paid".
                     tariffAreas = app.tariffAreas.orEmpty(),
                     zoneResolver = { app.zoneResolver() },
+                    routeClient = app.routeClient,
                 )
                 Tab.SETTINGS -> SettingsScreen(
                     stateStore = app.parkStateStore,

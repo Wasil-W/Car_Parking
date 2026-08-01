@@ -41,6 +41,7 @@ data class HandoffColors(
     // zone colours above, and for the same reason: the map tiles never change.
     val tariffBoundary: Color,
     val tariffSelected: Color,
+    val walkRoute: Color,
     // The hand-over button's fill, deliberately deeper than `*Strong` — see
     // Color.kt for why a slab and a stroke want different values.
     val wasilAction: Color,
@@ -71,6 +72,7 @@ private val DarkColors = HandoffColors(
     zoneHome = ZoneHome, zoneFree = ZoneFree, zoneCandidate = ZoneCandidate,
     tariffBoundary = TariffBoundary,
     tariffSelected = TariffSelected,
+    walkRoute = WalkRoute,
 )
 
 private val LightColors = HandoffColors(
@@ -89,6 +91,7 @@ private val LightColors = HandoffColors(
     zoneHome = ZoneHome, zoneFree = ZoneFree, zoneCandidate = ZoneCandidate,
     tariffBoundary = TariffBoundary,
     tariffSelected = TariffSelected,
+    walkRoute = WalkRoute,
 )
 
 // Every slot below is set explicitly so nothing falls back to Material 3's

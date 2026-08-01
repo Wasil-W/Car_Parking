@@ -10,6 +10,30 @@ change as a minor.
 
 ---
 
+## v0.5.3 — the walk back is drawn on the map
+
+"Walk to car" used to hand you to Google Maps and leave. It now draws the
+walking route on the app's own map — a dashed green line from where you are to
+where the car is, with the distance and how long it will take. Tap again to
+hide it.
+
+**No API key, no billing account, no Maps SDK** — the same constraint that chose
+OpenStreetMap tiles in the first place. Routes come from OSRM's public service.
+
+**When the route cannot be fetched, a straight line is drawn instead.** A
+courtesy service with no uptime promise is fine here, because a failed route is
+not a failed feature: for a car three streets away, the direction and the
+distance are most of the value. With no position of your own at all, the button
+falls back to opening Maps as before, rather than pretending.
+
+**The walking time is calculated, not taken from the routing service.** That
+service does not reliably distinguish walking from driving, and returned "2 min"
+for a 984 m walk — 30 km/h. Times are now worked out from the distance at a
+normal walking pace. Caught by reading it on screen, like everything else that
+has ever been caught here.
+
+---
+
 ## v0.5.2 — the map screen, tidied
 
 All from Wasil driving and tapping at v0.5.1, 2026-08-02.

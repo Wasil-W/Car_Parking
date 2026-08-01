@@ -54,6 +54,10 @@ class PermitApp : Application() {
     /** Plain client for RTDB — the permit client's auth/headers must not leak there. */
     private val plainHttp by lazy { OkHttpClient() }
 
+    /** Same reasoning as [plainHttp]: nothing of the permit session goes to a
+     * public routing service. */
+    val routeClient: OkHttpClient by lazy { OkHttpClient() }
+
     /** Bundled Amsterdam tariff areas; null when the asset is missing/corrupt. */
     val tariffAreas: List<TariffArea>? by lazy {
         runCatching {
