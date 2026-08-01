@@ -119,6 +119,11 @@ fun HandoffTabs(
                 Tab.MAP -> MapScreen(
                     stateStore = app.parkStateStore,
                     freeZoneStore = app.freeZoneStore,
+                    // null when the bundled asset is missing or corrupt — the
+                    // overlay then simply has nothing to draw, mirroring how
+                    // ZoneResolver falls back to "assume paid".
+                    tariffAreas = app.tariffAreas.orEmpty(),
+                    zoneResolver = { app.zoneResolver() },
                 )
                 Tab.SETTINGS -> SettingsScreen(
                     stateStore = app.parkStateStore,

@@ -5,8 +5,9 @@ here is decided. Where a choice is genuinely his, it is marked **open**.
 
 Shipped so far: `v0.1` switching · `v0.2` detection · `v0.3` shared state ·
 `v0.3.1` branding · `v0.3.2` dark-mode hotfix · `v0.3.3` navigation and layout ·
-`v0.3.4` three bugs. `v0.4` in progress: tappable notifications, map and zones,
-walking directions.
+`v0.3.4` three bugs · `v0.4` tappable notifications, map and zones, walking
+directions · `v0.4.1` the quietening pass · `v0.4.2` the cached-fix fallback.
+`v0.5.0` built and awaiting a look on a real screen.
 
 ---
 
