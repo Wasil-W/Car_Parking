@@ -282,21 +282,29 @@ lit. v0.3.1 only ships the static mark icon (rescaled — see above).
 
 ## v0.5 — the map becomes the home for everything location-based
 
-All location actions should happen where you can see them on a map, instead of
-being buried as buttons in Settings:
+**Designed — see `docs/superpowers/specs/2026-08-01-v05-design.md`.** Awaiting
+Wasil's review of the three questions that spec marks as his.
 
-- Show the home zone on the map as a circle, with its radius draggable, rather
-  than the current blind "set home to current location" button.
-- Show free zones as circles on the map; add and remove them there.
-- Show the parked car and allow correcting its position by dragging the pin
-  (GPS drift currently has no manual override).
-- Show the Amsterdam tariff-area polygons as an overlay, and let a zone be
-  selected or drawn by hand — including entering a tariff area code directly.
+Half of what was listed here shipped in v0.4: the home zone and free zones are
+already circles you place, rename and remove on the map, and Settings keeps only
+read-only summary rows that open the map tab. That also settled two of the v0.4
+spec's open questions by building them — tap-then-slider beat drag-a-radius, and
+zone editing lives on the map.
 
-Needs real interaction design before implementation — see
-`docs/superpowers/specs/2026-07-30-v04-design.md`'s open questions (drawing a
-free zone, selecting a tariff area, whether correcting the parked pin updates
-shared state, where home-zone editing lives).
+What is left is the same idea twice — the app holds two beliefs it never shows
+you, and one of them is wrong often enough to matter:
+
+- **Correcting the parked pin.** GPS drift has no manual override, so a bad fix
+  sends "Walk to car" down the wrong street. Tap the marker, tap the true spot,
+  confirm. Re-resolves the zone, because a 40 m error is the difference between
+  a paid street and the free zone around the corner.
+- **Showing the tariff areas.** The 29 Amsterdam polygons are already bundled,
+  parsed at app start and already deciding whether the permit gets claimed —
+  they are just invisible. Drawing them is what makes "why did it claim here?"
+  answerable without reading the source.
+
+Typing a tariff area code by hand is dropped: nothing reads it. Entering a code
+only earns its place once a manual override needs one.
 
 ---
 
