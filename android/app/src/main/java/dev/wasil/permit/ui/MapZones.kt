@@ -124,11 +124,17 @@ fun tariffSummary(area: TariffArea): String =
     listOf(area.tariffText, area.name).filter { it.isNotBlank() }.joinToString(" · ")
 
 /**
- * When the schedule starts inside an area's name. Amsterdam prefixes every one
+ * Where the schedule starts inside an area's name. Amsterdam prefixes every one
  * with its rate class — "Basistarief TC1 ma-zo 00-24" — which is the part the
  * rate already tells you, and which pushed the map header onto three lines.
+ *
+ * Matches a day token **or** a time range, whichever comes first. A day token
+ * alone was not enough: "Basistarief TC7 19-06, niet za op zo" begins with its
+ * hours, so cutting at the first day gave "za op zo" — which states the
+ * opposite of the real rule, *not* Saturday to Sunday. Caught on screen in
+ * Noord, not by a test.
  */
-private val SCHEDULE = Regex("""\b(ma|di|wo|do|vr|za|zo)[- ]""")
+private val SCHEDULE = Regex("""\b(ma|di|wo|do|vr|za|zo)[- ]|\b\d{1,2}-\d{2}\b""")
 
 /**
  * Just the days and hours: "ma-zo 00-24". Falls back to the whole name when no

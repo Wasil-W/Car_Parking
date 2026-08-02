@@ -150,6 +150,22 @@ class MapZonesTest {
     }
 
     @Test
+    fun `a schedule that starts with its hours is not cut at the first day`() {
+        // T17N is "Basistarief TC7 19-06, niet za op zo". Cutting at the first
+        // day token gave "za op zo", which says the opposite of "niet za op zo".
+        val nightly = paidArea.copy(name = "Basistarief TC7 19-06, niet za op zo")
+        assertEquals("19-06, niet za op zo", tariffHours(nightly))
+    }
+
+    @Test
+    fun `every bundled area keeps its negation words if it has any`() {
+        val areas = TariffAreas.parse(java.io.File("src/main/assets/amsterdam_tarieven.json").readText())
+        areas.filter { "niet" in it.name }.forEach {
+            assertTrue("lost 'niet' from ${it.code}: ${tariffHours(it)}", "niet" in tariffHours(it))
+        }
+    }
+
+    @Test
     fun `an area with no schedule in its name keeps the whole name`() {
         val odd = paidArea.copy(name = "Tarief 4 start tarief 7")
         assertEquals("Tarief 4 start tarief 7", tariffHours(odd))

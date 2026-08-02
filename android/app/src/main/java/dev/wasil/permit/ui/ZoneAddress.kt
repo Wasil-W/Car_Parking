@@ -36,6 +36,27 @@ fun formatAreaName(address: GeocodedAddress): String? =
         ?: address.locality?.takeIf { it.isNotBlank() }
 
 /**
+ * Where you are, at two levels: the district you would name to a friend, and
+ * the street underneath it.
+ *
+ * Wasil, 2026-08-03: "Amsterdam Noord and then a bit smaller underneath it
+ * Molenwijk, so you know where you are". The finer buurt names he saw
+ * ("Molenwijk", "NDSM-werf") come from Amsterdam's own zone data, not from a
+ * geocoder — this is the closest honest approximation until the zone registry
+ * lands, and the street is arguably more use anyway when you are looking for
+ * the car.
+ */
+data class PlaceLabel(val district: String, val detail: String?)
+
+fun formatPlaceLabel(address: GeocodedAddress): PlaceLabel? {
+    val district = address.subLocality?.takeIf { it.isNotBlank() }
+        ?: address.locality?.takeIf { it.isNotBlank() }
+        ?: return null
+    val street = address.thoroughfare?.takeIf { it.isNotBlank() && it != district }
+    return PlaceLabel(district, street)
+}
+
+/**
  * A short, human place name from a reverse-geocode result — "Damstraat 14"
  * over "Damstraat, Amsterdam" over a full postal address. Preference order:
  * street + house number, then street + city, then street alone, then just

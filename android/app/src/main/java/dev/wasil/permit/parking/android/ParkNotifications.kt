@@ -204,7 +204,7 @@ class ParkNotifications(private val context: Context) : ParkNotifier {
     override fun switchFailed(reason: String?) {
         notify(EVENT_ID, NotificationCompat.Builder(context, CHANNEL_EVENTS)
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle("Permit switch FAILED")
+            .setContentTitle("Permit switch failed")
             .setContentText(reason ?: "Network error - will retry automatically")
             .setAutoCancel(true)
             .setContentIntent(openAppIntent())
@@ -215,8 +215,8 @@ class ParkNotifications(private val context: Context) : ParkNotifier {
     override fun mismatchWarning(serverVrn: String?) {
         notify(EVENT_ID, NotificationCompat.Builder(context, CHANNEL_EVENTS)
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle("WARNING: permit switch not confirmed")
-            .setContentText("Server reports ${serverVrn ?: "no plate"} active - check the website!")
+            .setContentTitle("Permit switch not confirmed")
+            .setContentText("The site still shows ${serverVrn ?: "no plate"} on the permit. Worth checking.")
             .setAutoCancel(true)
             .setContentIntent(openAppIntent())
             .addAction(action(ParkActionReceiver.ACTION_CLAIM, "Retry"))

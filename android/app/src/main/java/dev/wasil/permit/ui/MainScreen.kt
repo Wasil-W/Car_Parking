@@ -128,7 +128,7 @@ fun MainScreen(
 
         if (myCar != null && !state.loading) {
             val action = primaryActionFor(myCar, holder)
-            val target = state.options.firstOrNull { it.label == action.target.label() }
+            val target = state.options.firstOrNull { it.car == action.target }
             Button(
                 onClick = { target?.let(onSwitch) },
                 enabled = target != null && state.switching == null,

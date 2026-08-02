@@ -14,19 +14,19 @@ Shipped today: `v0.4.1` the quietening pass · `v0.4.2` the cached-fix fallback 
 The honest recommendation, and not a glamorous one. Three of these have been
 carried since v0.4 and one of them is a genuine hazard.
 
-### 1. A pending decision never expires — HAZARD
+### 1. A pending decision never expires — ~~HAZARD~~ WRONG, already fixed
 
-The app can raise "your brother's car is parked, claim anyway?" and leave it
-sitting there after he has driven off. Acting on it then does something you no
-longer want, and the app has no idea the question went stale.
+**Retracted 2026-08-03.** This was carried forward from the old roadmap without
+being re-checked, and it is not true. Expiry exists
+(`PENDING_DECISION_MAX_AGE_MS`, 12 h), freshness re-checking exists
+(`PendingDecision.stillStands` against a live read), and both are wired:
+`MainActivity` calls `currentPendingDecision()` and `stillStands()` before
+showing a decision, and `GiveBackWorker` re-reads the other phone's state
+before acting.
 
-Worse now than when it was first noted: v0.5.0 added a second way to reach the
-claim path (the correction flip), so there are more routes into a decision and
-still no route out of a dead one.
-
-Fix: `PendingDecision` already stores `raisedAtMs`. Expire on age, and re-check
-the other phone's state before acting on it rather than trusting the snapshot
-that raised it.
+Left in rather than deleted, because "an item that was already done" is worth
+recording once — the cost of re-checking a claim is minutes, and the cost of
+building a second fix on top of an existing one is much more than that.
 
 ### 2. The app has two voices
 

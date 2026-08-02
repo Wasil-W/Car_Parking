@@ -54,7 +54,7 @@ import dev.wasil.permit.parking.route.fetchWalkRoute
 import dev.wasil.permit.parking.route.walkSummary
 import dev.wasil.permit.parking.zones.ZoneResolver
 import dev.wasil.permit.parking.android.reverseGeocodeAddress
-import dev.wasil.permit.parking.android.reverseGeocodeAreaName
+import dev.wasil.permit.parking.android.reverseGeocodePlace
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -103,7 +103,12 @@ fun MapScreen(
     // itself, or the car. A ring's centroid can fall outside a concave shape,
     // and these shapes are very concave.
     var namePoint by remember { mutableStateOf<GeoPoint?>(null) }
-    var areaName by remember { mutableStateOf<String?>(null) }
+    var place by remember { mutableStateOf<PlaceLabel?>(null) }
+    // Distinguishes "still looking" from "looked and found nothing". Without
+    // it the code was shown as a placeholder and then swapped for the name,
+    // which read as a glitch — Wasil: "there is still a small frame where the
+    // T11V is visible before it changes".
+    var placeResolved by remember { mutableStateOf(false) }
 
     // Moving the car pin: tap the marker, tap the true spot, confirm.
     var movingPin by remember { mutableStateOf(false) }
@@ -142,10 +147,15 @@ fun MapScreen(
     // is no network — a code beats a blank.
     val lookupPoint = namePoint.takeIf { selectedHit != null } ?: car
     LaunchedEffect(highlight, lookupPoint) {
-        areaName = null
-        val at = lookupPoint ?: return@LaunchedEffect
-        if (highlight == null) return@LaunchedEffect
-        areaName = reverseGeocodeAreaName(context, at)
+        place = null
+        placeResolved = false
+        val at = lookupPoint
+        if (at == null || highlight == null) {
+            placeResolved = true
+            return@LaunchedEffect
+        }
+        place = reverseGeocodePlace(context, at)
+        placeResolved = true
     }
 
     Column(Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
@@ -185,11 +195,26 @@ fun MapScreen(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
                         horizontalAlignment = Alignment.End,
                     ) {
-                        Text(
-                            areaName ?: area.code,
-                            style = MaterialTheme.typography.titleMedium,
-                            textAlign = TextAlign.End,
-                        )
+                        // While the lookup is in flight this stays blank rather
+                        // than showing the code and swapping it a moment later.
+                        // The code appears only once we know no name is coming.
+                        val heading = place?.district
+                            ?: area.code.takeIf { placeResolved }
+                        if (heading != null) {
+                            Text(
+                                heading,
+                                style = MaterialTheme.typography.titleMedium,
+                                textAlign = TextAlign.End,
+                            )
+                        }
+                        place?.detail?.let { street ->
+                            Text(
+                                street,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.End,
+                            )
+                        }
                         Text(
                             tariffShort(area),
                             style = MaterialTheme.typography.bodySmall,

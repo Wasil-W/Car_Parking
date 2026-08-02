@@ -51,4 +51,36 @@ class ZoneAddressTest {
     @Test fun `coordinates keep five decimal places even with more precision available`() {
         assertEquals("52.37023, 4.89518", formatCoordinates(52.3702345, 4.8951789))
     }
+
+    // --- two-level place label (v0.5.4) ---
+
+    @Test
+    fun `the district leads and the street sits under it`() {
+        val label = formatPlaceLabel(
+            GeocodedAddress(subLocality = "Amsterdam-Noord", thoroughfare = "Molenwijkpad"),
+        )!!
+        assertEquals("Amsterdam-Noord", label.district)
+        assertEquals("Molenwijkpad", label.detail)
+    }
+
+    @Test
+    fun `the city stands in when there is no district`() {
+        val label = formatPlaceLabel(GeocodedAddress(locality = "Amsterdam"))!!
+        assertEquals("Amsterdam", label.district)
+        assertNull(label.detail)
+    }
+
+    @Test
+    fun `a street identical to the district is not repeated underneath it`() {
+        val label = formatPlaceLabel(
+            GeocodedAddress(subLocality = "Molenwijk", thoroughfare = "Molenwijk"),
+        )!!
+        assertEquals("Molenwijk", label.district)
+        assertNull(label.detail)
+    }
+
+    @Test
+    fun `nothing usable gives no label at all, so the caller can fall back`() {
+        assertNull(formatPlaceLabel(GeocodedAddress(thoroughfare = "Damstraat")))
+    }
 }

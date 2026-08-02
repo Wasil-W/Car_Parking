@@ -265,7 +265,7 @@ fun SettingsScreen(
                             syncStatus = "Testing…"
                             scope.launch {
                                 syncStatus = runCatching { sharedStore().heartbeat() }
-                                    .fold({ "Connection OK." }, { "FAILED: ${it.message}" })
+                                    .fold({ "Connection OK." }, { "Could not connect: ${it.message}" })
                             }
                         }) { Text("Test connection") }
                     }
@@ -382,12 +382,13 @@ fun SettingsScreen(
                             contentDescription = null,
                             tint = if (row.ok) colors.fine else colors.alert,
                         )
-                        row.fixLabel?.let { fix ->
+                        row.fix?.let { fix ->
                             TextButton(onClick = {
                                 when (fix) {
-                                    "Grant" -> needed.firstOrNull { !granted(context, it) }
-                                        ?.let { permissionLauncher.launch(it) }
-                                    else -> {
+                                    FixAction.GrantPermission ->
+                                        needed.firstOrNull { !granted(context, it) }
+                                            ?.let { permissionLauncher.launch(it) }
+                                    FixAction.BatterySettings -> {
                                         context.startActivity(
                                             Intent(
                                                 Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
@@ -397,7 +398,7 @@ fun SettingsScreen(
                                         refresh++
                                     }
                                 }
-                            }) { Text(fix) }
+                            }) { Text(row.fixLabel ?: "Fix") }
                         }
                     }
                 },

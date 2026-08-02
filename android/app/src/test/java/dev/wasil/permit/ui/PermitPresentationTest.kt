@@ -6,7 +6,7 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class PermitPresentationTest {
-    private val options = listOf(PlateOption("Wasil", "RH950F"), PlateOption("Walid", "XX123Y"))
+    private val options = listOf(PlateOption("Wasil", "RH950F", MyCar.WASIL), PlateOption("Walid", "XX123Y", MyCar.WALID))
 
     @Test fun `wasil holding lights the left arc and puts the dot left`() {
         assertEquals(MarkState(Side.LEFT, Side.LEFT), markStateFor(MyCar.WASIL))
