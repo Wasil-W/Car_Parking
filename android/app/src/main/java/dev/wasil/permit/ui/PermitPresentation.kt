@@ -28,5 +28,4 @@ fun primaryActionFor(myCar: MyCar, holder: MyCar?): PrimaryAction = when (holder
 }
 
 fun holderFor(activeVrn: String?, options: List<PlateOption>): MyCar? =
-    options.firstOrNull { it.vrn == activeVrn }
-        ?.let { if (it.label == "Wasil") MyCar.WASIL else MyCar.WALID }
+    options.firstOrNull { it.vrn == activeVrn }?.car

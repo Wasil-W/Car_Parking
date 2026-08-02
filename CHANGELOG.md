@@ -10,6 +10,59 @@ change as a minor.
 
 ---
 
+## v0.5.4 — where you are, and quieter
+
+### The header says where you are, at two levels
+
+**Amsterdam-Noord**, with the street underneath it, then the rate. Wasil's ask:
+knowing the district *and* the specific spot, rather than a code.
+
+The finer names he saw on the council's map — "Molenwijk", "NDSM-werf" — come
+from Amsterdam's own zone data, not from a geocoder, so they arrive with the
+zone registry. The street is arguably more use anyway when you are looking for
+the car.
+
+### The zone code no longer flashes before the name
+
+*"There is still a small frame where the T11V is visible before it changes."*
+Right — the code was shown as a placeholder while the name was being looked up,
+then swapped. The header now stays blank until the lookup finishes, and falls
+back to the code only when no name is coming.
+
+### A schedule could state the opposite of the truth
+
+One area reads "Basistarief TC7 19-06, niet za op zo" — charged overnight,
+**not** at weekends. The header trimmed everything before the first day it
+found, which left "za op zo": exactly the opposite. Now it trims from the hours
+or the day, whichever comes first. Found by looking at Noord on a map.
+
+### Notifications stopped shouting
+
+`WARNING:`, `FAILED`, `check the website!` — gone. "Permit switch failed"
+carries the same urgency without the capitals, and a notification is usually
+the first thing you see.
+
+### Two silent failure modes retired
+
+Both were flagged by review twice and both dispatched on **display text**:
+
+- The main button matched its target by comparing labels, and an unrecognised
+  label mapped to Walid — so a typo would have lit the wrong brother's arc.
+  Plates now carry which car they are.
+- A Settings fix button dispatched on the button's own words, so any new row
+  silently inherited the battery-settings action. That is why the "no car
+  paired" row shipped with no button at all. It is a typed action now, and the
+  compiler checks it.
+
+### One thing checked and found already done
+
+The roadmap carried "a pending decision never expires" as a hazard. It is not
+true — expiry and a live re-check were both built in v0.4 and are wired. The
+item was carried forward without being re-read. Recorded rather than quietly
+dropped.
+
+---
+
 ## v0.5.3 — the walk back is drawn on the map
 
 "Walk to car" used to hand you to Google Maps and leave. It now draws the

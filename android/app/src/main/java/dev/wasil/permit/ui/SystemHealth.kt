@@ -1,7 +1,21 @@
 package dev.wasil.permit.ui
 
 /** One line per system requirement: quiet when fine, actionable when not. */
-data class HealthRow(val label: String, val ok: Boolean, val fixLabel: String?)
+/**
+ * What a health row's fix button does. A sealed type rather than the button's
+ * own label text: dispatch used to be `when (fix) { "Grant" -> …; else ->
+ * battery }`, so any new row silently inherited the battery-settings intent.
+ * That is why the "car not paired" row shipped with no button at all — wiring
+ * one would have opened the wrong screen.
+ */
+sealed interface FixAction {
+    /** Ask for the first permission still missing. */
+    data object GrantPermission : FixAction
+    /** Open the battery-optimisation settings screen. */
+    data object BatterySettings : FixAction
+}
+
+data class HealthRow(val label: String, val ok: Boolean, val fix: FixAction?, val fixLabel: String?)
 
 /**
  * Permissions and battery only. Kept as-is (same two rows, same behaviour) so
@@ -10,15 +24,15 @@ data class HealthRow(val label: String, val ok: Boolean, val fixLabel: String?)
  */
 fun healthRows(missingPermissions: Int, batteryOptimised: Boolean): List<HealthRow> = listOf(
     if (missingPermissions == 0) {
-        HealthRow("Permissions all granted", true, null)
+        HealthRow("Permissions all granted", true, null, null)
     } else {
         val noun = if (missingPermissions == 1) "permission" else "permissions"
-        HealthRow("$missingPermissions $noun missing", false, "Grant")
+        HealthRow("$missingPermissions $noun missing", false, FixAction.GrantPermission, "Grant")
     },
     if (batteryOptimised) {
-        HealthRow("Battery optimisation on", false, "Fix")
+        HealthRow("Battery optimisation on", false, FixAction.BatterySettings, "Fix")
     } else {
-        HealthRow("Battery optimisation off", true, null)
+        HealthRow("Battery optimisation off", true, null, null)
     },
 )
 
@@ -49,10 +63,10 @@ fun healthRows(
     homeZoneSet: Boolean,
 ): List<HealthRow> = healthRows(missingPermissions, batteryOptimised) + listOf(
     if (carPaired) {
-        HealthRow("Car paired", true, null)
+        HealthRow("Car paired", true, null, null)
     } else {
-        HealthRow("No car paired — detection won't run", false, null)
+        HealthRow("No car paired — detection won't run", false, null, null)
     },
-    HealthRow(if (syncConfigured) "Sync configured" else "Sync not set up", true, null),
-    HealthRow(if (homeZoneSet) "Home zone set" else "No home zone set", true, null),
+    HealthRow(if (syncConfigured) "Sync configured" else "Sync not set up", true, null, null),
+    HealthRow(if (homeZoneSet) "Home zone set" else "No home zone set", true, null, null),
 )

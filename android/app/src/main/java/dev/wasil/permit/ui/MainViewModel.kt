@@ -24,7 +24,13 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-data class PlateOption(val label: String, val vrn: String)
+/**
+ * A plate the permit can sit on. [car] is the identity; [label] is only ever
+ * display text. They were previously matched by comparing label strings, which
+ * meant a typo silently disabled the main button and — worse — mapped an
+ * unrecognised label to Walid, lighting the wrong brother's arc.
+ */
+data class PlateOption(val label: String, val vrn: String, val car: MyCar)
 
 data class BlockedInfo(
     val option: PlateOption,
@@ -65,9 +71,11 @@ class MainViewModel(
         }
     }
 
+    // The one place a MyCar is bound to its plate and its display name, so the
+    // rest of the UI can match on the enum instead of on text.
     private fun PermitConfig.toOptions() = listOf(
-        PlateOption("Wasil", wasilPlate),
-        PlateOption("Walid", walidPlate),
+        PlateOption(MyCar.WASIL.label(), wasilPlate, MyCar.WASIL),
+        PlateOption(MyCar.WALID.label(), walidPlate, MyCar.WALID),
     )
 
     fun refresh() {
@@ -127,7 +135,7 @@ class MainViewModel(
                     is ParkOutcome.MismatchDetected -> _state.update {
                         it.copy(
                             switching = null, activeVrn = outcome.serverVrn,
-                            message = "WARNING: server reports ${outcome.serverVrn ?: "no plate"} active - check the website!",
+                            message = "The site still shows ${outcome.serverVrn ?: "no plate"} on the permit.",
                         )
                     }
                     ParkOutcome.NotConfigured -> _state.update {

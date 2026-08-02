@@ -27,6 +27,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import dev.wasil.permit.parking.MyCar
 import org.junit.Test
 
 private class ScriptedApi : PermitApi {
@@ -91,7 +92,7 @@ class MainViewModelTest {
     fun `switchTo updates active plate after confirmed switch`() = runTest(dispatcher) {
         val vm = vm()
         dispatcher.scheduler.advanceUntilIdle()
-        vm.switchTo(PlateOption("Walid", "XX123Y"))
+        vm.switchTo(PlateOption("Walid", "XX123Y", MyCar.WALID))
         dispatcher.scheduler.advanceUntilIdle()
         val s = vm.state.value
         assertEquals("XX123Y", s.activeVrn)
@@ -119,7 +120,7 @@ class MainViewModelTest {
             )
             val vm = vm(shared = shared)
             dispatcher.scheduler.advanceUntilIdle()
-            vm.switchTo(PlateOption("Wasil", "RH950F"))
+            vm.switchTo(PlateOption("Wasil", "RH950F", MyCar.WASIL))
             dispatcher.scheduler.advanceUntilIdle()
 
             val blocked = vm.state.value.blocked
