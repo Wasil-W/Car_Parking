@@ -10,6 +10,35 @@ change as a minor.
 
 ---
 
+## v0.6.1 — what is owed, then who is covering it
+
+The Permit screen now answers two questions in the order you actually ask them.
+
+Above the card, **This spot**: €8,05/h · all day, or "Nothing to pay — at home",
+or "Not parked". Below it, unchanged, **who holds the permit**.
+
+This is the separation Wasil asked for — permit and paying as distinct things
+sharing one mainframe. *Where you parked* decides whether anything is owed;
+*what you hold* decides how it gets settled. They were previously fused, with
+the permit card implying an obligation it never actually stated.
+
+Nothing about claiming changed. The value is that the screen now explains
+itself: when the permit sits on your car you can see what it is covering, and
+when it does not matter — at home, in a free zone — the screen says so instead
+of leaving you to infer it.
+
+**It also makes room for paying.** A settlement that costs money slots into the
+top half without the permit card needing to know it exists. Whether that is
+possible at all is still the open question, and it is a research question about
+what the payment providers expose rather than something to design around.
+
+A free spot always wins over a readable tariff, matching how the claim decision
+already orders them — the screen cannot disagree with the app about whether you
+owe anything. And a spot with no readable tariff says "outside a paid zone"
+rather than claiming to be free, because a guess in that direction costs a fine.
+
+---
+
 ## v0.6.0 — what it costs right now
 
 The map header used to print a timetable at you: *"€3,01/h · ma-wo,vrij,za

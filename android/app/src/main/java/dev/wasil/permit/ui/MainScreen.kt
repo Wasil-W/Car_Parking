@@ -50,6 +50,7 @@ fun MainScreen(
     myCar: MyCar?,
     car: GeoPoint?,
     me: GeoPoint?,
+    demand: SpotDemand,
     onSwitch: (PlateOption) -> Unit,
     onRefresh: () -> Unit,
     onOpenMap: () -> Unit,
@@ -89,6 +90,30 @@ fun MainScreen(
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+        }
+
+        // What this spot demands, above what settles it. Two questions, in the
+        // order you actually ask them: is anything owed here, and who is
+        // covering it. Keeping them apart is what lets a paying action arrive
+        // later without the permit card having to know about it.
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 2.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                "This spot",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                spotDemandText(demand),
+                style = MaterialTheme.typography.bodyMedium,
+                color = when (demand) {
+                    is SpotDemand.Payable -> MaterialTheme.colorScheme.onSurface
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            )
         }
 
         Card(
