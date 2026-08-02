@@ -4,6 +4,7 @@ import dev.wasil.permit.parking.FreeZone
 import dev.wasil.permit.parking.GeoPoint
 import dev.wasil.permit.parking.zones.LatLng
 import dev.wasil.permit.parking.zones.TariffArea
+import dev.wasil.permit.parking.zones.TariffNow
 import dev.wasil.permit.parking.zones.TariffAreas
 import dev.wasil.permit.parking.zones.ZonePolygon
 import org.junit.Assert.assertEquals
@@ -185,5 +186,28 @@ class MapZonesTest {
         val areas = TariffAreas.parse(java.io.File("src/main/assets/amsterdam_tarieven.json").readText())
         assertEquals(29, areas.size)
         assertTrue(areas.all { area -> area.polygons.all { it.outer.size >= 3 } })
+    }
+
+    // --- what it costs right now (v0.6.0) ---
+
+    @Test
+    fun `charging reads as the rate and when it stops`() {
+        val now = TariffNow.Charging("€3,01/h", endsInMin = 8 * 60 + 30)
+        assertEquals("€3,01/h · until 19:00", tariffNowText(now, 10 * 60 + 30))
+    }
+
+    @Test
+    fun `a window to midnight reads as all day rather than until 00 00`() {
+        assertEquals("€8,05/h · all day", tariffNowText(TariffNow.Charging("€8,05/h", null), 13 * 60))
+    }
+
+    @Test
+    fun `free reads as when charging starts, wrapping past midnight`() {
+        assertEquals("Free · from 09:00", tariffNowText(TariffNow.Free(13 * 60), 20 * 60))
+    }
+
+    @Test
+    fun `nothing scheduled says so instead of inventing a time`() {
+        assertEquals("Free · no paid hours", tariffNowText(TariffNow.Free(null), 12 * 60))
     }
 }

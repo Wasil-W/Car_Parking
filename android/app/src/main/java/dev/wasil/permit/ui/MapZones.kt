@@ -5,6 +5,7 @@ import dev.wasil.permit.parking.GeoPoint
 import dev.wasil.permit.parking.distanceMeters
 import dev.wasil.permit.parking.zones.LatLng
 import dev.wasil.permit.parking.zones.TariffArea
+import dev.wasil.permit.parking.zones.TariffNow
 import dev.wasil.permit.parking.zones.ZonePolygon
 import dev.wasil.permit.parking.zones.pointInPolygon
 
@@ -147,3 +148,29 @@ fun tariffHours(area: TariffArea): String =
 /** Rate and schedule only — the compact form used in the map header. */
 fun tariffShort(area: TariffArea): String =
     listOf(area.tariffText, tariffHours(area)).filter { it.isNotBlank() }.joinToString(" · ")
+
+/** Clock time [minutes] from midnight, as "19:00". */
+private fun clock(minutes: Int): String {
+    val wrapped = ((minutes % 1440) + 1440) % 1440
+    return "%02d:%02d".format(wrapped / 60, wrapped % 60)
+}
+
+/**
+ * What this spot costs *right now*, in one line: "€3,01/h · until 19:00", or
+ * "Free · from 09:00".
+ *
+ * This is the whole point of the schedule engine. Standing in the street, the
+ * question is never "what is this area's timetable" — it is "am I paying, and
+ * for how long". The timetable made you decode "ma-wo,vrij,za 09-19 · do 09-21"
+ * yourself, in the rain.
+ */
+fun tariffNowText(now: TariffNow, minuteOfDay: Int): String = when (now) {
+    is TariffNow.Charging -> when (val ends = now.endsInMin) {
+        null -> "${now.rateText} · all day"
+        else -> "${now.rateText} · until ${clock(minuteOfDay + ends)}"
+    }
+    is TariffNow.Free -> when (val starts = now.startsInMin) {
+        null -> "Free · no paid hours"
+        else -> "Free · from ${clock(minuteOfDay + starts)}"
+    }
+}

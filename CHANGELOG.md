@@ -10,6 +10,33 @@ change as a minor.
 
 ---
 
+## v0.6.0 — what it costs right now
+
+The map header used to print a timetable at you: *"€3,01/h · ma-wo,vrij,za
+09-19 do 09-21"*. Standing in the street that is a puzzle, not an answer.
+
+It now says one true thing about this moment:
+
+> **€3,01/h · until 19:00**
+> **Free · from 09:00**
+> **€8,05/h · all day**
+
+Amsterdam's data always carried the real charging windows — times and days, per
+rate — they were just never read. They are now parsed into a schedule the app
+can ask "am I paying, and for how long".
+
+**A note on the day names**, because it is the kind of thing that silently
+breaks: the schedule field and the description field use *different spellings*.
+The schedule writes Friday as `vrij` where the description writes `vr`, and it
+never writes Tuesday alone — Tuesday only ever appears inside a range like
+`ma-wo`. Two vocabularies in one file, so they get two parsers and their own
+tests.
+
+Where a window cannot be read it is dropped rather than guessed at, and the area
+reads as free — the honest answer when the rule is unreadable.
+
+---
+
 ## v0.5.4 — where you are, and quieter
 
 ### The header says where you are, at two levels

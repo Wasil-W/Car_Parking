@@ -49,6 +49,7 @@ import dev.wasil.permit.parking.distanceMeters
 import dev.wasil.permit.parking.android.ParkActionReceiver
 import dev.wasil.permit.parking.android.SharedSync
 import dev.wasil.permit.parking.zones.TariffArea
+import dev.wasil.permit.parking.zones.tariffNow
 import dev.wasil.permit.parking.route.WalkRoute
 import dev.wasil.permit.parking.route.fetchWalkRoute
 import dev.wasil.permit.parking.route.walkSummary
@@ -134,6 +135,13 @@ fun MapScreen(
     // polygon and the overlay looks like it did nothing at all.
     var overviewRequest by remember { mutableIntStateOf(0) }
 
+    // Recomputed whenever the highlighted area changes: the header answers
+    // "what does this cost right now", not "what is the timetable".
+    val clockNow = remember(highlight) { java.util.Calendar.getInstance() }
+    val dayIndex = (clockNow.get(java.util.Calendar.DAY_OF_WEEK) + 5) % 7
+    val minuteOfDay = clockNow.get(java.util.Calendar.HOUR_OF_DAY) * 60 +
+        clockNow.get(java.util.Calendar.MINUTE)
+
     // Walking route, drawn in the app rather than by handing off to Google
     // Maps. Cleared whenever the car moves so a stale line can never point at
     // where the car used to be.
@@ -216,7 +224,10 @@ fun MapScreen(
                             )
                         }
                         Text(
-                            tariffShort(area),
+                            tariffNowText(
+                                tariffNow(area.windows, dayIndex, minuteOfDay),
+                                minuteOfDay,
+                            ),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.End,
