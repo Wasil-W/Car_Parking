@@ -13,6 +13,8 @@ data class TariffArea(
     val name: String,
     val tariffText: String,
     val polygons: List<ZonePolygon>,
+    /** The charging windows behind [tariffText], for answering "right now". */
+    val windows: List<TariffWindow> = emptyList(),
 )
 
 /** Parser for Amsterdam's tarieven.json (maps.amsterdam.nl parking-rate areas, CC-BY). */
@@ -35,7 +37,7 @@ object TariffAreas {
             else -> error("unknown geometry")
         }
         require(polygons.isNotEmpty() && polygons.all { it.outer.size >= 3 })
-        return TariffArea(code, name, tariffText(obj), polygons)
+        return TariffArea(code, name, tariffText(obj), polygons, windows(obj))
     }
 
     /** GeoJSON: first ring is the outer boundary, the rest are holes; [lng, lat] order. */
@@ -50,6 +52,37 @@ object TariffAreas {
         }
         return ZonePolygon(outer = parsed.first(), holes = parsed.drop(1))
     }
+
+    /**
+     * Every `{rate: {"900-1900": "ma-vrij"}}` pair flattened into windows.
+     * Anything unparseable is dropped rather than guessed at — a missing window
+     * shows as "free", which is the honest answer when we cannot read the rule.
+     */
+    private fun windows(obj: JsonObject): List<TariffWindow> {
+        val tarieven = obj["tarieven"] ?: return emptyList()
+        val blocks = when (tarieven) {
+            is JsonArray -> tarieven.mapNotNull { it as? JsonObject }
+            is JsonObject -> listOf(tarieven)
+            else -> return emptyList()
+        }
+        return blocks.flatMap { block ->
+            block.entries.flatMap { (rate, spec) ->
+                val label = rateLabel(rate)
+                (spec as? JsonObject)?.entries.orEmpty().mapNotNull { (range, days) ->
+                    val parts = range.split('-')
+                    if (parts.size != 2) return@mapNotNull null
+                    val start = parseHhmm(parts[0]) ?: return@mapNotNull null
+                    val end = parseHhmm(parts[1]) ?: return@mapNotNull null
+                    val onDays = parseDays(days.jsonPrimitive.content)
+                    if (start >= end || onDays.isEmpty()) return@mapNotNull null
+                    TariffWindow(label, start, end, onDays)
+                }
+            }
+        }
+    }
+
+    private fun rateLabel(key: String): String =
+        if ("[" in key) "€${key.substringBefore("[")}/h" else "€$key/h"
 
     private fun tariffText(obj: JsonObject): String {
         val tarieven = obj["tarieven"] ?: return ""
