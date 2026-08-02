@@ -32,6 +32,9 @@ import androidx.compose.ui.platform.LocalContext
 import dev.wasil.permit.PermitApp
 import dev.wasil.permit.parking.GeoPoint
 import dev.wasil.permit.parking.android.PlayServicesSignals
+import dev.wasil.permit.parking.zones.ZoneInfo
+import dev.wasil.permit.parking.zones.tariffNow
+import java.util.Calendar
 import dev.wasil.permit.ui.theme.HandoffShapes
 import dev.wasil.permit.ui.theme.LocalHandoffColors
 
@@ -122,6 +125,7 @@ fun HandoffTabs(
                     myCar = app.parkStateStore.myCar,
                     car = app.parkStateStore.lastParkLocation,
                     me = me,
+                    demand = spotDemand(app),
                     onSwitch = onSwitch,
                     onRefresh = onRefresh,
                     onOpenMap = { tab = Tab.MAP },
@@ -148,4 +152,37 @@ fun HandoffTabs(
             }
         }
     }
+}
+
+/**
+ * Resolves the parked spot into an obligation, reusing the same [ZoneResolver]
+ * the claim decision uses so the screen can never disagree with the app about
+ * whether a spot is free.
+ */
+private fun spotDemand(app: PermitApp): SpotDemand {
+    val store = app.parkStateStore
+    val car = store.lastParkLocation
+    if (!store.parked || car == null) return spotDemandFor(false, null, null)
+    val zone = app.zoneResolver().resolve(car)
+    if (zone !is ZoneInfo.Paid) {
+        return spotDemandFor(true, freeReasonFor(zone), null)
+    }
+    val area = zone.area ?: return spotDemandFor(true, null, null)
+    val now = Calendar.getInstance()
+    val dayIndex = (now.get(Calendar.DAY_OF_WEEK) + 5) % 7
+    val minuteOfDay = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE)
+    return spotDemandFor(
+        parked = true,
+        zoneReason = null,
+        nowText = tariffNowText(tariffNow(area.windows, dayIndex, minuteOfDay), minuteOfDay),
+    )
+}
+
+/** The same wording the parked-without-claiming notification already uses. */
+private fun freeReasonFor(zone: ZoneInfo): String = when (zone) {
+    ZoneInfo.Home -> "at home"
+    is ZoneInfo.ManualFree ->
+        "in a free zone" + (zone.label.takeIf { it.isNotBlank() }?.let { " ($it)" } ?: "")
+    ZoneInfo.FreeStreet -> "free street parking"
+    is ZoneInfo.Paid -> ""
 }

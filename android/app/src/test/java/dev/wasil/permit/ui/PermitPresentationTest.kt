@@ -45,4 +45,39 @@ class PermitPresentationTest {
         assertNull(holderFor(null, options))
         assertNull(holderFor("ZZ999Z", options))
     }
+
+    // --- obligation, separate from settlement (v0.6.1) ---
+
+    @Test
+    fun `not parked owes nothing and says so plainly`() {
+        assertEquals(SpotDemand.Unparked, spotDemandFor(false, null, "€8,05/h · all day"))
+        assertEquals("Not parked", spotDemandText(SpotDemand.Unparked))
+    }
+
+    @Test
+    fun `a free zone reports why it is free, in the notifier's own words`() {
+        val demand = spotDemandFor(true, "at home", null)
+        assertEquals(SpotDemand.Free("at home"), demand)
+        assertEquals("Nothing to pay — at home", spotDemandText(demand))
+    }
+
+    @Test
+    fun `a free zone wins even when a tariff could be read for the same point`() {
+        // Home and free zones are hand-placed and beat geometry, exactly as
+        // ZoneResolver already orders them.
+        assertEquals(SpotDemand.Free("at home"), spotDemandFor(true, "at home", "€8,05/h · all day"))
+    }
+
+    @Test
+    fun `a chargeable spot carries the live rate through unchanged`() {
+        val demand = spotDemandFor(true, null, "€3,01/h · until 19:00")
+        assertEquals(SpotDemand.Payable("€3,01/h · until 19:00"), demand)
+        assertEquals("€3,01/h · until 19:00", spotDemandText(demand))
+    }
+
+    @Test
+    fun `parked with no readable tariff never claims to be free without saying why`() {
+        val demand = spotDemandFor(true, null, null)
+        assertEquals(SpotDemand.Free("outside a paid zone"), demand)
+    }
 }
