@@ -72,15 +72,7 @@ payment question:** three of those four fields are obligation, which the app
 already computes. The badge should carry *settlement kind*, making the
 obligation/settlement split visible in history.
 
-### 4. Wiring the tariff comparison to an action
-**Source:** built in v0.6.2, deliberately not connected.
-The comparison works and is tested. It is not wired because *"the expensive spot
-keeps the permit"* only pays off once the other car can **pay instead** — today
-the cheaper car does not pay a smaller tariff, it gets a fine, so deciding by
-rate only changes which brother is fined. **Awaiting Wasil's decision:** surface
-both rates in the "claim anyway?" prompt, or switch automatically.
-
-### 5. The vehicle roster refactor
+### 4. The vehicle roster refactor
 **Source:** [`USER-MODEL.md`](USER-MODEL.md) recommendation 1.
 Replace the `MyCar` enum with `Vehicle(id, plate, name, bluetoothDevice)` plus a
 device-local `thisPhoneDrives`. **Nothing on screen changes.** Two-car behaviour
@@ -89,7 +81,7 @@ paying features arrive, so they never have to reason about two brothers. Note:
 the source document estimates a day; `MyCar` reaches into detection, shared
 state, notifications and presentation, so plan for more.
 
-### 6. The onboarding reversal
+### 5. The onboarding reversal
 **Source:** [`USER-MODEL.md`](USER-MODEL.md), "The onboarding sequence".
 Show something true before asking anything. The app currently opens on a
 four-field form. The permit moves from the first question to the fifth, asked at
@@ -97,7 +89,7 @@ the first park in a paid zone. Two steps become confirmations rather than
 questions — the Bluetooth device, and the home zone after several overnight
 parks in one place.
 
-### 7. The zone registry
+### 6. The zone registry
 **Source:** [`v0.6-zone-registry.md`](v0.6-zone-registry.md), verified against
 live APIs 2026-08-04.
 - `parkeerzones` — 107 permit zones, all `VERGUNP`, real names, WGS84 via one
@@ -117,20 +109,38 @@ live APIs 2026-08-04.
 | Paid parking sessions | **Blocked on one unanswered question: can a session be started programmatically at all?** Real money and real liability, unlike the free permit. Nothing found so far touches it. |
 | Payment details in the app | Prohibited regardless of the answer above. The provider's own flow owns this. |
 | Email, accounts, user profiles | No reader exists. The app has cars and phones, not users — see [`USER-MODEL.md`](USER-MODEL.md). |
-| Three or more cars | Not until a third car exists with a name attached. The roster refactor (5) is the whole insurance policy; more than that is buying a guess. |
+| Three or more cars | Not until a third car exists with a name attached. The roster refactor (4) is the whole insurance policy; more than that is buying a guess. |
 | Home-screen widget | Waiting for the map work to settle. |
 | Typing a tariff code by hand | Dropped in v0.5.0 design — nothing reads it. |
+| **Acting on the tariff comparison** | Decided 2026-08-05. "The expensive spot keeps the permit" only pays off once the cheaper car can **pay instead**; today it just gets a fine either way, so deciding by rate would only change which brother is fined. The comparison is built and tested in `TariffPreference.kt` and `SpotRate.kt` and is left **dormant** — nothing calls it. It is pure logic with no runtime cost, and the day paying works it is needed. |
 
 ---
 
 ## Open questions needing Wasil
 
 1. **Should `zoneCode` stop being published?** It is the last location signal on
-   the wire — it narrows the other car to a district up to 3 km wide. Nothing
-   reads it. Dropping it is free.
-2. **Should the tariff comparison act, or only report?** See Planned 4.
-3. **Can a parking session be started programmatically?** The question the whole
-   paid direction rests on. Research, not a questionnaire.
+   the wire — it narrows the other car to a district up to 3 km wide. It was
+   meant for a "the other car is in zone T13B" display that was never built, and
+   **nothing reads it**, exactly as was true of `lat`/`lng` before v0.6.2
+   removed them. Dropping it is free.
+
+2. **Can our app talk to a parking payment system at all?**
+
+   Not "automatic versus manual" — those need the same thing and are a choice
+   made *after* this is answered. The real question is whether Handoff can start
+   a session itself, or whether the most it can ever do is tell you what you owe
+   and send you to someone else's app:
+
+   | | What it needs |
+   |---|---|
+   | Handoff starts a session on its own | Handoff can reach a payment system |
+   | You tap a button in Handoff, it starts a session | **The same thing** |
+   | Handoff shows the rate, you pay in Q-Park | Nothing — works today |
+
+   If the answer is no, both of the first two vanish together and the app is an
+   informer rather than a payer. Still useful, much smaller, and honest.
+
+   This is research — reading what the providers expose — not a questionnaire.
 
 ---
 
