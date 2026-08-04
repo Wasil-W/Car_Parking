@@ -982,6 +982,19 @@ piece of this app that is currently correct and quiet. *Settled by:* deciding
 whether anything ever needs to treat home differently from a named free zone. I
 could not find such a thing, but I did not look exhaustively.
 
+**Whether the tile source should change.** The argument above is sound but the
+decision is not mine — it is a dependency, a licence and an attribution question,
+and MAPNIK is currently doing an honest job. *Settled by:* Wasil looking at a
+Positron or Dark Matter tile layer next to the current one on a real screen, in
+both themes. Everything else in the map section is independent of this.
+
+**What the further map screenshots will say.** More are coming and they are the
+directly relevant ones. Nothing above depends on them — the chrome arithmetic and
+the points-versus-polygons finding are both measured against this repo's own
+source — but the specific treatment of pins, clusters and selection is exactly
+the sort of thing a screenshot settles faster than an argument. Treat this
+section as revisable when they land.
+
 ---
 
 ## Sources
