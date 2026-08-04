@@ -124,6 +124,7 @@ fun HandoffTabs(
                     state = state,
                     myCar = app.parkStateStore.myCar,
                     car = app.parkStateStore.lastParkLocation,
+                    parked = app.parkStateStore.parked,
                     me = me,
                     demand = spotDemand(app),
                     onSwitch = onSwitch,

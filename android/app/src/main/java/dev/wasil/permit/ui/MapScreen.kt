@@ -66,6 +66,29 @@ import okhttp3.OkHttpClient
 private enum class ZoneKind { HOME, FREE }
 
 /**
+ * The line under "Map" that says what the pin — or the absence of one — means.
+ *
+ * The parked-without-a-position case is the one worth spelling out. It used to
+ * read "No parked location recorded yet", which was true about the database and
+ * false about the app: the app had decided you were parked, was acting on that,
+ * and was telling you nothing had happened. Being contradicted by your own
+ * phone is worse than being told the awkward thing, so now it says the awkward
+ * thing. A screen may be short of an answer; it may not disagree with the rest
+ * of the app about what it believes.
+ *
+ * Pure and separate from the composable so the wording is unit-testable — the
+ * contradiction this fixes was a wording bug, and wording bugs are exactly what
+ * a test can hold still.
+ */
+internal fun carPositionLine(car: GeoPoint?, parked: Boolean, parkedAtText: String?): String =
+    when {
+        car != null && parkedAtText != null -> "Car parked $parkedAtText."
+        car != null -> "Last known car position."
+        parked -> "Parked — but the location is unknown."
+        else -> "No parked location recorded yet."
+    }
+
+/**
  * Your car's last parked spot, your own position, and both kinds of zone —
  * home and free — drawn as circles instead of buried as Settings rows you
  * can't see against the street. Nothing about your own position is shared
@@ -177,11 +200,7 @@ fun MapScreen(
             Column(Modifier.weight(1f)) {
                 Text("Map", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    when {
-                        car == null -> "No parked location recorded yet."
-                        parkedAt != null -> "Car parked $parkedAt."
-                        else -> "Last known car position."
-                    },
+                    carPositionLine(car, stateStore.parked, parkedAt),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

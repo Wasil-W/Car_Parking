@@ -9,8 +9,11 @@ class FakeParkStateStore : ParkStateStore {
     override var lastParkLocation: GeoPoint? = null
     override var detectedParkLocation: GeoPoint? = null
     override var parkedOutside: Boolean = false
+    override var parkedOutsideKnown: Boolean = true
     override var parkedAtMs: Long = 0
     override var lastZoneCode: String? = null
+    override var carLinkConnected: Boolean = false
+    override var liveLocation: LiveLocation? = null
     override var homeZone: FreeZone? = null
     override var syncUrl: String? = null
     override var lastAlertedClaimMs: Long = 0
