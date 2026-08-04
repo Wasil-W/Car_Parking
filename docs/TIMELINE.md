@@ -154,6 +154,29 @@ live APIs 2026-08-04.
 | [`CONDITION-ACTION-AUDIT.md`](CONDITION-ACTION-AUDIT.md) | Every condition that currently leads to a user-facing action, assessed. |
 | [`USER-MODEL.md`](USER-MODEL.md) | What the app needs to know about someone, and the two-brother question. **Design only.** |
 | [`v0.6-zone-registry.md`](v0.6-zone-registry.md) | The Amsterdam zone data, verified against live APIs. |
-| [`BACKLOG.md`](BACKLOG.md) | Historical record of decisions and diagnoses. Superseded by this file for *sequencing*. |
+| [`BACKLOG.md`](BACKLOG.md) | **Historical.** Decisions and diagnoses as they were made, including "Locked decisions — do not re-open without a reason". Superseded by this file for sequencing. |
+| [`IDEAS.md`](IDEAS.md) | **Historical.** A ranked menu from 2026-07-30, with honest assessments of the bad ideas. Superseded by Planned and Parked above. |
+| [`superpowers/specs/`](superpowers/specs/), [`superpowers/plans/`](superpowers/plans/) | **Archive.** How each release was designed and built, dated. Not maintained after the release ships. |
 | [`TOOLING.md`](TOOLING.md) | Emulator, adb, and why no third-party MCP server has ADB access here. |
 | [`inspo/`](inspo/) | Reference screenshots — E-Flux and Q-Park. |
+
+---
+
+## Appendix — learning the UI side
+
+Kept from a deleted document because it is the only thing in it that was not
+superseded. For Wasil, in the order worth reading:
+
+1. **Refactoring UI** (Wathan & Schoger) — the highest-value one by far.
+   Spacing, hierarchy, why greys look muddy. Most of what v0.4.1 did to this app
+   is in that book.
+2. **m3.material.io** — the colour-roles page especially. It explains *why* the
+   slots exist, which is exactly the bug v0.3.1 shipped.
+3. **Steve Schoger's design tips** — before/after pairs, one idea each. Builds
+   the instinct to notice what is off before being able to name it.
+4. **mobbin.com** — real app screenshots by flow. Use with a specific question
+   ("how do five map apps do a bottom bar"), not for browsing.
+
+What has helped this project most is not theory but Wasil pointing at a screen
+and saying "this looks off" — which has caught more real defects than tests and
+review combined. The reading turns that into "the label competes with the value".
