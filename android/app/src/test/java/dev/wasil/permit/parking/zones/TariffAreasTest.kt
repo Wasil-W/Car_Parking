@@ -52,6 +52,25 @@ class TariffAreasTest {
         assertEquals("€1,72/h (stepped)", areas.first { it.code == "T14_UA01" }.tariffText)
     }
 
+    /**
+     * The number is read from the same JSON key as the label, so the two can
+     * never drift apart — €8,05 shown and 805 compared.
+     */
+    @Test
+    fun `windows carry the rate as a number alongside its label`() {
+        val areas = TariffAreas.parse(fixture)
+        val t11 = areas.first { it.code == "T11V" }.windows.single()
+        assertEquals("€8,05/h", t11.rateText)
+        assertEquals(805, t11.rateCents)
+    }
+
+    @Test
+    fun `a stepped rate carries its first band as the number`() {
+        val stepped = TariffAreas.parse(fixture).first { it.code == "T14_UA01" }.windows.single()
+        assertEquals("€1,72/h", stepped.rateText)
+        assertEquals(172, stepped.rateCents)
+    }
+
     @Test
     fun `malformed records are skipped not fatal`() {
         val areas = TariffAreas.parse(fixture)

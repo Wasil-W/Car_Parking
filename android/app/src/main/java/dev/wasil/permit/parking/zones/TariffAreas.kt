@@ -68,6 +68,11 @@ object TariffAreas {
         return blocks.flatMap { block ->
             block.entries.flatMap { (rate, spec) ->
                 val label = rateLabel(rate)
+                // Read once, here, from the source key — the numeric rate and the
+                // label are two views of the same JSON key, and deriving the
+                // number from the label instead would mean parsing back out of a
+                // string we just formatted.
+                val cents = parseRateCents(rate)
                 (spec as? JsonObject)?.entries.orEmpty().mapNotNull { (range, days) ->
                     val parts = range.split('-')
                     if (parts.size != 2) return@mapNotNull null
@@ -75,7 +80,7 @@ object TariffAreas {
                     val end = parseHhmm(parts[1]) ?: return@mapNotNull null
                     val onDays = parseDays(days.jsonPrimitive.content)
                     if (start >= end || onDays.isEmpty()) return@mapNotNull null
-                    TariffWindow(label, start, end, onDays)
+                    TariffWindow(label, start, end, onDays, cents)
                 }
             }
         }

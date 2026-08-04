@@ -18,13 +18,16 @@ import dev.wasil.permit.parking.FreeZone
 import dev.wasil.permit.parking.GiveBackResult
 import dev.wasil.permit.parking.MyCar
 import dev.wasil.permit.parking.ParkScheduler
+import dev.wasil.permit.parking.ParkStateStore
 import dev.wasil.permit.parking.PrefsFreeZoneStore
 import dev.wasil.permit.parking.PrefsParkStateStore
 import dev.wasil.permit.parking.label
 import dev.wasil.permit.parking.other
 import dev.wasil.permit.parking.shared.ClaimGuard
 import dev.wasil.permit.parking.shared.PhoneState
+import dev.wasil.permit.parking.zones.spotRateCents
 import dev.wasil.permit.ui.formatCoordinates
+import java.util.Calendar
 import java.util.concurrent.TimeUnit
 
 object SharedSync {
@@ -120,12 +123,14 @@ class SyncStateWorker(context: Context, params: WorkerParameters) :
         val shared = app.sharedStateStore()
         if (!shared.configured) return Result.success()
         return try {
-            val location = store.lastParkLocation.takeIf { store.parkedOutside }
+            // No lat/lng/accuracy: as of v0.6.3 the parked position never leaves
+            // this phone. The position is still read — one line below, locally —
+            // but only to turn it into a price, and the price is what goes on the
+            // wire. See PhoneState for why removing the fields beats filtering
+            // them when there is no server to filter at.
             shared.writeMine(PhoneState(
                 parkedOutside = store.parkedOutside,
-                lat = location?.lat,
-                lng = location?.lng,
-                accuracyM = location?.accuracyM?.toDouble(),
+                rateCentsPerHour = myRateCentsPerHour(app, store),
                 zoneCode = store.lastZoneCode.takeIf { store.parkedOutside },
                 parkedAtMs = store.parkedAtMs,
             ))
@@ -135,6 +140,32 @@ class SyncStateWorker(context: Context, params: WorkerParameters) :
             Result.retry()
         }
     }
+}
+
+/**
+ * What this car's spot costs per hour, resolved here on this phone from a
+ * position that is not published.
+ *
+ * Reuses [PermitApp.zoneResolver] rather than re-deriving the zone, so the
+ * number published to the other phone cannot disagree with what this phone's
+ * own screens and claim decision believe about the same spot.
+ *
+ * Null — meaning "could not price it", never "free" — in three cases, all of
+ * which the comparison treats as possibly-expensive rather than free:
+ * not parked outside (nothing to say, and the comparison reads `parkedOutside`
+ * first anyway), no stored position, or a spot whose tariff would not parse.
+ * The middle one matters: a park with no GPS fix is exactly the situation the
+ * v0.6.2 work exists to fix, and until it is fixed the honest answer is
+ * "unknown", which keeps the permit where it is instead of handing it away on
+ * the strength of a failed location read.
+ */
+private fun myRateCentsPerHour(app: PermitApp, store: ParkStateStore): Int? {
+    if (!store.parkedOutside) return null
+    val point = store.lastParkLocation ?: return null
+    val now = Calendar.getInstance()
+    val dayIndex = (now.get(Calendar.DAY_OF_WEEK) + 5) % 7   // Monday 0, as tariffNow expects
+    val minuteOfDay = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE)
+    return spotRateCents(app.zoneResolver().resolve(point), dayIndex, minuteOfDay)
 }
 
 /** While parked outside: refresh my heartbeat and watch for permit takeovers. */
