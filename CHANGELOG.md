@@ -10,6 +10,71 @@ change as a minor.
 
 ---
 
+## v0.6.2 — the car's position stops being guessed, and stops being shared
+
+Two pieces of work that had to ship together, because the second depends on the
+first being true.
+
+### Your two long-standing bugs were one bug
+
+*"No parked car location even though it detected the parked car"* and *"asked in
+the home zone if I want to claim the permit"* had the same cause, and it was not
+in the home-zone check — which is why looking there never found it.
+
+Resolving a zone needs a GPS fix. The fallback to a cached fix only accepted one
+under two minutes old. In a garage both fail, and that branch **prompted you and
+told the other phone your car was not on a paid street** — on the strength of a
+failed location read. Home is exactly where fixes fail, so the prompt appeared
+where it was least wanted, and the map said "no parked location" at the same
+moment, from the same gap.
+
+### The fix: the position is now captured across the whole drive
+
+While the car's Bluetooth is connected the phone samples its position every 20
+seconds. On disconnect, sampling stops and the last sample is sealed as the
+parked location. The drive to the house supplies a position even when the final
+fix fails.
+
+**The live driving position can never trigger a claim.** Not by convention — by
+type. A driving sample keeps its coordinates private and hands them to nobody;
+the only way to a usable position is a function that refuses while the car is
+still connected. Eight attempted ways around it were tried against the compiler
+and all eight were rejected. A test runs twenty polls through the full claim path
+mid-drive and asserts the permit never moves.
+
+A sample older than three minutes is discarded rather than trusted, because the
+oldest thing a drive can hold is the driveway you left — and sealing that would
+say "parked at home" while the car sits in town.
+
+**And a park with no position no longer claims to be free.** It now says the
+state is unknown instead of publishing a guess.
+
+### Your car's location no longer leaves your phone
+
+Each phone published its coordinates to the other. Nothing ever read them —
+verified before removal, across every consumer. They are gone from the wire
+entirely, and a test asserts the bytes actually sent contain nothing
+coordinate-shaped.
+
+Since there is no server between the two phones, not publishing is stronger than
+filtering.
+
+### The permit can be decided by cost instead of by who got there first
+
+Each phone prices **its own** spot and publishes a number. Two numbers are
+compared. Neither phone learns where the other is.
+
+Equal cost deliberately decides nothing. Any "who parked first" tie-break
+compares clocks belonging to two different phones, and only the heartbeat is
+server-stamped — so skew could let **both** phones conclude they had won and
+both claim. A test asserts the two sides can never both claim and never both
+yield.
+
+This is built and tested but not yet acting on its own — see the release notes
+discussion. It reports; it does not decide.
+
+---
+
 ## v0.6.1 — what is owed, then who is covering it
 
 The Permit screen now answers two questions in the order you actually ask them.
