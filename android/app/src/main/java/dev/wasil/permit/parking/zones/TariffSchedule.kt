@@ -9,12 +9,22 @@ package dev.wasil.permit.parking.zones
  * schedule field spells Friday `vrij` where the description says `vr`, and
  * never writes `di` alone — Tuesday only ever appears inside a range like
  * `ma-wo`. Two vocabularies in one file, so they get two parsers.
+ *
+ * [rateCents] is the same price as [rateText], as a whole number of cents per
+ * hour. It is carried from the parse rather than re-derived from the text
+ * later, because [rateText] is a display string — it has a currency symbol, a
+ * Dutch comma decimal and a `/h` suffix, and re-parsing a string we formatted
+ * ourselves is a round trip that only ever loses. Null when the source rate
+ * could not be read as a number, which is *not* the same as free: see
+ * [dev.wasil.permit.parking.shared.preferredPermitHolder], where an unreadable
+ * rate is treated as possibly-expensive rather than as zero.
  */
 data class TariffWindow(
     val rateText: String,
     val startMin: Int,
     val endMin: Int,
     val days: Set<Int>,
+    val rateCents: Int? = null,
 )
 
 /** Monday is 0, Sunday is 6 — the order Amsterdam's own day ranges assume. */
@@ -27,6 +37,30 @@ internal fun parseHhmm(raw: String): Int? {
     val value = raw.trim().toIntOrNull() ?: return null
     val minutes = (value / 100) * 60 + (value % 100)
     return minutes.takeIf { it in 0..1440 }
+}
+
+/**
+ * `"8,05"` becomes 805 cents. Dutch decimals use a comma, so a naive
+ * `toDouble()` on this data silently returns null and every paid street reads
+ * as free — the exact failure that costs a fine. A dot is accepted too, purely
+ * so a hand-edited asset does not have to know which convention was used;
+ * neither separator is ambiguous here because an hourly parking rate never
+ * carries a thousands separator.
+ *
+ * Stepped rates arrive as `"1,72[0-180];4,19[180-999999]"` — a first-three-hours
+ * price and an after-that price. Only the first band is taken, matching the
+ * label [TariffAreas] already shows, because the comparison this feeds asks
+ * "what is this spot costing me now", and now is always inside the first band
+ * at the moment of parking.
+ *
+ * Null rather than zero when nothing parses: a rate we cannot read is not a
+ * rate of nothing.
+ */
+internal fun parseRateCents(raw: String): Int? {
+    val head = raw.substringBefore('[').trim().replace(',', '.')
+    val euros = head.toDoubleOrNull() ?: return null
+    if (euros < 0) return null
+    return Math.round(euros * 100).toInt()
 }
 
 /** `"ma-wo,vrij,za"` becomes {0,1,2,4,5}. Unknown tokens are skipped, not guessed. */
@@ -47,8 +81,17 @@ internal fun parseDays(spec: String): Set<Int> = buildSet {
 
 /** What an area costs at one moment, rather than what its whole timetable says. */
 sealed interface TariffNow {
-    /** Charging now. [endsInMin] is null when the window runs to midnight. */
-    data class Charging(val rateText: String, val endsInMin: Int?) : TariffNow
+    /**
+     * Charging now. [endsInMin] is null when the window runs to midnight.
+     * [rateCents] is [rateText] as a number, for comparing two spots without
+     * either phone learning where the other is — null when the source rate was
+     * unreadable, which must not be read as free.
+     */
+    data class Charging(
+        val rateText: String,
+        val endsInMin: Int?,
+        val rateCents: Int? = null,
+    ) : TariffNow
 
     /** Not charging now. [startsInMin] is null when nothing is scheduled at all. */
     data class Free(val startsInMin: Int?) : TariffNow
@@ -71,7 +114,7 @@ fun tariffNow(windows: List<TariffWindow>, dayOfWeek: Int, minuteOfDay: Int): Ta
     windows.firstOrNull { dayOfWeek in it.days && minuteOfDay >= it.startMin && minuteOfDay < it.endMin }
         ?.let { active ->
             val endsIn = (active.endMin - minuteOfDay).takeIf { active.endMin < MINUTES_PER_DAY }
-            return TariffNow.Charging(active.rateText, endsIn)
+            return TariffNow.Charging(active.rateText, endsIn, active.rateCents)
         }
 
     // Nothing now: find the soonest start within a week. A week is enough —
