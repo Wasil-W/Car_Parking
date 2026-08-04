@@ -15,6 +15,8 @@ import androidx.work.workDataOf
 import androidx.core.app.NotificationCompat
 import dev.wasil.permit.PermitApp
 import dev.wasil.permit.parking.GuardedResult
+import dev.wasil.permit.parking.LIVE_POLL_INTERVAL_MS
+import dev.wasil.permit.parking.LiveLocation
 import dev.wasil.permit.parking.ParkDetectionUseCase
 import dev.wasil.permit.parking.ParkOutcome
 import dev.wasil.permit.parking.PrefsParkStateStore
@@ -23,6 +25,7 @@ import java.util.concurrent.TimeUnit
 object ParkWorkers {
     const val DETECTION_WORK = "park_detection"
     const val CLAIM_WORK = "claim_permit"
+    const val LIVE_LOCATION_WORK = "live_location"
 
     /**
      * Stop retrying a claim after this many attempts. Without a cap, a
@@ -40,6 +43,40 @@ object ParkWorkers {
             .build()
         WorkManager.getInstance(context)
             .enqueueUniqueWork(DETECTION_WORK, ExistingWorkPolicy.REPLACE, request)
+    }
+
+    /**
+     * Begin sampling the phone's position, now that the car says the phone is
+     * in it.
+     *
+     * There is no location *stream* and no foreground service behind this — it
+     * is one short worker that takes a fix and books the next one. A permit app
+     * has no business holding a high-accuracy request open for the length of
+     * every drive, and the only sample that is ever used is the last one, so
+     * the gaps in between cost nothing.
+     */
+    fun startLiveLocation(context: Context) = enqueueLiveLocation(context, delayMs = 0)
+
+    /**
+     * Stop sampling. Called the instant the car disconnects, before detection
+     * is even enqueued — a poll still in flight when the car stops is the one
+     * thing that could write a position after the fact.
+     */
+    fun stopLiveLocation(context: Context) {
+        WorkManager.getInstance(context).cancelUniqueWork(LIVE_LOCATION_WORK)
+    }
+
+    internal fun enqueueLiveLocation(context: Context, delayMs: Long) {
+        val request = OneTimeWorkRequestBuilder<LiveLocationWorker>()
+            .setInitialDelay(delayMs, TimeUnit.MILLISECONDS)
+            .build()
+        // Unique, so a stray second connect event cannot start a second chain
+        // sampling in parallel. REPLACE rather than KEEP because the worker
+        // re-books itself under this same name: KEEP would drop every
+        // subsequent poll on the floor and the trail would freeze at its first
+        // sample — the stalest possible answer, in the direction that matters.
+        WorkManager.getInstance(context)
+            .enqueueUniqueWork(LIVE_LOCATION_WORK, ExistingWorkPolicy.REPLACE, request)
     }
 
     /**
@@ -88,6 +125,47 @@ class ParkDetectionWorker(context: Context, params: WorkerParameters) :
         // Retry the CLAIM, not the detection: we know we're parked.
         if (outcome == ParkOutcome.SwitchFailed) {
             ParkWorkers.enqueueClaim(applicationContext, userInitiated = false)
+        }
+        return Result.success()
+    }
+}
+
+/**
+ * One sample of where the phone is while the car's Bluetooth is connected, and
+ * the booking for the next one.
+ *
+ * Everything this worker touches is [dev.wasil.permit.parking.LiveLocation],
+ * and that is the point. It cannot resolve a zone, switch a permit or publish
+ * anything, because it never holds a type any of those accept — not by
+ * convention, but because a [dev.wasil.permit.parking.GeoPoint] goes into
+ * [dev.wasil.permit.parking.LiveLocation.captured] here and no expression in
+ * this file can get one back out. A late poll is therefore uninteresting rather
+ * than dangerous, which is the property that was asked for.
+ */
+class LiveLocationWorker(context: Context, params: WorkerParameters) :
+    CoroutineWorker(context, params) {
+
+    override suspend fun doWork(): Result {
+        val store = PrefsParkStateStore.from(applicationContext)
+        // The stale-timer guard. WorkManager makes no promise about when a
+        // delayed job actually lands, so one booked mid-drive can easily arrive
+        // after the car has been parked, walked away from, and the permit
+        // decided. Nothing after this line should run in that world.
+        if (!store.carLinkConnected) return Result.success()
+
+        val point = PlayServicesSignals(applicationContext).currentLocation()
+        // Re-read rather than trust the check above: taking a fix can take
+        // seconds, and the car can disconnect inside them. A sample captured
+        // while connected but written after the link dropped would be a
+        // position racing the detection that is already deciding what to do
+        // with the trail, so it is dropped instead. The fix detection takes for
+        // itself covers this moment anyway.
+        if (point != null && store.carLinkConnected) {
+            store.liveLocation = LiveLocation.captured(point, System.currentTimeMillis())
+        }
+
+        if (store.carLinkConnected) {
+            ParkWorkers.enqueueLiveLocation(applicationContext, LIVE_POLL_INTERVAL_MS)
         }
         return Result.success()
     }

@@ -49,6 +49,9 @@ fun MainScreen(
     state: UiState,
     myCar: MyCar?,
     car: GeoPoint?,
+    // Passed alongside [car] rather than inferred from it: "no pin" and "not
+    // parked" are different states, and this card used to render them as one.
+    parked: Boolean,
     me: GeoPoint?,
     demand: SpotDemand,
     onSwitch: (PlateOption) -> Unit,
@@ -208,7 +211,10 @@ fun MainScreen(
         ) {
             if (car == null) {
                 Text(
-                    "No parked location yet",
+                    // The app knowing you are parked and this card announcing
+                    // that nothing has happened cannot both be on screen. See
+                    // carPositionLine in MapScreen.kt — same rule, same reason.
+                    if (parked) "Parked — location unknown" else "No parked location yet",
                     modifier = Modifier.fillMaxWidth().padding(vertical = 18.dp),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,

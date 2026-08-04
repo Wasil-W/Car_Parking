@@ -64,6 +64,13 @@ class PrefsParkStateStore(private val prefs: SharedPreferences) : ParkStateStore
         get() = prefs.getBoolean("parked_outside", false)
         set(value) { prefs.edit().putBoolean("parked_outside", value).apply() }
 
+    // Defaults true: a fresh install has never parked, so "not parked outside"
+    // is a fact about it rather than a gap in what we know. Only a detection
+    // that failed to resolve a zone sets this false.
+    override var parkedOutsideKnown: Boolean
+        get() = prefs.getBoolean("parked_outside_known", true)
+        set(value) { prefs.edit().putBoolean("parked_outside_known", value).apply() }
+
     override var parkedAtMs: Long
         get() = prefs.getLong("parked_at_ms", 0L)
         set(value) { prefs.edit().putLong("parked_at_ms", value).apply() }
@@ -71,6 +78,20 @@ class PrefsParkStateStore(private val prefs: SharedPreferences) : ParkStateStore
     override var lastZoneCode: String?
         get() = prefs.getString("last_zone_code", null)
         set(value) { prefs.edit().putString("last_zone_code", value).apply() }
+
+    override var carLinkConnected: Boolean
+        get() = prefs.getBoolean("car_link_connected", false)
+        set(value) { prefs.edit().putBoolean("car_link_connected", value).apply() }
+
+    // Stored as the opaque string LiveLocation hands out, never as lat/lng
+    // columns of its own. Writing it as coordinates here would mean this class
+    // could read them straight back, and the whole value of the type is that
+    // nothing outside it can. Same reasoning as pendingDecision below: the
+    // encode/decode round trip is a pure function, so it is unit-testable
+    // without Android.
+    override var liveLocation: LiveLocation?
+        get() = LiveLocation.decode(prefs.getString("live_location", null))
+        set(value) { prefs.edit().putString("live_location", value?.encode()).apply() }
 
     override var homeZone: FreeZone?
         get() = prefs.getString("home_zone", null)?.let {

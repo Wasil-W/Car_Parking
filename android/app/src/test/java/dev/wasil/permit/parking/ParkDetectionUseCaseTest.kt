@@ -136,6 +136,226 @@ class ParkDetectionUseCaseTest {
         assertTrue(notifier.calls.contains("manual"))
     }
 
+    // --- D2: a failed GPS read is not a finding about where the car is ---
+
+    @Test
+    fun `no fix anywhere leaves the published parked-outside value alone`() = runTest {
+        // This used to write false, which reads on the other phone as "my car
+        // is not on a paid street, the permit is yours" — on the strength of a
+        // failed GPS read, with their car possibly on a paid street.
+        val signals = ScriptedSignals(script = mapOf(1 to stillAt6s),
+            locations = mutableListOf(null))
+        val state = FakeParkStateStore().apply {
+            parkedOutside = true
+            lastZoneCode = "T11V"
+        }
+        useCase(signals, state, SwitchApi()).run()
+        assertTrue("the previous value must stand", state.parkedOutside)
+        assertEquals("T11V", state.lastZoneCode)
+    }
+
+    @Test
+    fun `no fix anywhere marks the parked-outside state unknown`() = runTest {
+        val signals = ScriptedSignals(script = mapOf(1 to stillAt6s),
+            locations = mutableListOf(null))
+        val state = FakeParkStateStore().apply { parkedOutside = true }
+        val scheduler = RecordingScheduler()
+        useCase(signals, state, SwitchApi(), scheduler = scheduler).run()
+        assertFalse(state.parkedOutsideKnown)
+        // Still syncs: the other phone has to learn the difference between a
+        // finding and a gap, and it can only learn it from a write.
+        assertTrue(scheduler.calls.contains("sync"))
+    }
+
+    @Test
+    fun `a resolved zone is a finding and says so`() = runTest {
+        val signals = ScriptedSignals(script = mapOf(1 to stillAt6s),
+            locations = mutableListOf(homePoint))
+        val state = FakeParkStateStore().apply { parkedOutsideKnown = false }
+        useCase(signals, state, SwitchApi()).run()
+        assertTrue(state.parkedOutsideKnown)
+        assertFalse(state.parkedOutside)
+    }
+
+    @Test
+    fun `parking in a paid zone is a finding too`() = runTest {
+        val signals = ScriptedSignals(script = mapOf(1 to stillAt6s),
+            locations = mutableListOf(paidPoint))
+        val state = FakeParkStateStore().apply { parkedOutsideKnown = false }
+        useCase(signals, state).run()
+        assertTrue(state.parkedOutsideKnown)
+        assertTrue(state.parkedOutside)
+    }
+
+    // --- the live trail: the drive supplies what the final fix could not ---
+
+    @Test
+    fun `with no fix the drive's last position resolves the zone`() = runTest {
+        // The reported bug, from the inside: park in a garage or after the
+        // phone has sat still and there is no fix to be had — but the drive to
+        // get there produced positions all the way.
+        val signals = ScriptedSignals(script = mapOf(1 to stillAt6s),
+            locations = mutableListOf(null))
+        val state = FakeParkStateStore().apply {
+            carLinkConnected = false
+            liveLocation = LiveLocation.captured(homePoint, now - 20_000)
+        }
+        val api = SwitchApi()
+        val notifier = RecordingParkNotifier()
+        val outcome = useCase(signals, state, api, notifier = notifier).run()
+
+        assertEquals(ParkOutcome.FreeZoneParked, outcome)
+        assertFalse("no permit is needed at home", state.parkedOutside)
+        assertTrue(notifier.calls.contains("noclaim:at home"))
+        assertFalse("this is the prompt Wasil kept getting at home",
+            notifier.calls.contains("manual"))
+    }
+
+    @Test
+    fun `with no fix the drive's last position pins the car on the map`() = runTest {
+        val signals = ScriptedSignals(script = mapOf(1 to stillAt6s),
+            locations = mutableListOf(null))
+        val state = FakeParkStateStore().apply {
+            liveLocation = LiveLocation.captured(paidPoint, now - 20_000)
+        }
+        useCase(signals, state).run()
+        // The other half of the same bug: "no parked car location even though
+        // it detected the parked car".
+        assertEquals(paidPoint, state.lastParkLocation)
+        assertEquals(paidPoint, state.detectedParkLocation)
+    }
+
+    @Test
+    fun `with no fix the drive's last position can still claim a paid spot`() = runTest {
+        val signals = ScriptedSignals(script = mapOf(1 to stillAt6s),
+            locations = mutableListOf(null))
+        val state = FakeParkStateStore().apply {
+            liveLocation = LiveLocation.captured(paidPoint, now - 20_000)
+        }
+        val outcome = useCase(signals, state, SwitchApi()).run()
+        assertEquals(ParkOutcome.Claimed("RH950F"), outcome)
+        assertTrue(state.parkedOutside)
+        assertEquals("T11V", state.lastZoneCode)
+    }
+
+    @Test
+    fun `a trail from a link that came back up cannot claim anything`() = runTest {
+        // A Bluetooth blip that reconnects while detection is still running.
+        // The position is fresh and would resolve to a paid zone, and it must
+        // still be refused: the car is being driven, not parked.
+        val signals = ScriptedSignals(script = mapOf(1 to stillAt6s),
+            locations = mutableListOf(null))
+        val state = FakeParkStateStore().apply {
+            carLinkConnected = true
+            liveLocation = LiveLocation.captured(paidPoint, now - 20_000)
+        }
+        val api = SwitchApi()
+        val notifier = RecordingParkNotifier()
+        val outcome = useCase(signals, state, api, notifier = notifier).run()
+
+        assertEquals(ParkOutcome.ManualNeeded, outcome)
+        assertEquals("the permit must not move on a driving position", "XX123Y", api.active)
+        assertFalse(state.parkedOutside)
+        assertTrue(notifier.calls.contains("manual"))
+    }
+
+    @Test
+    fun `nothing the sampler writes during a whole drive can move the permit`() = runTest {
+        // The requirement stated as a test: the live position must not be able
+        // to fire a zone lookup, a permit switch or a purchase, not even via a
+        // stale timer or a race. So run the claim path against the trail at
+        // every single sample of a drive through a paid zone, with the link
+        // still up, and check the permit never moves.
+        val api = SwitchApi()
+        val notifier = RecordingParkNotifier()
+        val state = FakeParkStateStore().apply { carLinkConnected = true }
+
+        repeat(20) { poll ->
+            state.liveLocation = LiveLocation.captured(paidPoint, now - poll * 1_000L)
+            val signals = ScriptedSignals(script = mapOf(1 to stillAt6s),
+                locations = mutableListOf(null))
+            useCase(signals, state, api, notifier = notifier).run()
+
+            assertEquals("permit moved on poll $poll", "XX123Y", api.active)
+            assertFalse("poll $poll blocked the other phone", state.parkedOutside)
+            assertEquals("poll $poll resolved a zone", null, state.lastZoneCode)
+        }
+    }
+
+    @Test
+    fun `a trail older than the cap is refused rather than guessed from`() = runTest {
+        // Sampling died early in a long drive, so the freshest thing left is
+        // the driveway. Sealing it would say "at home, no permit needed" with
+        // the car parked in town.
+        val signals = ScriptedSignals(script = mapOf(1 to stillAt6s),
+            locations = mutableListOf(null))
+        val state = FakeParkStateStore().apply {
+            liveLocation = LiveLocation.captured(homePoint, now - LIVE_FIX_MAX_AGE_MS - 1)
+        }
+        val notifier = RecordingParkNotifier()
+        val outcome = useCase(signals, state, SwitchApi(), notifier = notifier).run()
+
+        assertEquals(ParkOutcome.ManualNeeded, outcome)
+        assertTrue(notifier.calls.contains("manual"))
+        assertFalse(state.parkedOutsideKnown)
+    }
+
+    @Test
+    fun `a real fix beats the trail`() = runTest {
+        val signals = ScriptedSignals(script = mapOf(1 to stillAt6s),
+            locations = mutableListOf(paidPoint))
+        val state = FakeParkStateStore().apply {
+            liveLocation = LiveLocation.captured(homePoint, now - 20_000)
+        }
+        useCase(signals, state).run()
+        assertEquals(paidPoint, state.lastParkLocation)
+        assertTrue(state.parkedOutside)
+    }
+
+    // --- A3: ninety seconds of silence is not a reason to ask at home ---
+
+    @Test
+    fun `unclear signals at a known home spot stay quiet`() = runTest {
+        // Weak activity signals mean indoors, and indoors correlates with home
+        // — so the prompt fired hardest where there is nothing to decide.
+        val signals = ScriptedSignals(locations = mutableListOf(null))
+        val state = FakeParkStateStore().apply {
+            liveLocation = LiveLocation.captured(homePoint, now - 20_000)
+        }
+        val notifier = RecordingParkNotifier()
+        val outcome = useCase(signals, state, SwitchApi(), notifier = notifier).run()
+
+        assertEquals(ParkOutcome.FreeZoneParked, outcome)
+        assertFalse(notifier.calls.contains("manual"))
+        assertTrue(notifier.calls.contains("noclaim:at home"))
+    }
+
+    @Test
+    fun `unclear signals at a known paid spot still ask and never claim`() = runTest {
+        // "Unclear" is not evidence that a claim is wanted. It may go quiet; it
+        // may never go ahead.
+        val signals = ScriptedSignals(locations = mutableListOf(null))
+        val state = FakeParkStateStore().apply {
+            liveLocation = LiveLocation.captured(paidPoint, now - 20_000)
+        }
+        val api = SwitchApi()
+        val notifier = RecordingParkNotifier()
+        val outcome = useCase(signals, state, api, notifier = notifier).run()
+
+        assertEquals(ParkOutcome.ManualNeeded, outcome)
+        assertEquals("XX123Y", api.active)
+        assertTrue(notifier.calls.contains("manual"))
+    }
+
+    @Test
+    fun `unclear signals with nothing known still ask`() = runTest {
+        val signals = ScriptedSignals(locations = mutableListOf(null))
+        val notifier = RecordingParkNotifier()
+        val outcome = useCase(signals, notifier = notifier).run()
+        assertEquals(ParkOutcome.ManualNeeded, outcome)
+        assertTrue(notifier.calls.contains("manual"))
+    }
+
     @Test
     fun `blocked by parked brother posts the blocked notification`() = runTest {
         val signals = ScriptedSignals(script = mapOf(1 to stillAt6s),
