@@ -2,3 +2,6 @@
 __pycache__/
 .idea/
 .mailmap
+
+# Agent worktrees — transient, never part of the repo
+.claude/worktrees/
