@@ -11,8 +11,21 @@ import dev.wasil.permit.parking.zones.ZoneResolver
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+
+/** An in-memory park log, holding the same list operations the prefs store does. */
+private class FakeParkLogStore : ParkLogStore {
+    var records: List<ParkRecord> = emptyList()
+    override fun all(): List<ParkRecord> = records
+    override fun record(record: ParkRecord) { records = records.withPark(record) }
+    override fun closeOpen(endedAtMs: Long) { records = records.withOpenParkClosed(endedAtMs) }
+    override fun settleOpen(settlement: Settlement, holder: MyCar?) {
+        records = records.withOpenParkSettled(settlement, holder)
+    }
+    override fun uncoverOpen() { records = records.withOpenParkUncovered() }
+}
 
 private class ScriptedSignals(
     /** samples that "arrive" at the given poll round (0-based). */
@@ -67,14 +80,17 @@ class ParkDetectionUseCaseTest {
         notifier: RecordingParkNotifier = RecordingParkNotifier(),
         scheduler: RecordingScheduler = RecordingScheduler(),
         homeZone: FreeZone? = home,
+        parkLog: FakeParkLogStore? = null,
     ): ParkDetectionUseCase {
         val repo = PermitRepository(api)
         val credentials = FakeCredentialStore(config)
         val guarded = GuardedClaim(repo, credentials, state, shared,
-            ClaimPermit(repo, credentials, state, notifier), nowMs = { now })
+            ClaimPermit(repo, credentials, state, notifier, parkLog), nowMs = { now })
         val resolver = ZoneResolver(homeZone, emptyList(), listOf(paidArea))
         return ParkDetectionUseCase(signals, state, resolver, guarded, notifier,
-            scheduler, nowMs = { now })
+            scheduler, nowMs = { now }, parkLog = parkLog,
+            namePlace = { "Molenwijk · Computerweg" },
+            rateNow = { "€8,05/h · all day" })
     }
 
     @Test
@@ -482,5 +498,142 @@ class ParkDetectionUseCaseTest {
         val state = FakeParkStateStore().apply { myCar = null }
         val outcome = useCase(signals, state).run()
         assertEquals(ParkOutcome.NotConfigured, outcome)
+    }
+
+    // --- the session log: a park is written when detection confirms one ---
+
+    @Test
+    fun `a claimed park is recorded as covered by the permit`() = runTest {
+        val signals = ScriptedSignals(script = mapOf(1 to stillAt6s),
+            locations = mutableListOf(paidPoint))
+        val log = FakeParkLogStore()
+        useCase(signals, parkLog = log).run()
+
+        val record = log.records.single()
+        assertEquals(now, record.startedAtMs)
+        assertEquals(Settlement.PERMIT, record.settlement)
+        assertEquals(MyCar.WASIL, record.holder)
+        assertEquals("Molenwijk · Computerweg", record.place)
+        assertEquals("€8,05/h · all day", record.rateText)
+        assertEquals(true, record.paid)
+        // Nothing observed the park ending yet, and nothing pretends otherwise.
+        assertNull(record.endedAtMs)
+    }
+
+    @Test
+    fun `a paid park nobody claimed is recorded as unsettled, with its rate`() = runTest {
+        val signals = ScriptedSignals(script = mapOf(1 to stillAt6s),
+            locations = mutableListOf(paidPoint))
+        val state = FakeParkStateStore().apply { autoClaim = false }
+        val log = FakeParkLogStore()
+        useCase(signals, state, SwitchApi(active = "XX123Y"), parkLog = log).run()
+
+        val record = log.records.single()
+        assertEquals(Settlement.UNSETTLED, record.settlement)
+        assertNull(record.holder)
+        assertEquals("€8,05/h · all day", record.rateText)
+        assertEquals(true, record.paid)
+    }
+
+    @Test
+    fun `a park at home is recorded as home, owing nothing and quoting no rate`() = runTest {
+        val signals = ScriptedSignals(script = mapOf(1 to stillAt6s),
+            locations = mutableListOf(homePoint))
+        val log = FakeParkLogStore()
+        useCase(signals, parkLog = log).run()
+
+        val record = log.records.single()
+        assertEquals(Settlement.HOME, record.settlement)
+        assertEquals(false, record.paid)
+        assertNull(record.rateText)
+    }
+
+    @Test
+    fun `a park outside every polygon is recorded as free street`() = runTest {
+        val signals = ScriptedSignals(script = mapOf(1 to stillAt6s),
+            locations = mutableListOf(outsidePoint))
+        val log = FakeParkLogStore()
+        useCase(signals, parkLog = log).run()
+        assertEquals(Settlement.FREE_STREET, log.records.single().settlement)
+    }
+
+    /**
+     * The rule this project pays for, in the log as well as on the wire: a
+     * failed position read is recorded as a gap, never as "nothing was owed".
+     */
+    @Test
+    fun `a park with no fix is recorded as not known, not as free`() = runTest {
+        val signals = ScriptedSignals(script = mapOf(1 to stillAt6s),
+            locations = mutableListOf(null))
+        val log = FakeParkLogStore()
+        useCase(signals, api = SwitchApi(active = "XX123Y"), parkLog = log).run()
+
+        val record = log.records.single()
+        assertEquals(Settlement.UNKNOWN, record.settlement)
+        assertNull(record.paid)
+        assertNull(record.place)
+    }
+
+    @Test
+    fun `a false alarm leaves no record — nothing was parked`() = runTest {
+        val signals = ScriptedSignals(script = mapOf(1 to driving),
+            locations = mutableListOf(paidPoint))
+        val log = FakeParkLogStore()
+        useCase(signals, parkLog = log).run()
+        assertTrue(log.records.isEmpty())
+    }
+
+    @Test
+    fun `claiming from the notification re-badges the park detection left unsettled`() = runTest {
+        val signals = ScriptedSignals(script = mapOf(1 to stillAt6s),
+            locations = mutableListOf(paidPoint))
+        val state = FakeParkStateStore().apply { autoClaim = false }
+        val log = FakeParkLogStore()
+        val api = SwitchApi(active = "XX123Y")
+        val notifier = RecordingParkNotifier()
+        useCase(signals, state, api, notifier = notifier, parkLog = log).run()
+        assertEquals(Settlement.UNSETTLED, log.records.single().settlement)
+
+        // The user taps "Claim" a minute later — the same call the notification
+        // action makes. History must stop saying "Unsettled".
+        val repo = PermitRepository(api)
+        ClaimPermit(repo, FakeCredentialStore(config), state, notifier, log).claim()
+
+        assertEquals(Settlement.PERMIT, log.records.single().settlement)
+        assertEquals(MyCar.WASIL, log.records.single().holder)
+    }
+
+    @Test
+    fun `handing the permit away mid-park leaves that park unsettled again`() = runTest {
+        val signals = ScriptedSignals(script = mapOf(1 to stillAt6s),
+            locations = mutableListOf(paidPoint))
+        val state = FakeParkStateStore()
+        val log = FakeParkLogStore()
+        val api = SwitchApi()
+        useCase(signals, state, api, parkLog = log).run()
+        assertEquals(Settlement.PERMIT, log.records.single().settlement)
+
+        ClaimPermit(PermitRepository(api), FakeCredentialStore(config), state,
+            RecordingParkNotifier(), log).claim(target = MyCar.WALID)
+
+        assertEquals(Settlement.UNSETTLED, log.records.single().settlement)
+        assertNull(log.records.single().holder)
+    }
+
+    @Test
+    fun `a switch made while not parked belongs to no park and re-badges nothing`() = runTest {
+        val signals = ScriptedSignals(script = mapOf(1 to stillAt6s),
+            locations = mutableListOf(paidPoint))
+        val state = FakeParkStateStore().apply { autoClaim = false }
+        val log = FakeParkLogStore()
+        val api = SwitchApi(active = "XX123Y")
+        useCase(signals, state, api, parkLog = log).run()
+        // Drove off: the receiver clears this, and the last record is history.
+        state.parked = false
+
+        ClaimPermit(PermitRepository(api), FakeCredentialStore(config), state,
+            RecordingParkNotifier(), log).claim()
+
+        assertEquals(Settlement.UNSETTLED, log.records.single().settlement)
     }
 }

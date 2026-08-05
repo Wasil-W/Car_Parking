@@ -10,6 +10,71 @@ change as a minor.
 
 ---
 
+## v0.6.4 — the permission that was never asked for
+
+### The bug behind three of your reports
+
+**`ACCESS_BACKGROUND_LOCATION` was declared in the manifest and never requested.**
+
+On Android 10 and up that is a runtime permission, so declaring it does nothing.
+Without it, location only works while the app is on screen — and every part of
+this app that needs a position runs in the background: park detection, and the
+live sampling added in v0.6.2. Both asked for a fix and got nothing, every time.
+
+That is one cause behind three separately-reported symptoms: no parked pin, being
+asked about the permit at home, and the car's location vanishing. It is also why
+none of the earlier fixes helped.
+
+**And the app said its permissions were fine.** The health check tested four
+permissions and this was not one of them, so it reported a green all-clear while
+the one that mattered was missing. It now has its own row, worded as what it
+costs you — *"Parks are only noticed while Handoff is open"* — and setup cannot
+read as complete without it. The row above it changed from "Permissions all
+granted" to "Permissions granted in the app", because a green tick sitting over
+a location fault is the same false reassurance in a smaller costume.
+
+### The parked pin survives the drive
+
+It used to be deleted when you got in the car, which was defensible — during a
+drive the old pin points at a spot you have left. But that made it the only copy,
+so a park that produced no position left no location at all, permanently. It is
+now held and hidden: the map says *"You're in the car"*, and a failed park falls
+back to where the car was last seen.
+
+### The map is the screen
+
+Controls float over the map instead of taking rows of layout. The map goes from
+**64% to 83%** of the screen. Four circular buttons bottom-right, one pill
+bottom-centre, and **a locate-me button that did not exist** — until now, panning
+away from yourself was a one-way trip.
+
+### It stops calling a working app broken
+
+A one-car, no-permit, no-sharing install is a valid way to use Handoff, and the
+app used to call it "Setup incomplete". First run now asks one question — whose
+phone this is — because that is the only thing detection cannot work without. The
+permit moved behind an **"Add a permit"** row in Settings, and can now be removed
+again from the same place: **"Remove permit"** clears the username and password
+from this phone and nothing else. Your zones, history and the link to the other
+phone all stay.
+
+The permit screen now has three truths rather than one: two cars with a permit
+(unchanged), one car with a permit (no hand-over button — there is nowhere to
+hand it to), and no permit at all (what the spot costs, and when it goes free).
+
+### History
+
+A fourth tab: every park, newest first, grouped by month. Each record carries
+**how the obligation was met** — permit, home, free zone, or unsettled — rather
+than a zone code, because that split is what the app is built around.
+"Unsettled" means the spot was charging and nothing covered it, which is true and
+useful whether or not the app can ever pay.
+
+The tab formerly called "Permit" is now **"Now"** — it can no longer be assumed
+that there is a permit on it.
+
+---
+
 ## v0.6.3 — the other phone is told only what it reads
 
 No visible change. Everything here is about what leaves your phone.

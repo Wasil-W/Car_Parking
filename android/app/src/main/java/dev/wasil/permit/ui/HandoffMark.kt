@@ -17,17 +17,47 @@ import dev.wasil.permit.ui.theme.LocalHandoffColors
  * Two arcs curving away from each other like a facing "( )", with a dot that
  * sits at whichever arc's centre currently holds the permit. The unlit arc
  * dims, so position, colour and contrast all say the same thing.
+ *
+ * With [MarkArcs.SOLE] it draws one arc and the dot nested in it — the shape a
+ * single car with the permit actually has. The second arc is *removed*, not
+ * dimmed: a dimmed arc means "the other car has not got it", which needs there
+ * to be another car.
  */
 @Composable
 fun HandoffMark(state: MarkState, modifier: Modifier = Modifier, size: Dp = 56.dp) {
     val colors = LocalHandoffColors.current
     val leftColor = if (state.lit == Side.LEFT) colors.wasilStrong else colors.arcInactive
     val rightColor = if (state.lit == Side.RIGHT) colors.walidStrong else colors.arcInactive
+    val sole = state.arcs == MarkArcs.SOLE
 
-    Canvas(modifier = modifier.size(width = size * 1.6f, height = size)) {
+    // The pair needs room for two arcs and the travel between them; one arc and
+    // its dot is a little over half that, and keeping the full width would sit
+    // the whole mark left of centre inside a centred column.
+    Canvas(modifier = modifier.size(width = size * (if (sole) 0.86f else 1.6f), height = size)) {
         val stroke = Stroke(width = size.toPx() * 0.13f, cap = StrokeCap.Round)
         val cy = this.size.height / 2f
         val r = this.size.height * 0.42f
+
+        if (sole) {
+            // The arc's own circle centre, which is where the dot sits: the
+            // stroke is the far (west) side of that circle, so the dot lands
+            // just inside the curve exactly as it does in the pair.
+            val x = this.size.width * 0.52f
+            // `null` is a real case and it is not "Wasil". Seen on screen: with
+            // the permit state unreadable the card said "No plate active" while
+            // the arc beside it glowed Wasil blue — the mark asserting a holder
+            // the text was denying. An unlit arc says the same thing as the
+            // text, which is what it is for.
+            val color = when (state.lit) {
+                Side.LEFT -> colors.wasilStrong
+                Side.RIGHT -> colors.walidStrong
+                null -> colors.arcInactive
+            }
+            drawPath(arcPath(x, cy, r, opensRight = true), color, style = stroke)
+            drawCircle(colors.dot, radius = this.size.height * 0.115f, center = Offset(x, cy))
+            return@Canvas
+        }
+
         val leftX = this.size.width * 0.30f
         val rightX = this.size.width * 0.70f
 

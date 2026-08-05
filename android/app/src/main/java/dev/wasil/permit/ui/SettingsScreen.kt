@@ -27,6 +27,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -50,6 +51,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import dev.wasil.permit.data.store.CredentialStore
 import dev.wasil.permit.parking.FreeZoneStore
 import dev.wasil.permit.parking.MyCar
 import dev.wasil.permit.parking.ParkStateStore
@@ -126,7 +128,9 @@ private fun RowHint(text: String) {
 fun SettingsScreen(
     stateStore: ParkStateStore,
     freeZoneStore: FreeZoneStore,
+    credentialStore: CredentialStore,
     sharedStore: () -> SharedStateStore,
+    onSavePermit: (String, String, String, String) -> Unit,
     onOpenMap: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -137,6 +141,9 @@ fun SettingsScreen(
         ActivityResultContracts.RequestPermission(),
     ) { refresh++ }
 
+    var permit by remember { mutableStateOf(credentialStore.load()) }
+    var editingPermit by remember { mutableStateOf(false) }
+    var confirmRemovePermit by remember { mutableStateOf(false) }
     var carMac by remember { mutableStateOf(stateStore.carMac) }
     var carName by remember { mutableStateOf(stateStore.carName) }
     var myCar by remember { mutableStateOf(stateStore.myCar) }
@@ -160,6 +167,20 @@ fun SettingsScreen(
         add(Manifest.permission.ACCESS_FINE_LOCATION)
     }
     val missingPermissions = remember(revision) { needed.count { !granted(context, it) } }
+    // Deliberately NOT in `needed` above. Bundling ACCESS_BACKGROUND_LOCATION
+    // into an ordinary request makes the system deny it without showing
+    // anything on API 30+, and it may only be asked for once fine location is
+    // already granted — so it is checked here, reported as its own row, and
+    // fixed by sending the user to the one screen where "Allow all the time"
+    // exists at all.
+    val backgroundLocation = remember(revision) {
+        when {
+            Build.VERSION.SDK_INT < 29 -> BackgroundLocation.NOT_APPLICABLE
+            granted(context, Manifest.permission.ACCESS_BACKGROUND_LOCATION) ->
+                BackgroundLocation.GRANTED
+            else -> BackgroundLocation.MISSING
+        }
+    }
     val powerManager = context.getSystemService(PowerManager::class.java)
     val ignoringBatteryOpt = remember(revision) {
         powerManager?.isIgnoringBatteryOptimizations(context.packageName) == true
@@ -168,8 +189,10 @@ fun SettingsScreen(
         missingPermissions = missingPermissions,
         batteryOptimised = !ignoringBatteryOpt,
         carPaired = carMac != null,
+        permitAdded = permit != null,
         syncConfigured = syncUrl.isNotBlank(),
         homeZoneSet = homeZone != null,
+        backgroundLocation = backgroundLocation,
     )
     val setupOk = rows.all { it.ok }
     val bluetoothGranted = granted(context, Manifest.permission.BLUETOOTH_CONNECT)
@@ -205,7 +228,13 @@ fun SettingsScreen(
                         tint = if (setupOk) colors.fine else colors.alert,
                     )
                     Text(
-                        if (setupOk) "Setup complete" else "Setup incomplete",
+                        // Never "Setup incomplete" again. That headline was
+                        // shown to anyone who had declined sharing or had no
+                        // permit — both of which are working configurations of
+                        // this app — and it named a fault that did not exist.
+                        // Counting the genuine ones instead means the card can
+                        // only be as loud as the number of things wrong.
+                        setupHeadline(rows),
                         style = MaterialTheme.typography.bodyLarge,
                         modifier = Modifier.weight(1f),
                     )
@@ -216,9 +245,11 @@ fun SettingsScreen(
                     // literal string "null" via the safe-call chain
                     // ("null's phone"). Currently unreachable because of
                     // branch ordering in MainActivity, but not guaranteed.
-                    (myCar?.let { "${it.label()}'s phone" } ?: "Whose phone isn't set yet") + " · " +
-                        (if (syncUrl.isNotBlank()) "sync configured" else "sync not set up") + " · " +
-                        (if (carMac != null) "car paired" else "no car paired"),
+                    setupConfigurationLine(
+                        phoneLabel = myCar?.label(),
+                        permitAdded = permit != null,
+                        syncConfigured = syncUrl.isNotBlank(),
+                    ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -243,9 +274,15 @@ fun SettingsScreen(
                         }
                     }
 
-                    Text("Shared state (Firebase)", style = MaterialTheme.typography.bodyLarge)
+                    Text("Sharing with the other phone", style = MaterialTheme.typography.bodyLarge)
                     Text(
-                        "Database URL from SETUP_FIREBASE.md. Both phones must use the same URL.",
+                        // Optional, and said so plainly. Leaving this blank is a
+                        // single-phone install, which works: the guard proceeds
+                        // when there is no other state to read, and nothing on
+                        // screen asks about a car that is not there.
+                        "Optional. Leave it empty to use Handoff on this phone alone. " +
+                            "To share a permit, both phones need the same Firebase " +
+                            "database URL — see SETUP_FIREBASE.md.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -272,6 +309,73 @@ fun SettingsScreen(
                     syncStatus?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                 }
             }
+        }
+
+        // --- Permit: one way of settling what a spot demands, and not the
+        // app's front door any more. This row is where the four-field form
+        // that used to block first run now lives. ---
+        SectionHeader("Permit")
+
+        SettingRow(
+            label = if (permit == null) "Add a permit" else "Permit account",
+            value = permit?.username,
+            onClick = { editingPermit = !editingPermit },
+        )
+        if (permit == null && !editingPermit) {
+            RowHint(
+                "Handoff works without one — it still says what a spot costs and " +
+                    "when it goes free.",
+            )
+        }
+        if (editingPermit) {
+            PermitEditor(
+                initialUsername = permit?.username.orEmpty(),
+                initialWasilPlate = permit?.wasilPlate.orEmpty(),
+                initialWalidPlate = permit?.walidPlate.orEmpty(),
+                onSave = { u, p, a, b ->
+                    onSavePermit(u, p, a, b)
+                    permit = credentialStore.load()
+                    editingPermit = false
+                },
+            )
+        } else if (permit != null) {
+            SettingRow(label = "Wasil's plate", value = permit?.wasilPlate)
+            SettingRow(label = "Walid's plate", value = permit?.walidPlate)
+            SettingRow(label = "Remove permit", onClick = { confirmRemovePermit = true })
+        }
+
+        // Deliberately narrow, and the dialog says so. "Log out" would be the
+        // wrong word twice over: there is no account to leave — the credentials
+        // live only on this phone — and it implies the rest goes with them.
+        // Only the username and password are cleared; the sync link, the zones,
+        // the history and the parked state are separate things a person set up
+        // separately and would have to set up again for no reason.
+        if (confirmRemovePermit) {
+            AlertDialog(
+                onDismissRequest = { confirmRemovePermit = false },
+                title = { Text("Remove permit?") },
+                text = {
+                    Text(
+                        "The username and password are deleted from this phone. " +
+                            "Your home zone, free zones, history and the link to the " +
+                            "other phone all stay. " +
+                            "If the permit is on your car right now it stays there — " +
+                            "removing it here does not hand it back.",
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        credentialStore.clear()
+                        permit = null
+                        editingPermit = false
+                        confirmRemovePermit = false
+                        refresh++
+                    }) { Text("Remove") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { confirmRemovePermit = false }) { Text("Keep it") }
+                },
+            )
         }
 
         // --- Detection: options you might occasionally change. ---
@@ -369,6 +473,19 @@ fun SettingsScreen(
         // Setup summary card, so both read the same facts. ---
         SectionHeader("System")
 
+        // The only screen where "Allow all the time" exists. Bumping `refresh`
+        // on the way out is what makes the row go green when you come back
+        // without having to restart the app.
+        val openAppSettings: () -> Unit = {
+            context.startActivity(
+                Intent(
+                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    Uri.fromParts("package", context.packageName, null),
+                ),
+            )
+            refresh++
+        }
+
         rows.forEach { row ->
             SettingRow(
                 label = row.label,
@@ -397,27 +514,15 @@ fun SettingsScreen(
                                         )
                                         refresh++
                                     }
+                                    FixAction.AppSettings -> openAppSettings()
                                 }
                             }) { Text(row.fixLabel ?: "Fix") }
                         }
                     }
                 },
             )
+            row.hint?.let { RowHint(it) }
         }
-        SettingRow(
-            label = "Open app settings",
-            onClick = {
-                context.startActivity(
-                    Intent(
-                        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                        Uri.fromParts("package", context.packageName, null),
-                    ),
-                )
-            },
-        )
-        RowHint(
-            "Background location must be set to \"Allow all the time\" in system settings " +
-                "for detection to work with the screen off.",
-        )
+        SettingRow(label = "Open app settings", onClick = openAppSettings)
     }
 }

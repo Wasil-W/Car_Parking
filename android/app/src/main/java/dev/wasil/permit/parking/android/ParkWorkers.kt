@@ -20,6 +20,9 @@ import dev.wasil.permit.parking.LiveLocation
 import dev.wasil.permit.parking.ParkDetectionUseCase
 import dev.wasil.permit.parking.ParkOutcome
 import dev.wasil.permit.parking.PrefsParkStateStore
+import dev.wasil.permit.parking.zones.tariffNow
+import dev.wasil.permit.ui.tariffNowText
+import java.util.Calendar
 import java.util.concurrent.TimeUnit
 
 object ParkWorkers {
@@ -121,6 +124,23 @@ class ParkDetectionWorker(context: Context, params: WorkerParameters) :
             guardedClaim = app.guardedClaim(),
             notifier = ParkNotifications(applicationContext),
             scheduler = WorkManagerScheduler(applicationContext),
+            parkLog = app.parkLogStore,
+            // The same geocoder, and the same two-level name, the map header
+            // shows — so a history record and the map can never disagree about
+            // what a place is called.
+            namePlace = { point ->
+                reverseGeocodePlace(applicationContext, point)
+                    ?.let { listOfNotNull(it.district, it.detail).joinToString(" · ") }
+            },
+            // The live line, not the timetable: "€3,01/h · until 19:00" is what
+            // the spot was charging when you left the car, which is the only
+            // rate a record has any business quoting.
+            rateNow = { area ->
+                val now = Calendar.getInstance()
+                val dayIndex = (now.get(Calendar.DAY_OF_WEEK) + 5) % 7
+                val minuteOfDay = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE)
+                tariffNowText(tariffNow(area.windows, dayIndex, minuteOfDay), minuteOfDay)
+            },
         ).run()
         // Retry the CLAIM, not the detection: we know we're parked.
         if (outcome == ParkOutcome.SwitchFailed) {
@@ -152,6 +172,14 @@ class LiveLocationWorker(context: Context, params: WorkerParameters) :
         // after the car has been parked, walked away from, and the permit
         // decided. Nothing after this line should run in that world.
         if (!store.carLinkConnected) return Result.success()
+
+        // The one moment the app ever sees a park *end*: the car's link came
+        // back up, so you got in and drove away. This is why history can show a
+        // time range at all — a record whose end nothing observed says "from
+        // 09:12" rather than borrowing the next park's start and calling it a
+        // departure. Idempotent, so the nineteen later runs of this worker cost
+        // a read and nothing else.
+        (applicationContext as? PermitApp)?.parkLogStore?.closeOpen(System.currentTimeMillis())
 
         val point = PlayServicesSignals(applicationContext).currentLocation()
         // Re-read rather than trust the check above: taking a fix can take

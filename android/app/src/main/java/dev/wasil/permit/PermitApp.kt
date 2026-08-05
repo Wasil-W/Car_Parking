@@ -12,8 +12,10 @@ import dev.wasil.permit.data.store.EncryptedCredentialStore
 import dev.wasil.permit.parking.ClaimPermit
 import dev.wasil.permit.parking.FreeZoneStore
 import dev.wasil.permit.parking.GuardedClaim
+import dev.wasil.permit.parking.ParkLogStore
 import dev.wasil.permit.parking.ParkStateStore
 import dev.wasil.permit.parking.PrefsFreeZoneStore
+import dev.wasil.permit.parking.PrefsParkLogStore
 import dev.wasil.permit.parking.PrefsParkStateStore
 import dev.wasil.permit.parking.android.ParkNotifications
 import dev.wasil.permit.parking.key
@@ -39,6 +41,8 @@ class PermitApp : Application() {
         private set
     lateinit var freeZoneStore: FreeZoneStore
         private set
+    lateinit var parkLogStore: ParkLogStore
+        private set
 
     override fun onCreate() {
         super.onCreate()
@@ -47,7 +51,9 @@ class PermitApp : Application() {
         val client = buildAuthenticatedClient(baseUrl, TokenStore(), credentialStore)
         repository = PermitRepository(buildPermitApi(baseUrl, client))
         parkStateStore = PrefsParkStateStore.from(this)
-        freeZoneStore = PrefsFreeZoneStore(getSharedPreferences("park_state", Context.MODE_PRIVATE))
+        val prefs = getSharedPreferences("park_state", Context.MODE_PRIVATE)
+        freeZoneStore = PrefsFreeZoneStore(prefs)
+        parkLogStore = PrefsParkLogStore(prefs)
         ParkNotifications.createChannels(this)
     }
 
@@ -84,7 +90,7 @@ class PermitApp : Application() {
         val notifications = ParkNotifications(this)
         return GuardedClaim(
             repository, credentialStore, parkStateStore, sharedStateStore(),
-            ClaimPermit(repository, credentialStore, parkStateStore, notifications),
+            ClaimPermit(repository, credentialStore, parkStateStore, notifications, parkLogStore),
         )
     }
 

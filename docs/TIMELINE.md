@@ -45,6 +45,7 @@ other document under `docs/` is a deep-dive that this one points at.
 | `v0.6.1` | The obligation/settlement split made visible: "This spot" above the permit card |
 | `v0.6.2` | Live location while Bluetooth-connected, sealed at disconnect; coordinates removed from the wire; rate comparison built |
 | `v0.6.3` | Zone code and rate removed from the wire, comparison machinery deleted. `PhoneState` is three fields, all of them read. No UI change |
+| `v0.6.4` | **The background-location permission was never requested** — the cause of three long-standing symptoms. Map controls float; locate-me exists; the parked pin survives the drive; the app stops calling a one-car, no-permit install broken; a History tab; "Remove permit" |
 
 ---
 
@@ -52,52 +53,11 @@ other document under `docs/` is a deep-dive that this one points at.
 
 Ordered by value per effort. Nothing here is implemented.
 
-**Mockups come first.** Every UI release now opens with a published mockup —
-see `CLAUDE.md`, "Draw it before you build it". v0.6.4's:
+**Mockups come first.** Every UI release opens with a published mockup — see
+`CLAUDE.md`, "Draw it before you build it". v0.6.4's:
 <https://claude.ai/code/artifact/9ac1d27a-05ea-4735-953d-d43443029b4c>
 
-**v0.6.4 is the UI release.** Items 1, 2 and 3 land together rather than in
-separate passes, so the map chrome, the session log and the wider design arrive
-as one coherent thing instead of a second pass partly undoing the first. Wasil's
-framing, and it is the right one: *"rather something perfect than more and
-imperfect"* — depth over width.
-
-### 1. The standalone copy pass
-**Source:** [`USER-MODEL.md`](USER-MODEL.md) recommendation 3.
-"No permit" and "no sharing" already work in the code; only the Settings copy and
-the `needsSetup` gate call them broken. Fixing that is the single largest step
-toward the app standing on its own, and it introduces no new concepts.
-
-### 2. Map controls from layout into overlay, plus a locate-me button
-**Source:** [`USER-MODEL.md`](USER-MODEL.md) recommendation 8, from the reference
-screenshots in [`inspo/`](inspo/).
-Handoff spends a header row, a three-button card, a full-width button and an
-attribution line on chrome. Both reference apps spend a floating search pill and
-two circular buttons. **There is currently no way to re-centre the map after
-panning.**
-
-**Built, awaiting release — branch `v064-map-chrome`.** The map screen half of
-this item is done: the controls are off the layout and onto the map as four
-40dp circles bottom-right, "Walk to car" is a bottom-centre pill, the header and
-the OpenStreetMap credit are overlays, and **locate-me exists**. Measured on a
-1080x2400 device, the map goes from **64% of the screen to 83%** by area (71% to
-83% by height). The mockup's "58% to 92%" was drawn on a shorter phone and did
-not count the status bar and the tab bar, which are system chrome the map cannot
-have. Not versioned, not in the changelog, not shipped — v0.6.4 is assembled
-from several branches at the end.
-
-### 3. The session log
-**Also look at:** the permit website's own session history, which Wasil pointed
-out on 2026-08-05 — it already lists his past sessions and is the closest thing
-to a reference built for this exact permit. Needs a screenshot into `inspo/`;
-reading it directly would mean signing in as him, which is not something to do.
-**Source:** [`USER-MODEL.md`](USER-MODEL.md) recommendation 7.
-Zone badge, address, time range, price — the Q-Park record. **Not blocked on the
-payment question:** three of those four fields are obligation, which the app
-already computes. The badge should carry *settlement kind*, making the
-obligation/settlement split visible in history.
-
-### 4. Permit and paying as separate destinations, and what sits in the middle
+### 1. Permit and paying as separate destinations, and what sits in the middle
 **Source:** Wasil, 2026-08-05. **Mockup first** — see `CLAUDE.md`.
 
 Two parts, and they arrive together because both land on the tab bar.
@@ -123,16 +83,38 @@ Rejected candidates, with reasons, so they are not re-proposed: *hand over the
 permit* is contextual and already has its own screen; *pay* does not exist yet
 and would be a button that apologises for itself.
 
-### 5. The vehicle roster refactor
+### 2. The vehicle roster refactor
 **Source:** [`USER-MODEL.md`](USER-MODEL.md) recommendation 1.
 Replace the `MyCar` enum with `Vehicle(id, plate, name, bluetoothDevice)` plus a
 device-local `thisPhoneDrives`. **Nothing on screen changes.** Two-car behaviour
 is selected on `roster.size == 2` rather than on the enum. Worth doing before
-paying features arrive, so they never have to reason about two brothers. Note:
-the source document estimates a day; `MyCar` reaches into detection, shared
-state, notifications and presentation, so plan for more.
+paying features arrive, so they never have to reason about two brothers.
 
-### 6. The onboarding reversal
+Wasil arrived at this independently on 2026-08-05, asking for setup that does
+not show two cars to someone who has one. Note the source document estimates a
+day; `MyCar` reaches into detection, shared state, notifications and
+presentation, so plan for more.
+
+**The roster comes from the permit account, and the app already fetches it.**
+Wasil's correction, 2026-08-06, and it is better than the RDW idea it replaced:
+sign in once and the account states which cars it covers, so the user maps them
+to names and never types a plate.
+
+This needs no new integration. `ClientProductResponse(val vrns: List<VrnEntry>)`
+has been read since v0.1 — the app pulls every plate on the account plus which
+one holds a session, then uses only the second part and discards the list.
+
+Two consequences: setup never asks how many cars there are, because `vrns.size`
+already says; and the roster has a real source rather than one invented during
+setup. It only covers permit holders — someone with no permit has no account to
+read — but that user may need no plate at all, since the obligation half does
+not use one.
+
+(RDW-by-plate remains a fallback for a no-permit user who does want their car
+named. Keep it apart from the other RDW finding: dead end for zone *geometry*,
+right source for vehicle data.)
+
+### 3. The onboarding reversal
 **Source:** [`USER-MODEL.md`](USER-MODEL.md), "The onboarding sequence".
 Show something true before asking anything. The app currently opens on a
 four-field form. The permit moves from the first question to the fifth, asked at
@@ -140,7 +122,7 @@ the first park in a paid zone. Two steps become confirmations rather than
 questions — the Bluetooth device, and the home zone after several overnight
 parks in one place.
 
-### 7. The zone registry
+### 4. The zone registry
 **Source:** [`v0.6-zone-registry.md`](v0.6-zone-registry.md), verified against
 live APIs 2026-08-04.
 - `parkeerzones` — 107 permit zones, all `VERGUNP`, real names, WGS84 via one
@@ -160,7 +142,7 @@ live APIs 2026-08-04.
 | Paid parking sessions | **Blocked on one unanswered question: can a session be started programmatically at all?** Real money and real liability, unlike the free permit. Nothing found so far touches it. |
 | Payment details in the app | Prohibited regardless of the answer above. The provider's own flow owns this. |
 | Email, accounts, user profiles | No reader exists. The app has cars and phones, not users — see [`USER-MODEL.md`](USER-MODEL.md). |
-| Three or more cars | Not until a third car exists with a name attached. The roster refactor (5) is the whole insurance policy; more than that is buying a guess. |
+| Three or more cars | Not until a third car exists with a name attached. The roster refactor (2) is the whole insurance policy; more than that is buying a guess. |
 | Home-screen widget | Waiting for the map work to settle. |
 | Typing a tariff code by hand | Dropped in v0.5.0 design — nothing reads it. |
 | **Deciding the permit by tariff** | Decided 2026-08-05. "The expensive spot keeps the permit" only pays off once the cheaper car can **pay instead**; today it gets a fine either way, so deciding by rate would change which brother is fined and nothing else. It was built and tested in v0.6.2 and **deleted again in v0.6.3** on Wasil's call — no unused machinery. It gets built against a working payment path, or not at all. Recoverable from git if that day comes, but likely to need different requirements by then anyway. |

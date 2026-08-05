@@ -124,13 +124,22 @@ class MainActivity : ComponentActivity() {
                     } else {
                         val state by viewModel.state.collectAsStateWithLifecycle()
                         var setupDone by remember { mutableStateOf(false) }
-                        val needsSetup =
-                            (state.needsSetup || app.parkStateStore.myCar == null) && !setupDone
+                        // The permit is no longer a wall. It used to be:
+                        // `state.needsSetup` was true whenever no credentials
+                        // were stored, and the app showed a four-field form
+                        // instead of itself. That called a working
+                        // configuration broken — the obligation half computes
+                        // what a spot costs from position alone and never
+                        // consults a permit — and it put the one question that
+                        // only matters to permit holders in front of everyone.
+                        // The form lives in Settings now, behind "Add a
+                        // permit", and the first run asks the one thing
+                        // detection genuinely cannot work without.
+                        val needsSetup = app.parkStateStore.myCar == null && !setupDone
 
                         if (needsSetup) {
                             SetupFlow(
                                 stateStore = app.parkStateStore,
-                                onSaveCredentials = viewModel::saveSetup,
                                 onDone = { setupDone = true },
                             )
                         } else {
@@ -140,6 +149,7 @@ class MainActivity : ComponentActivity() {
                                 onSwitch = viewModel::switchTo,
                                 onRefresh = viewModel::refresh,
                                 onMessageShown = viewModel::consumeMessage,
+                                onSavePermit = viewModel::saveSetup,
                                 onConfirmBlocked = viewModel::confirmBlockedSwitch,
                                 onDismissBlocked = viewModel::dismissBlocked,
                             )

@@ -1,8 +1,10 @@
 package dev.wasil.permit.ui
 
 import dev.wasil.permit.parking.MyCar
+import dev.wasil.permit.parking.zones.TariffNow
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PermitPresentationTest {
@@ -79,5 +81,113 @@ class PermitPresentationTest {
     fun `parked with no readable tariff never claims to be free without saying why`() {
         val demand = spotDemandFor(true, null, null)
         assertEquals(SpotDemand.Free("outside a paid zone"), demand)
+    }
+
+    // --- the three truths (v0.6.4) ---
+
+    @Test fun `two phones and a permit is the screen that ships today`() {
+        assertEquals(PermitView.Shared, permitViewFor(permitAdded = true, sharingConfigured = true))
+    }
+
+    @Test fun `a permit with no second phone has nowhere to hand it to`() {
+        assertEquals(PermitView.Sole, permitViewFor(permitAdded = true, sharingConfigured = false))
+    }
+
+    @Test fun `no permit is a screen of its own, whether or not sharing is on`() {
+        assertEquals(PermitView.NoPermit, permitViewFor(permitAdded = false, sharingConfigured = false))
+        assertEquals(PermitView.NoPermit, permitViewFor(permitAdded = false, sharingConfigured = true))
+    }
+
+    @Test fun `the sole mark keeps the holder's colour and drops the second arc`() {
+        assertEquals(MarkState(Side.LEFT, Side.LEFT, MarkArcs.SOLE), soleMarkStateFor(MyCar.WASIL))
+        assertEquals(MarkState(Side.RIGHT, Side.RIGHT, MarkArcs.SOLE), soleMarkStateFor(MyCar.WALID))
+    }
+
+    @Test fun `the pair mark is still the default, so nothing else had to change`() {
+        assertEquals(MarkArcs.PAIR, markStateFor(MyCar.WASIL).arcs)
+        assertEquals(MarkArcs.PAIR, markStateFor(null).arcs)
+    }
+
+    // --- the rate line, split for the no-permit headline ---
+
+    @Test fun `a live rate line splits into a rate and a deadline`() {
+        assertEquals("€3,01/h" to "until 19:00", splitRateLine("€3,01/h · until 19:00"))
+        assertEquals("€8,05/h" to "all day", splitRateLine("€8,05/h · all day"))
+        assertEquals("Free" to "from 09:00", splitRateLine("Free · from 09:00"))
+    }
+
+    @Test fun `a line with no separator degrades to showing all of it`() {
+        assertEquals("€3,01/h" to null, splitRateLine("€3,01/h"))
+    }
+
+    @Test fun `the split is pinned against what tariffNowText actually writes`() {
+        val line = tariffNowText(TariffNow.Charging("€3,01/h", endsInMin = 120), minuteOfDay = 17 * 60)
+        assertEquals("€3,01/h" to "until 19:00", splitRateLine(line))
+    }
+
+    // --- the no-permit headline ---
+
+    @Test fun `a chargeable spot leads with the rate and names the place under it`() {
+        val headline = spotHeadlineFor(SpotDemand.Payable("€3,01/h · until 19:00"), "Nieuwmarkt")
+        assertEquals(SpotHeadline("€3,01/h", "Nieuwmarkt · until 19:00"), headline)
+    }
+
+    @Test fun `an unnamed chargeable spot still says the rate and the deadline`() {
+        assertEquals(
+            SpotHeadline("€3,01/h", "until 19:00"),
+            spotHeadlineFor(SpotDemand.Payable("€3,01/h · until 19:00"), null),
+        )
+    }
+
+    @Test fun `a free spot says nothing to pay and why`() {
+        assertEquals(
+            SpotHeadline("Nothing to pay", "Oostzanerwerf · at home"),
+            spotHeadlineFor(SpotDemand.Free("at home"), "Oostzanerwerf"),
+        )
+    }
+
+    @Test fun `not parked is a finished sentence, not an empty screen`() {
+        val headline = spotHeadlineFor(SpotDemand.Unparked, null)
+        assertEquals("Not parked", headline.big)
+        assertTrue(headline.detail.isNotBlank())
+    }
+
+    // --- the sole-car card ---
+
+    @Test fun `a sole card says covered rather than naming a brother`() {
+        assertEquals("Covered", soleCardTitle(covered = true))
+        assertEquals("RH950F · permit active", soleCardSubtitle("RH950F"))
+    }
+
+    /**
+     * When the permit state could not be read there is no holder, and the card
+     * must not claim one. Pinned because this state needs a live permit session
+     * and so cannot be reached on an emulator to be checked by eye.
+     */
+    @Test fun `a sole card with no readable holder says so instead of covered`() {
+        assertEquals("No plate active", soleCardTitle(covered = false))
+        assertEquals(MarkState(null, null, MarkArcs.SOLE), soleMarkStateFor(null))
+    }
+
+    // --- the sole-car quiet line ---
+
+    @Test fun `a sole park names where and since when, and says there is nothing to do`() {
+        assertEquals(
+            "Parked in Amsterdam-Centrum since 09:12. Nothing to do.",
+            soleStatusLine(parked = true, place = "Amsterdam-Centrum", sinceClock = "09:12"),
+        )
+    }
+
+    @Test fun `a sole park with no name or time still reads as a sentence`() {
+        assertEquals("Parked. Nothing to do.", soleStatusLine(true, null, null))
+        assertEquals("Parked since 09:12. Nothing to do.", soleStatusLine(true, null, "09:12"))
+        assertEquals("Parked in Molenwijk. Nothing to do.", soleStatusLine(true, "Molenwijk", null))
+    }
+
+    @Test fun `not parked says where the permit is rather than nothing`() {
+        assertEquals(
+            "The permit is on your car. Nothing to do.",
+            soleStatusLine(parked = false, place = "Molenwijk", sinceClock = "09:12"),
+        )
     }
 }
