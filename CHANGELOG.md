@@ -10,6 +10,33 @@ change as a minor.
 
 ---
 
+## v0.6.3 — the other phone is told only what it reads
+
+No visible change. Everything here is about what leaves your phone.
+
+**The zone code is gone from the wire.** It had been published since v0.3 and
+read by nothing — it was meant for a "the other car is in zone T13B" display
+that was never built. It is also a location signal in its own right: Amsterdam's
+tariff areas run up to 3 km across, so publishing a code narrowed the other car
+to a district. Coarse is not the same as private.
+
+**The rate is gone too, along with the comparison it was for.** v0.6.2 published
+a price per hour so the dearer of the two spots could keep the permit. That only
+pays off once the cheaper car can *pay* instead — today it gets a fine either
+way, so deciding by rate would change which brother is fined and nothing else.
+Rather than leave working machinery dormant until it is needed, it is removed.
+It gets built against a real payment path, or not at all.
+
+**What one phone now tells the other, in full:** is my car on a paid street,
+since when, and how fresh is this. Three fields, and the collision guard reads
+all three. Nothing else crosses.
+
+Old and new phones still talk to each other in both directions — the upgrade is
+not coordinated, so a node still carrying coordinates, a zone code or a rate
+decodes cleanly and those simply fall on the floor.
+
+---
+
 ## v0.6.2 — the car's position stops being guessed, and stops being shared
 
 Two pieces of work that had to ship together, because the second depends on the
