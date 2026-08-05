@@ -1,0 +1,18 @@
+<!--
+  Tariff areas: the stacked-sheets mark, which is what every map app uses for
+  "an extra layer over the tiles" — and that is exactly what the overlay is.
+  Geometry copied from the approved v0.6.4 mockup, section 01. Colour is a
+  placeholder; Compose's Icon() tint replaces it.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path android:strokeColor="#000000" android:strokeWidth="1.7"
+        android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:fillColor="@android:color/transparent"
+        android:pathData="M12,3.4 L21,8 L12,12.6 L3,8 Z" />
+    <path android:strokeColor="#000000" android:strokeWidth="1.7"
+        android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:fillColor="@android:color/transparent"
+        android:pathData="M3,12.6 L12,17 L21,12.6 M3,16.8 L12,21.2 L21,16.8" />
+</vector>

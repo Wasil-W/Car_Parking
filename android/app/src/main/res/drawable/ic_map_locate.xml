@@ -1,0 +1,23 @@
+<!--
+  Locate me. Drawn here rather than taken from Icons.Filled because
+  material-icons-core has no MyLocation and the extended artifact is ~4 MB of
+  icons for the sake of four. Geometry copied from the approved v0.6.4 mockup,
+  section 01, on the same 24x24 grid.
+
+  The colour is a placeholder: every use goes through Compose's Icon(), whose
+  tint replaces it, so the map controls stay legible in both themes.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path android:strokeColor="#000000" android:strokeWidth="1.7"
+        android:fillColor="@android:color/transparent"
+        android:pathData="M12,4.4 a7.6,7.6 0 1,0 0,15.2 a7.6,7.6 0 1,0 0,-15.2" />
+    <path android:strokeColor="#000000" android:strokeWidth="1.7"
+        android:fillColor="@android:color/transparent"
+        android:pathData="M12,8.6 a3.4,3.4 0 1,0 0,6.8 a3.4,3.4 0 1,0 0,-6.8" />
+    <path android:strokeColor="#000000" android:strokeWidth="1.7"
+        android:strokeLineCap="round"
+        android:fillColor="@android:color/transparent"
+        android:pathData="M12,1.6 V4.6 M12,19.4 V22.4 M1.6,12 H4.6 M19.4,12 H22.4" />
+</vector>
