@@ -31,4 +31,33 @@ class CarPositionLineTest {
         assertEquals("Parked — but the location is unknown.", line)
         assertFalse("must not contradict the app", line.contains("No parked location"))
     }
+
+    @Test
+    fun `while driving it says so, rather than pointing at where you last parked`() {
+        // The pin is kept in storage through the drive and hidden by the
+        // screens. Reported twice: deleting it meant a park that produced no
+        // position left no car location at all.
+        assertEquals(
+            "You're in the car.",
+            carPositionLine(null, parked = false, parkedAtText = null, driving = true),
+        )
+    }
+
+    @Test
+    fun `driving wins over every other case, including a held position`() {
+        val held = GeoPoint(52.37, 4.89, 8f)
+        assertEquals(
+            "You're in the car.",
+            carPositionLine(held, parked = true, parkedAtText = "25 Jul 17:20", driving = true),
+        )
+    }
+
+    @Test
+    fun `once the drive ends the held position is the answer again`() {
+        val held = GeoPoint(52.37, 4.89, 8f)
+        assertEquals(
+            "Last known car position.",
+            carPositionLine(held, parked = false, parkedAtText = null, driving = false),
+        )
+    }
 }

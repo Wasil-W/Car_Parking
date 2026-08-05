@@ -123,7 +123,9 @@ fun HandoffTabs(
                 Tab.PERMIT -> MainScreen(
                     state = state,
                     myCar = app.parkStateStore.myCar,
-                    car = app.parkStateStore.lastParkLocation,
+                    // Hidden while driving, for the same reason as the map tab.
+                    car = app.parkStateStore.lastParkLocation
+                        .takeUnless { app.parkStateStore.carLinkConnected },
                     parked = app.parkStateStore.parked,
                     me = me,
                     demand = spotDemand(app),

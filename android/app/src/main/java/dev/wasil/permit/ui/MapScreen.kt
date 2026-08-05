@@ -99,13 +99,21 @@ private const val NO_POSITION = "Couldn't read your position"
  * contradiction this fixes was a wording bug, and wording bugs are exactly what
  * a test can hold still.
  */
-internal fun carPositionLine(car: GeoPoint?, parked: Boolean, parkedAtText: String?): String =
-    when {
-        car != null && parkedAtText != null -> "Car parked $parkedAtText."
-        car != null -> "Last known car position."
-        parked -> "Parked — but the location is unknown."
-        else -> "No parked location recorded yet."
-    }
+internal fun carPositionLine(
+    car: GeoPoint?,
+    parked: Boolean,
+    parkedAtText: String?,
+    driving: Boolean = false,
+): String = when {
+    // While the car's Bluetooth is connected the car is wherever you are, so a
+    // pin would point at the spot you just left. The position is still held —
+    // it simply is not the answer to "where is the car" right now.
+    driving -> "You're in the car."
+    car != null && parkedAtText != null -> "Car parked $parkedAtText."
+    car != null -> "Last known car position."
+    parked -> "Parked — but the location is unknown."
+    else -> "No parked location recorded yet."
+}
 
 /**
  * Your car's last parked spot, your own position, and both kinds of zone —
@@ -141,7 +149,11 @@ fun MapScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val car = stateStore.lastParkLocation
+    // Held through the drive, hidden during it. Deleting it was how a failed
+    // park could leave no car location at all — see CarBluetoothReceiver.
+    val driving = stateStore.carLinkConnected
+    val storedCar = stateStore.lastParkLocation
+    val car = storedCar.takeUnless { driving }
     val parkedAt = stateStore.parkedAtMs.takeIf { it > 0 && stateStore.parked }
         ?.let { SimpleDateFormat("d MMM HH:mm", Locale.getDefault()).format(Date(it)) }
 
@@ -310,7 +322,7 @@ fun MapScreen(
 
         MapHeaderOverlay(
             title = "Map",
-            subtitle = carPositionLine(car, stateStore.parked, parkedAt),
+            subtitle = carPositionLine(car, stateStore.parked, parkedAt, driving),
             modifier = Modifier.align(Alignment.TopStart),
             // Unchanged from v0.6.3 apart from its backing. The chip works, it
             // is recent, and it was never what made this screen crowded.
