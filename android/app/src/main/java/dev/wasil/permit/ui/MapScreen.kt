@@ -6,20 +6,16 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -36,7 +32,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -59,11 +55,34 @@ import dev.wasil.permit.parking.android.reverseGeocodePlace
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 
 /** Which kind of zone the map is currently placing a candidate point for. */
 private enum class ZoneKind { HOME, FREE }
+
+/** Mockup geometry: the control stack sits 10dp in from the right edge. */
+private val CHROME_SIDE_INSET = 10.dp
+
+/**
+ * How far the controls and the walk pill float above the bottom of the map.
+ *
+ * The map already ends at the top of the tab bar — it is inside the Scaffold's
+ * content padding — so this is clearance from that, not from the system bar.
+ * 28dp rather than 12dp because the OpenStreetMap credit sits below it, and the
+ * credit is not optional.
+ */
+private val CHROME_BOTTOM_INSET = 28.dp
+
+/** Long enough to read, short enough not to become part of the furniture. */
+private const val NOTICE_MS = 4000L
+
+/**
+ * Said when the phone cannot tell us where it is. It states the failure rather
+ * than moving the map somewhere plausible — the rule this project pays for.
+ */
+private const val NO_POSITION = "Couldn't read your position"
 
 /**
  * The line under "Map" that says what the pin — or the absence of one — means.
@@ -93,6 +112,11 @@ internal fun carPositionLine(car: GeoPoint?, parked: Boolean, parkedAtText: Stri
  * home and free — drawn as circles instead of buried as Settings rows you
  * can't see against the street. Nothing about your own position is shared
  * with the other phone — deliberately.
+ *
+ * The map is the screen. Everything else floats over it (see `MapChrome.kt`)
+ * rather than taking a row of layout of its own; the one exception is the
+ * placing flow — the hint and candidate cards — which is a mode rather than
+ * chrome, and keeps the bottom of the screen while it is running.
  */
 @SuppressLint("MissingPermission")
 @Composable
@@ -105,6 +129,15 @@ fun MapScreen(
     // the free-zone list, both of which this very screen can change.
     zoneResolver: () -> ZoneResolver,
     routeClient: OkHttpClient,
+    /**
+     * Re-reads where the phone is, right now, and returns null if it cannot.
+     *
+     * Deliberately a fresh read rather than the one-shot [me] taken at app
+     * start: "locate me" exists because you have panned away, and by then that
+     * first fix can be an hour old and a mile off. The caller owns [me], so
+     * this both answers here and updates it there.
+     */
+    onLocate: suspend () -> GeoPoint?,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -158,6 +191,22 @@ fun MapScreen(
     // polygon and the overlay looks like it did nothing at all.
     var overviewRequest by remember { mutableIntStateOf(0) }
 
+    // The two camera controls the map never had. Counters, not booleans: the
+    // second tap has to move the map again even though nothing else changed.
+    var locateRequest by remember { mutableIntStateOf(0) }
+    var frameRequest by remember { mutableIntStateOf(0) }
+    var locating by remember { mutableStateOf(false) }
+
+    // The one thing these controls can fail at, said out loud and then gone.
+    // A failed position read means "we do not know", never "you are here".
+    var notice by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(notice) {
+        if (notice != null) {
+            delay(NOTICE_MS)
+            notice = null
+        }
+    }
+
     // Recomputed whenever the highlighted area changes: the header answers
     // "what does this cost right now", not "what is the timetable".
     val clockNow = remember(highlight) { java.util.Calendar.getInstance() }
@@ -189,131 +238,111 @@ fun MapScreen(
         placeResolved = true
     }
 
-    Column(Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
-        // The zone lives up here, in space the header was wasting, rather than
-        // in a card stacked over the map. Every card in that bottom stack costs
-        // map, and the map is the screen.
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text("Map", style = MaterialTheme.typography.titleMedium)
-                Text(
-                    carPositionLine(car, stateStore.parked, parkedAt),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            // Given its own surface rather than left as bare text. Moving it out
-            // of a card reclaimed the map, but it also lost the thing that made
-            // it read as a distinct piece of information — Wasil: "it just
-            // doesn't stand out so much as before". A tint and a corner is
-            // enough separation without spending map again.
-            highlightArea?.let { area ->
-                Card(
-                    modifier = Modifier.weight(1f).padding(start = 12.dp),
-                    shape = HandoffShapes.Control,
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    ),
-                ) {
-                    Column(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-                        horizontalAlignment = Alignment.End,
-                    ) {
-                        // While the lookup is in flight this stays blank rather
-                        // than showing the code and swapping it a moment later.
-                        // The code appears only once we know no name is coming.
-                        val heading = place?.district
-                            ?: area.code.takeIf { placeResolved }
-                        if (heading != null) {
-                            Text(
-                                heading,
-                                style = MaterialTheme.typography.titleMedium,
-                                textAlign = TextAlign.End,
-                            )
+    // While a zone is being placed or the pin moved, every tap is a placement
+    // and the bottom of the screen belongs to that flow. The floating controls
+    // stand down rather than compete with it — which is what the old layout did
+    // too, by swapping the button card for the hint card in the same slot.
+    val placing = addingKind != null || candidatePoint != null || movingPin || pending != null
+
+    Box(Modifier.fillMaxSize()) {
+        MapCanvas(
+            car = car,
+            me = me,
+            homeZone = homeZone,
+            freeZones = freeZones,
+            candidateZone = candidateZone,
+            tariffAreas = visibleTariffAreas,
+            highlightRing = highlight?.ring,
+            ghostCar = pending?.point,
+            walkRoute = route?.points.orEmpty(),
+            overviewRequest = overviewRequest,
+            locateRequest = locateRequest,
+            frameRequest = frameRequest,
+            onCarTap = {
+                if (car != null && stateStore.parked) {
+                    movingPin = true
+                    selectedHit = null
+                }
+            },
+            // Placing modes come first and win outright: while a candidate
+            // is being placed or the pin moved, every tap is a placement.
+            // Below them, mapHitAt is the single precedence rule.
+            onMapTap = { point ->
+                when {
+                    addingKind != null -> candidatePoint = point
+                    movingPin && car != null -> {
+                        // Anchored to where detection put the car, not to
+                        // the current pin: measuring from the pin let a
+                        // confirmed move become the origin of the next one.
+                        val anchor = stateStore.detectedParkLocation ?: car
+                        when (val r = correctionFor(anchor, point, stateStore.parkedOutside, zoneResolver())) {
+                            is CorrectionResult.TooFar -> {
+                                tooFarM = r.distanceM
+                                pending = null
+                            }
+                            is CorrectionResult.Ok -> {
+                                pending = r
+                                tooFarM = null
+                            }
                         }
-                        place?.detail?.let { street ->
-                            Text(
-                                street,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = TextAlign.End,
-                            )
+                    }
+                    else -> when (val hit = mapHitAt(point, homeZone, freeZones, visibleTariffAreas)) {
+                        is MapHit.Zone -> zoneDialogTarget = hit.ref
+                        is MapHit.Tariff -> {
+                            selectedHit = hit.hit
+                            namePoint = point
                         }
-                        Text(
-                            tariffNowText(
-                                tariffNow(area.windows, dayIndex, minuteOfDay),
-                                minuteOfDay,
-                            ),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.End,
-                        )
+                        null -> selectedHit = null
                     }
                 }
-            }
-        }
+            },
+            // Edge to edge, square corners. The inset rounded card spent a
+            // border of screen announcing "this is a card", which is the one
+            // thing about a full-screen map nobody needs telling.
+            //
+            // clipToBounds is load-bearing, not tidiness. A View hosted by
+            // AndroidView is not clipped to its composable's bounds, and
+            // osmdroid draws well past them — with the old rounded `clip` gone,
+            // tiles rendered up behind the status bar and put white system
+            // icons on pale streets. Caught on screen; nothing else would have.
+            modifier = Modifier.fillMaxSize().clipToBounds(),
+        )
 
-        Box(Modifier.fillMaxWidth().weight(1f)) {
-            MapCanvas(
-                car = car,
-                me = me,
-                homeZone = homeZone,
-                freeZones = freeZones,
-                candidateZone = candidateZone,
-                tariffAreas = visibleTariffAreas,
-                highlightRing = highlight?.ring,
-                ghostCar = pending?.point,
-                walkRoute = route?.points.orEmpty(),
-                overviewRequest = overviewRequest,
-                onCarTap = {
-                    if (car != null && stateStore.parked) {
-                        movingPin = true
-                        selectedHit = null
-                    }
-                },
-                // Placing modes come first and win outright: while a candidate
-                // is being placed or the pin moved, every tap is a placement.
-                // Below them, mapHitAt is the single precedence rule.
-                onMapTap = { point ->
-                    when {
-                        addingKind != null -> candidatePoint = point
-                        movingPin && car != null -> {
-                            // Anchored to where detection put the car, not to
-                            // the current pin: measuring from the pin let a
-                            // confirmed move become the origin of the next one.
-                            val anchor = stateStore.detectedParkLocation ?: car
-                            when (val r = correctionFor(anchor, point, stateStore.parkedOutside, zoneResolver())) {
-                                is CorrectionResult.TooFar -> {
-                                    tooFarM = r.distanceM
-                                    pending = null
-                                }
-                                is CorrectionResult.Ok -> {
-                                    pending = r
-                                    tooFarM = null
-                                }
-                            }
-                        }
-                        else -> when (val hit = mapHitAt(point, homeZone, freeZones, visibleTariffAreas)) {
-                            is MapHit.Zone -> zoneDialogTarget = hit.ref
-                            is MapHit.Tariff -> {
-                                selectedHit = hit.hit
-                                namePoint = point
-                            }
-                            null -> selectedHit = null
-                        }
-                    }
-                },
-                modifier = Modifier.fillMaxSize().clip(HandoffShapes.Card),
-            )
+        MapHeaderOverlay(
+            title = "Map",
+            subtitle = carPositionLine(car, stateStore.parked, parkedAt),
+            modifier = Modifier.align(Alignment.TopStart),
+            // Unchanged from v0.6.3 apart from its backing. The chip works, it
+            // is recent, and it was never what made this screen crowded.
+            chip = highlightArea?.let { area ->
+                @Composable {
+                    TariffChip(
+                        area = area,
+                        place = place,
+                        placeResolved = placeResolved,
+                        dayIndex = dayIndex,
+                        minuteOfDay = minuteOfDay,
+                    )
+                }
+            },
+        )
 
+        // Required by the tile licence, so it survives the move onto the map
+        // rather than being dropped with the layout row it used to own.
+        MapAttribution(
+            Modifier.align(Alignment.BottomStart).padding(start = 8.dp, bottom = 6.dp),
+        )
+
+        if (placing) {
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .padding(bottom = 12.dp, start = 4.dp, end = 4.dp),
+                    // Same clearance as the floating controls, and for the same
+                    // reason: at 12dp these cards sat on top of the
+                    // OpenStreetMap credit, which the tile licence does not let
+                    // us hide for the duration of a mode. Seen on screen.
+                    .padding(bottom = CHROME_BOTTOM_INSET, start = 16.dp, end = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 when {
@@ -408,88 +437,75 @@ fun MapScreen(
                         },
                         onCancel = { addingKind = null },
                     )
-                    // These float over map tiles, which stay light whatever the
-                    // app theme is doing. An OutlinedButton has a transparent
-                    // container, so in dark mode its near-white label rendered
-                    // straight onto pale streets and vanished. They need a
-                    // surface of their own to sit on.
-                    else -> Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = HandoffShapes.Control,
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surface,
-                        ),
-                    ) {
-                        // One row, short labels. Three full sentences stacked
-                        // over two rows ate a third of the map for controls
-                        // used seconds at a time.
-                        Row(
-                            Modifier.fillMaxWidth().padding(8.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            OutlinedButton(
-                                onClick = { addingKind = ZoneKind.HOME },
-                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
-                                modifier = Modifier.weight(1f),
-                            ) { Text(if (homeZone == null) "Set home" else "Home") }
-                            OutlinedButton(
-                                onClick = { addingKind = ZoneKind.FREE },
-                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
-                                modifier = Modifier.weight(1f),
-                            ) { Text("Free zone") }
-                            OutlinedButton(
-                                onClick = {
-                                    showTariff = !showTariff
-                                    if (showTariff) overviewRequest++ else selectedHit = null
-                                },
-                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
-                                modifier = Modifier.weight(1f),
-                                enabled = tariffAreas.isNotEmpty(),
-                            ) { Text(if (showTariff) "Hide areas" else "Tariffs") }
+                }
+            }
+        } else {
+            MapControlStack(
+                homeZoneSet = homeZone != null,
+                tariffShowing = showTariff,
+                tariffEnabled = tariffAreas.isNotEmpty(),
+                locating = locating,
+                onLocate = {
+                    // Guarded rather than queued: two reads in flight would
+                    // race to be the one that moves the map.
+                    if (!locating) {
+                        locating = true
+                        scope.launch {
+                            val fix = onLocate()
+                            locating = false
+                            // A failed read is "we do not know", not "you are
+                            // still where you were an hour ago". Nothing moves.
+                            if (fix != null) locateRequest++ else notice = NO_POSITION
                         }
                     }
-                }
+                },
+                onFrame = { frameRequest++ },
+                // Unchanged from the old text button, zoom-out included.
+                onToggleTariff = {
+                    showTariff = !showTariff
+                    if (showTariff) overviewRequest++ else selectedHit = null
+                },
+                onSetHomeZone = { addingKind = ZoneKind.HOME },
+                onAddFreeZone = { addingKind = ZoneKind.FREE },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = CHROME_SIDE_INSET, bottom = CHROME_BOTTOM_INSET),
+            )
 
-                if (car != null && addingKind == null && candidatePoint == null && !movingPin) {
-                    val here = me
-                    Button(
-                        onClick = {
-                            when {
-                                route != null -> route = null
-                                here == null -> openWalkingDirections(context, car)
-                                else -> scope.launch {
-                                    routing = true
-                                    route = fetchWalkRoute(routeClient, here, car)
-                                    routing = false
-                                }
+            if (car != null) {
+                val here = me
+                WalkPill(
+                    label = walkPillText(routing, route?.let(::walkSummary), here != null),
+                    enabled = !routing,
+                    onClick = {
+                        when {
+                            route != null -> route = null
+                            here == null -> openWalkingDirections(context, car)
+                            else -> scope.launch {
+                                routing = true
+                                route = fetchWalkRoute(routeClient, here, car)
+                                routing = false
                             }
-                        },
-                        enabled = !routing,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = HandoffShapes.Control,
-                    ) {
-                        Text(
-                            when {
-                                routing -> "Finding the way…"
-                                route != null -> "Hide route · ${walkSummary(route!!)}"
-                                // Without a position of our own there is no
-                                // route to draw, so this stays the old hand-off
-                                // rather than a button that does nothing.
-                                here == null -> "Open walk in Maps"
-                                else -> "Walk to car"
-                            },
-                        )
-                    }
-                }
+                        }
+                    },
+                    // Symmetric side padding wide enough for the control stack,
+                    // so the pill stays centred on the screen and still cannot
+                    // reach the circles however long its label gets.
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = CHROME_BOTTOM_INSET, start = 60.dp, end = 60.dp),
+                )
             }
         }
 
-        Text(
-            "© OpenStreetMap contributors",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(vertical = 8.dp),
-        )
+        notice?.let {
+            MapNotice(
+                it,
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = CHROME_BOTTOM_INSET + 52.dp, start = 16.dp, end = 16.dp),
+            )
+        }
     }
 
     zoneDialogTarget?.let { target ->
@@ -573,6 +589,58 @@ fun MapScreen(
                 TextButton(onClick = { flipToConfirm = null }) { Text("Not now") }
             },
         )
+    }
+}
+
+/**
+ * What the highlighted area is called and what it costs right now.
+ *
+ * Lifted out of the header row unchanged when the header became an overlay —
+ * same content, same alignment, same blank-while-resolving rule. The only
+ * difference is the container, which is now translucent so the map underneath
+ * is still a map rather than a strip of colour behind a card.
+ */
+@Composable
+private fun TariffChip(
+    area: TariffArea,
+    place: PlaceLabel?,
+    placeResolved: Boolean,
+    dayIndex: Int,
+    minuteOfDay: Int,
+) {
+    Card(
+        shape = HandoffShapes.Control,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = OVER_TILES_ALPHA),
+            contentColor = MaterialTheme.colorScheme.onSurface,
+        ),
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+            horizontalAlignment = Alignment.End,
+        ) {
+            // While the lookup is in flight this stays blank rather than
+            // showing the code and swapping it a moment later. The code appears
+            // only once we know no name is coming.
+            val heading = place?.district ?: area.code.takeIf { placeResolved }
+            if (heading != null) {
+                Text(heading, style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.End)
+            }
+            place?.detail?.let { street ->
+                Text(
+                    street,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.End,
+                )
+            }
+            Text(
+                tariffNowText(tariffNow(area.windows, dayIndex, minuteOfDay), minuteOfDay),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.End,
+            )
+        }
     }
 }
 

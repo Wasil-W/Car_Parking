@@ -143,6 +143,12 @@ fun HandoffTabs(
                     tariffAreas = app.tariffAreas.orEmpty(),
                     zoneResolver = { app.zoneResolver() },
                     routeClient = app.routeClient,
+                    // Owned here rather than in MapScreen so that a position
+                    // read by the locate-me button also reaches the preview map
+                    // on the Permit tab — same reason `me` is read here at all.
+                    // Null when the phone cannot say, which the map is careful
+                    // to report rather than paper over.
+                    onLocate = { PlayServicesSignals(context).currentLocation()?.also { me = it } },
                 )
                 Tab.SETTINGS -> SettingsScreen(
                     stateStore = app.parkStateStore,

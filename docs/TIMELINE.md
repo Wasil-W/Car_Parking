@@ -76,6 +76,16 @@ attribution line on chrome. Both reference apps spend a floating search pill and
 two circular buttons. **There is currently no way to re-centre the map after
 panning.**
 
+**Built, awaiting release — branch `v064-map-chrome`.** The map screen half of
+this item is done: the controls are off the layout and onto the map as four
+40dp circles bottom-right, "Walk to car" is a bottom-centre pill, the header and
+the OpenStreetMap credit are overlays, and **locate-me exists**. Measured on a
+1080x2400 device, the map goes from **64% of the screen to 83%** by area (71% to
+83% by height). The mockup's "58% to 92%" was drawn on a shorter phone and did
+not count the status bar and the tab bar, which are system chrome the map cannot
+have. Not versioned, not in the changelog, not shipped — v0.6.4 is assembled
+from several branches at the end.
+
 ### 3. The session log
 **Also look at:** the permit website's own session history, which Wasil pointed
 out on 2026-08-05 — it already lists his past sessions and is the closest thing

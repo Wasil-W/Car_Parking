@@ -97,6 +97,14 @@ fun MapCanvas(
      * same reasoning as the framing guard below.
      */
     overviewRequest: Int = 0,
+    /**
+     * Bumped to centre on [me]. Counters for the same reason as
+     * [overviewRequest]: the second tap of "locate me" has to move the map
+     * again even though nothing about the state has changed.
+     */
+    locateRequest: Int = 0,
+    /** Bumped to re-run the car-and-me fit that otherwise happens only once. */
+    frameRequest: Int = 0,
     onMapTap: ((GeoPoint) -> Unit)? = null,
 ) {
     val context = LocalContext.current
@@ -109,10 +117,8 @@ fun MapCanvas(
     // re-added. Identity comparison suffices: PermitApp holds a single list.
     val tariffCache = remember { mutableStateOf<Pair<List<TariffArea>, List<Polygon>>?>(null) }
     val lastOverviewRequest = remember { mutableStateOf(overviewRequest) }
-    // Tracks only the centre WE last set, never the map's live (possibly
-    // user-panned) position — otherwise re-centring on every recomposition
-    // would fight a pan made while placing a zone candidate or dragging the
-    // radius slider, snapping the map back under the user's finger.
+    val lastLocateRequest = remember { mutableStateOf(locateRequest) }
+    val lastFrameRequest = remember { mutableStateOf(frameRequest) }
     val lastFraming = remember { mutableStateOf<Pair<List<GeoPoint>, Boolean>?>(null) }
     AndroidView(
         modifier = modifier.fillMaxSize(),
@@ -130,41 +136,44 @@ fun MapCanvas(
             }
         },
         update = { map ->
-            if (overviewRequest != lastOverviewRequest.value) {
-                lastOverviewRequest.value = overviewRequest
-                map.controller.setZoom(OVERVIEW_ZOOM)
-            }
+            // Every pending request is consumed whether or not it is the one
+            // that wins, so a losing bump can never surface a pass later and
+            // move the map out from under the user.
+            val overviewPending = overviewRequest != lastOverviewRequest.value
+            val locatePending = locateRequest != lastLocateRequest.value
+            val framePending = frameRequest != lastFrameRequest.value
+            lastOverviewRequest.value = overviewRequest
+            lastLocateRequest.value = locateRequest
+            lastFrameRequest.value = frameRequest
 
-            // Frame everything worth seeing — the car and you — rather than
-            // centring on one and leaving the other off screen to be hunted
-            // for. With only one of them, or with the two effectively on top
-            // of each other, fall back to centring at the normal zoom.
+            // lastFraming tracks only the framing WE last set, never the map's
+            // live (possibly user-panned) position — otherwise re-framing on
+            // every recomposition would fight a pan made while placing a zone
+            // candidate or dragging the radius slider, snapping the map back
+            // under the user's finger.
             val focus = listOfNotNull(car, me)
             val framing = focus to interactive
-            if (lastFraming.value != framing) {
-                lastFraming.value = framing
-                when {
-                    focus.size == 2 && distanceMeters(focus[0], focus[1]) > MIN_SPREAD_M -> {
-                        val box = BoundingBox(
-                            maxOf(focus[0].lat, focus[1].lat),
-                            maxOf(focus[0].lng, focus[1].lng),
-                            minOf(focus[0].lat, focus[1].lat),
-                            minOf(focus[0].lng, focus[1].lng),
-                        )
-                        // osmdroid cannot fit a box before the view has been
-                        // measured, and silently does nothing if asked early.
-                        map.post {
-                            runCatching {
-                                map.zoomToBoundingBox(box, false, FRAME_PADDING_PX)
-                            }
-                        }
-                    }
-                    else -> {
-                        val centre = focus.firstOrNull() ?: FALLBACK
-                        map.controller.setCenter(OsmGeoPoint(centre.lat, centre.lng))
-                        map.controller.setZoom(zoom)
-                    }
+            val autoFramePending = lastFraming.value != framing
+            lastFraming.value = framing
+
+            when (
+                mapCameraCommand(
+                    overviewPending = overviewPending,
+                    locatePending = locatePending,
+                    haveMyPosition = me != null,
+                    framePending = framePending,
+                    autoFramePending = autoFramePending,
+                )
+            ) {
+                // Keeps the centre deliberately: switching the tariff layer on
+                // is about seeing boundaries around where you already are.
+                MapCameraCommand.OVERVIEW -> map.controller.setZoom(OVERVIEW_ZOOM)
+                MapCameraCommand.LOCATE -> me?.let {
+                    map.controller.setCenter(OsmGeoPoint(it.lat, it.lng))
+                    map.controller.setZoom(zoom)
                 }
+                MapCameraCommand.FRAME -> frameOn(map, focus, zoom)
+                MapCameraCommand.NONE -> Unit
             }
 
             // Rebuilt every update from the latest parameters, same as the
@@ -275,6 +284,35 @@ fun MapCanvas(
             map.invalidate()
         },
     )
+}
+
+/**
+ * Frame everything worth seeing — the car and you — rather than centring on one
+ * and leaving the other off screen to be hunted for. With only one of them, or
+ * with the two effectively on top of each other, falls back to centring at the
+ * normal zoom.
+ */
+private fun frameOn(map: MapView, focus: List<GeoPoint>, zoom: Double) {
+    when {
+        focus.size == 2 && distanceMeters(focus[0], focus[1]) > MIN_SPREAD_M -> {
+            val box = BoundingBox(
+                maxOf(focus[0].lat, focus[1].lat),
+                maxOf(focus[0].lng, focus[1].lng),
+                minOf(focus[0].lat, focus[1].lat),
+                minOf(focus[0].lng, focus[1].lng),
+            )
+            // osmdroid cannot fit a box before the view has been measured, and
+            // silently does nothing if asked early.
+            map.post {
+                runCatching { map.zoomToBoundingBox(box, false, FRAME_PADDING_PX) }
+            }
+        }
+        else -> {
+            val centre = focus.firstOrNull() ?: FALLBACK
+            map.controller.setCenter(OsmGeoPoint(centre.lat, centre.lng))
+            map.controller.setZoom(zoom)
+        }
+    }
 }
 
 /**

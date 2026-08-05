@@ -1,0 +1,16 @@
+<!--
+  Frame the car and me: four corner brackets, the universal "fit everything in
+  view" mark. Geometry copied from the approved v0.6.4 mockup, section 01.
+  Colour is a placeholder — Compose's Icon() tint replaces it.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path android:strokeColor="#000000" android:strokeWidth="1.7"
+        android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:fillColor="@android:color/transparent"
+        android:pathData="M4,9 V5.6 A1.6,1.6 0 0 1 5.6,4 H9
+                          M15,4 H18.4 A1.6,1.6 0 0 1 20,5.6 V9
+                          M20,15 V18.4 A1.6,1.6 0 0 1 18.4,20 H15
+                          M9,20 H5.6 A1.6,1.6 0 0 1 4,18.4 V15" />
+</vector>
