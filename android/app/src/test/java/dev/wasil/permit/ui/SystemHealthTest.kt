@@ -1,6 +1,7 @@
 package dev.wasil.permit.ui
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SystemHealthTest {
@@ -28,33 +29,44 @@ class SystemHealthTest {
         assertEquals("Fix", row.fixLabel)
     }
 
-    @Test fun `everything set gives five ok rows`() {
+    @Test fun `everything set gives six ok rows`() {
         val rows = healthRows(
             missingPermissions = 0, batteryOptimised = false,
-            carPaired = true, syncConfigured = true, homeZoneSet = true,
+            carPaired = true, permitAdded = true, syncConfigured = true, homeZoneSet = true,
         )
-        assertEquals(5, rows.size)
-        assertEquals(listOf(true, true, true, true, true), rows.map { it.ok })
+        assertEquals(6, rows.size)
+        assertTrue(rows.all { it.ok })
         assertEquals("Car paired", rows[2].label)
-        assertEquals("Sync configured", rows[3].label)
-        assertEquals("Home zone set", rows[4].label)
+        assertEquals("Permit added", rows[3].label)
+        assertEquals("Sharing with the other phone", rows[4].label)
+        assertEquals("Home zone set", rows[5].label)
     }
 
     @Test fun `no car paired is not ok — detection cannot run without it`() {
         val row = healthRows(
             missingPermissions = 0, batteryOptimised = false,
-            carPaired = false, syncConfigured = true, homeZoneSet = true,
+            carPaired = false, permitAdded = true, syncConfigured = true, homeZoneSet = true,
         )[2]
         assertEquals("No car paired — detection won't run", row.label)
         assertEquals(false, row.ok)
     }
 
-    @Test fun `sync not configured reads as informational, not a fault`() {
+    @Test fun `no permit reads as a configuration, not a fault`() {
         val row = healthRows(
             missingPermissions = 0, batteryOptimised = false,
-            carPaired = true, syncConfigured = false, homeZoneSet = true,
+            carPaired = true, permitAdded = false, syncConfigured = true, homeZoneSet = true,
         )[3]
-        assertEquals("Sync not set up", row.label)
+        assertEquals("No permit — rates and hours only", row.label)
+        assertEquals(true, row.ok)
+        assertEquals(null, row.fixLabel)
+    }
+
+    @Test fun `sharing off reads as informational, not a fault`() {
+        val row = healthRows(
+            missingPermissions = 0, batteryOptimised = false,
+            carPaired = true, permitAdded = true, syncConfigured = false, homeZoneSet = true,
+        )[4]
+        assertEquals("Sharing off — this phone only", row.label)
         assertEquals(true, row.ok)
         assertEquals(null, row.fixLabel)
     }
@@ -62,8 +74,8 @@ class SystemHealthTest {
     @Test fun `no home zone reads as informational, not a fault`() {
         val row = healthRows(
             missingPermissions = 0, batteryOptimised = false,
-            carPaired = true, syncConfigured = true, homeZoneSet = false,
-        )[4]
+            carPaired = true, permitAdded = true, syncConfigured = true, homeZoneSet = false,
+        )[5]
         assertEquals("No home zone set", row.label)
         assertEquals(true, row.ok)
         assertEquals(null, row.fixLabel)
@@ -72,8 +84,46 @@ class SystemHealthTest {
     @Test fun `several missing — only the genuine faults are not ok`() {
         val rows = healthRows(
             missingPermissions = 2, batteryOptimised = true,
-            carPaired = false, syncConfigured = false, homeZoneSet = false,
+            carPaired = false, permitAdded = false, syncConfigured = false, homeZoneSet = false,
         )
-        assertEquals(listOf(false, false, false, true, true), rows.map { it.ok })
+        assertEquals(listOf(false, false, false, true, true, true), rows.map { it.ok })
+    }
+
+    /**
+     * The whole point of the copy pass, pinned: one car, no permit, no sharing,
+     * no home zone is a **working** install and the app must not call it broken.
+     */
+    @Test fun `a one-car no-permit no-sharing install is fully set up`() {
+        val rows = healthRows(
+            missingPermissions = 0, batteryOptimised = false,
+            carPaired = true, permitAdded = false, syncConfigured = false, homeZoneSet = false,
+        )
+        assertTrue(rows.all { it.ok })
+        assertEquals("Everything is set up", setupHeadline(rows))
+    }
+
+    @Test fun `the headline counts faults rather than declaring setup incomplete`() {
+        val one = healthRows(
+            missingPermissions = 1, batteryOptimised = false,
+            carPaired = true, permitAdded = false, syncConfigured = false, homeZoneSet = false,
+        )
+        assertEquals("1 thing needs attention", setupHeadline(one))
+
+        val three = healthRows(
+            missingPermissions = 1, batteryOptimised = true,
+            carPaired = false, permitAdded = true, syncConfigured = true, homeZoneSet = true,
+        )
+        assertEquals("3 things need attention", setupHeadline(three))
+    }
+
+    @Test fun `the configuration line states facts, never complaints`() {
+        assertEquals(
+            "Wasil's phone · permit added · sharing on",
+            setupConfigurationLine("Wasil", permitAdded = true, syncConfigured = true),
+        )
+        assertEquals(
+            "Whose phone isn't set yet · no permit · sharing off",
+            setupConfigurationLine(null, permitAdded = false, syncConfigured = false),
+        )
     }
 }

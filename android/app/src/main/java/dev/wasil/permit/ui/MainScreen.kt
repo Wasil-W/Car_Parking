@@ -40,13 +40,21 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Answers one question — who has the permit — and offers the single action that
- * can change it. With exactly two cars the permit can only move to one place,
- * so one button is right where two would be noise.
+ * What is true right now, here: what this spot demands, and what is covering
+ * it. Three screens rather than one, selected on what is actually configured —
+ * see [PermitView].
+ *
+ * With two phones and a permit it is unchanged: one hero card and the single
+ * button, because a permit with two possible homes can only ever move to one
+ * place. With one phone the button goes, because there is nowhere to send it.
+ * With no permit the settlement half goes entirely and the obligation half is
+ * the screen — which is the app the v0.6 split was for, and it is not a
+ * degraded version of anything.
  */
 @Composable
 fun MainScreen(
     state: UiState,
+    view: PermitView,
     myCar: MyCar?,
     car: GeoPoint?,
     // Passed alongside [car] rather than inferred from it: "no pin" and "not
@@ -54,9 +62,14 @@ fun MainScreen(
     parked: Boolean,
     me: GeoPoint?,
     demand: SpotDemand,
+    /** Geocoded name of the parked spot, or null while it resolves / if it failed. */
+    place: String?,
+    /** "09:12", or null when nothing recorded a park time. */
+    parkedSince: String?,
     onSwitch: (PlateOption) -> Unit,
     onRefresh: () -> Unit,
     onOpenMap: () -> Unit,
+    onOpenSettings: () -> Unit,
     onConfirmBlocked: () -> Unit,
     onDismissBlocked: () -> Unit,
 ) {
@@ -76,7 +89,16 @@ fun MainScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                HandoffMark(markStateFor(holder), size = 20.dp)
+                HandoffMark(
+                    when (view) {
+                        PermitView.Shared -> markStateFor(holder)
+                        PermitView.Sole -> soleMarkStateFor(holder ?: myCar)
+                        // No permit, so nothing holds anything. The mark is a
+                        // wordmark here, not a state display.
+                        PermitView.NoPermit -> markStateFor(null)
+                    },
+                    size = 20.dp,
+                )
                 Text(
                     "  Handoff",
                     style = MaterialTheme.typography.titleMedium,
@@ -119,76 +141,127 @@ fun MainScreen(
             )
         }
 
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = HandoffShapes.Card,
-            border = BorderStroke(
-                1.dp,
-                holder?.let(colors::strongFor) ?: MaterialTheme.colorScheme.outline,
-            ),
-            colors = CardDefaults.cardColors(
-                containerColor = holder?.let(colors::containerFor)
-                    ?: MaterialTheme.colorScheme.surfaceVariant,
-            ),
-        ) {
-            val onCard = holder?.let(colors::onContainerFor)
-                ?: MaterialTheme.colorScheme.onSurfaceVariant
-            Column(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                if (state.loading) {
-                    CircularProgressIndicator(color = onCard)
-                } else {
-                    HandoffMark(markStateFor(holder), size = 60.dp)
-                    Text(
-                        holder?.let { "${it.label()}'s car" } ?: "No plate active",
-                        style = MaterialTheme.typography.headlineLarge,
-                        color = onCard,
-                    )
-                    state.activeVrn?.let {
-                        Text(it, style = MaterialTheme.typography.bodyMedium, color = onCard)
+        when (view) {
+            PermitView.NoPermit -> {
+                // The obligation half alone. No mark, no plate, no card asking
+                // to be completed — this is a finished screen for someone who
+                // has no permit and is not going to get one.
+                val headline = spotHeadlineFor(demand, place)
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = HandoffShapes.Card,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    ),
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp, horizontal = 16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text(
+                            headline.big,
+                            style = MaterialTheme.typography.headlineLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            textAlign = TextAlign.Center,
+                        )
+                        Text(
+                            headline.detail,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
+                        )
                     }
                 }
-            }
-        }
-
-        if (myCar != null && !state.loading) {
-            val action = primaryActionFor(myCar, holder)
-            val target = state.options.firstOrNull { it.car == action.target }
-            Button(
-                onClick = { target?.let(onSwitch) },
-                enabled = target != null && state.switching == null,
-                modifier = Modifier.fillMaxWidth().height(54.dp),
-                shape = HandoffShapes.Control,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = colors.actionFor(action.target),
-                    contentColor = colors.onAction,
-                ),
-            ) {
-                Text(
-                    if (state.switching != null) "Switching…" else action.label,
-                    style = MaterialTheme.typography.labelLarge,
+                QuietRow(
+                    "Have a permit? Add it in Settings.",
+                    onClick = onOpenSettings,
                 )
             }
-        }
 
-        state.otherStatus?.let { status ->
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = HandoffShapes.Control,
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                ),
-            ) {
-                Text(
-                    status,
-                    modifier = Modifier.fillMaxWidth().padding(13.dp),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                )
+            PermitView.Sole, PermitView.Shared -> {
+                val sole = view == PermitView.Sole
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = HandoffShapes.Card,
+                    border = BorderStroke(
+                        1.dp,
+                        holder?.let(colors::strongFor) ?: MaterialTheme.colorScheme.outline,
+                    ),
+                    colors = CardDefaults.cardColors(
+                        containerColor = holder?.let(colors::containerFor)
+                            ?: MaterialTheme.colorScheme.surfaceVariant,
+                    ),
+                ) {
+                    val onCard = holder?.let(colors::onContainerFor)
+                        ?: MaterialTheme.colorScheme.onSurfaceVariant
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        if (state.loading) {
+                            CircularProgressIndicator(color = onCard)
+                        } else if (sole) {
+                            // One car: naming a brother would be answering a
+                            // question nobody asked. What matters is that the
+                            // spot is covered.
+                            HandoffMark(soleMarkStateFor(holder ?: myCar), size = 60.dp)
+                            Text(
+                                if (holder != null) "Covered" else "No plate active",
+                                style = MaterialTheme.typography.headlineLarge,
+                                color = onCard,
+                            )
+                            state.activeVrn?.let {
+                                Text(
+                                    "$it · permit active",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = onCard,
+                                )
+                            }
+                        } else {
+                            HandoffMark(markStateFor(holder), size = 60.dp)
+                            Text(
+                                holder?.let { "${it.label()}'s car" } ?: "No plate active",
+                                style = MaterialTheme.typography.headlineLarge,
+                                color = onCard,
+                            )
+                            state.activeVrn?.let {
+                                Text(it, style = MaterialTheme.typography.bodyMedium, color = onCard)
+                            }
+                        }
+                    }
+                }
+
+                if (sole) {
+                    // No hand-over button, because there is nowhere to hand it
+                    // to. A disabled one would be worse than none: it implies a
+                    // second phone exists and is merely unavailable.
+                    QuietRow(soleStatusLine(parked, place, parkedSince))
+                } else if (myCar != null && !state.loading) {
+                    val action = primaryActionFor(myCar, holder)
+                    val target = state.options.firstOrNull { it.car == action.target }
+                    Button(
+                        onClick = { target?.let(onSwitch) },
+                        enabled = target != null && state.switching == null,
+                        modifier = Modifier.fillMaxWidth().height(54.dp),
+                        shape = HandoffShapes.Control,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = colors.actionFor(action.target),
+                            contentColor = colors.onAction,
+                        ),
+                    ) {
+                        Text(
+                            if (state.switching != null) "Switching…" else action.label,
+                            style = MaterialTheme.typography.labelLarge,
+                        )
+                    }
+                }
+
+                if (!sole) {
+                    state.otherStatus?.let { status -> QuietRow(status) }
+                }
             }
         }
 
@@ -228,6 +301,8 @@ fun MainScreen(
         }
     }
 
+    // The blocked dialog belongs to the two-phone case by construction: it only
+    // ever appears when the *other* phone is parked outside on this permit.
     state.blocked?.let { blocked ->
         val time = { ms: Long -> SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(ms)) }
         AlertDialog(
@@ -242,6 +317,32 @@ fun MainScreen(
             },
             confirmButton = { TextButton(onClick = onConfirmBlocked) { Text("Claim anyway") } },
             dismissButton = { TextButton(onClick = onDismissBlocked) { Text("Cancel") } },
+        )
+    }
+}
+
+/**
+ * The one-line note under the card — the other car's status, "nothing to do",
+ * or the invitation to add a permit. One shape for all three, because they sit
+ * in the same slot and differ only in what they say.
+ */
+@Composable
+private fun QuietRow(text: String, onClick: (() -> Unit)? = null) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
+        shape = HandoffShapes.Control,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        ),
+    ) {
+        Text(
+            text,
+            modifier = Modifier.fillMaxWidth().padding(13.dp),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
         )
     }
 }

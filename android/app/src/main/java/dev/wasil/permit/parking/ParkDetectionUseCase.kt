@@ -1,5 +1,6 @@
 package dev.wasil.permit.parking
 
+import dev.wasil.permit.parking.zones.TariffArea
 import dev.wasil.permit.parking.zones.ZoneInfo
 import dev.wasil.permit.parking.zones.ZoneResolver
 import kotlinx.coroutines.delay
@@ -41,6 +42,16 @@ sealed interface ParkOutcome {
     data class MismatchDetected(val serverVrn: String?) : ParkOutcome
 }
 
+/**
+ * Names the spot for the history record, or returns null when it cannot.
+ *
+ * A lambda rather than a dependency because the only implementation needs a
+ * `Context` (Android's `Geocoder`), and this class is unit-tested on the JVM.
+ * Defaults to "no name", which is also what a failed lookup produces — a park
+ * with no place name still happened.
+ */
+typealias PlaceNamer = suspend (GeoPoint) -> String?
+
 class ParkDetectionUseCase(
     private val signals: DetectionSignals,
     private val stateStore: ParkStateStore,
@@ -50,6 +61,22 @@ class ParkDetectionUseCase(
     private val scheduler: ParkScheduler,
     private val pollIntervalMs: Long = 5_000,
     private val nowMs: () -> Long = System::currentTimeMillis,
+    /**
+     * Where a confirmed park is written. Null in tests that predate the log and
+     * on any path that has no store to hand — the detection loop's job is not
+     * conditional on being able to record it.
+     */
+    private val parkLog: ParkLogStore? = null,
+    private val namePlace: PlaceNamer = { null },
+    /**
+     * What the area charges *at this moment* — "€3,01/h · until 19:00" — for
+     * the record's cost column. Injected rather than computed here because the
+     * one function that phrases it lives in the UI layer alongside the map
+     * header that already shows the same line, and the two must not drift.
+     * Defaults to the area's headline rate, which is what an area carries when
+     * no live schedule can be read.
+     */
+    private val rateNow: (TariffArea) -> String? = { it.tariffText.ifBlank { null } },
 ) {
     suspend fun run(): ParkOutcome {
         if (stateStore.myCar == null) return ParkOutcome.NotConfigured
@@ -131,9 +158,10 @@ class ParkDetectionUseCase(
     }
 
     private suspend fun confirmedPark(fix: ParkedFix?): ParkOutcome {
+        val startedAtMs = nowMs()
         val point = fix?.point
         stateStore.parked = true
-        stateStore.parkedAtMs = nowMs()
+        stateStore.parkedAtMs = startedAtMs
         // Only overwrite a known position with a real one. A failed fix means
         // "we don't know where you are now", not "the car is nowhere" — writing
         // null here erased the pin from the map on every park without a fix.
@@ -145,7 +173,18 @@ class ParkDetectionUseCase(
             stateStore.detectedParkLocation = it
         }
 
-        if (point == null) {
+        // Resolved once and held, because the history record must be badged
+        // with the same answer the permit decision was made on. Re-resolving
+        // later could disagree with it — a zone edited in between is enough.
+        val zone = point?.let { zoneResolver.resolve(it) }
+        val outcome = settleConfirmedPark(point, zone)
+        recordPark(startedAtMs, point, zone, outcome)
+        return outcome
+    }
+
+    /** Everything the park does to the world, minus the record it leaves behind. */
+    private suspend fun settleConfirmedPark(point: GeoPoint?, zone: ZoneInfo?): ParkOutcome {
+        if (point == null || zone == null) {
             // No fix now and nothing usable from the drive: we do not know
             // which zone this is. Never claim blind — but equally, never
             // *publish* a guess. This used to write parkedOutside = false,
@@ -161,7 +200,6 @@ class ParkDetectionUseCase(
             return askUnlessAlreadyMine()
         }
 
-        val zone = zoneResolver.resolve(point)
         if (zone !is ZoneInfo.Paid) {
             markNotOutside()
             notifier.statusParkedNoClaim(reasonFor(zone))
@@ -224,6 +262,41 @@ class ParkDetectionUseCase(
      * position, not the absence of one. The no-fix branch above deliberately
      * does not come through here.
      */
+    /**
+     * Leaves the record of a park that has just been decided.
+     *
+     * Written here, at the one point the app is certain a park happened, and
+     * never anywhere else — the log must not acquire a second author who could
+     * disagree with this one about what settled the spot. Nothing is
+     * reconstructed for parks that happened before this shipped; a log that
+     * invents its own past is worse than a short one.
+     *
+     * The geocode is best-effort and deliberately last: a name is a nicety, and
+     * a lookup that hangs or throws must not cost the record itself.
+     */
+    private suspend fun recordPark(
+        startedAtMs: Long,
+        point: GeoPoint?,
+        zone: ZoneInfo?,
+        outcome: ParkOutcome,
+    ) {
+        val log = parkLog ?: return
+        val settlement = settlementFor(zone, outcome)
+        val place = point?.let { runCatching { namePlace(it) }.getOrNull() }
+        log.record(
+            ParkRecord(
+                startedAtMs = startedAtMs,
+                settlement = settlement,
+                holder = stateStore.myCar.takeIf { settlement == Settlement.PERMIT },
+                place = place,
+                rateText = (zone as? ZoneInfo.Paid)?.area?.let(rateNow),
+                // Null, not false, when no zone resolved — the record has to be
+                // able to say "we could not tell" as distinctly as it says "no".
+                paid = zone?.let { it is ZoneInfo.Paid },
+            ),
+        )
+    }
+
     private fun markNotOutside() {
         stateStore.parkedOutside = false
         stateStore.parkedOutsideKnown = true
@@ -241,4 +314,24 @@ class ParkDetectionUseCase(
 
     private fun zoneText(zone: ZoneInfo.Paid): String =
         zone.area?.let { "${it.tariffText} zone ${it.code}" } ?: "paid area (zone data unavailable)"
+}
+
+/**
+ * Which badge a finished park earns.
+ *
+ * The claim wins outright and is checked first: if the permit ended up on this
+ * car, it covered the spot whether or not the zone lookup succeeded. Below that
+ * the zone decides, and the last two rows are the pair this app keeps insisting
+ * on — a paid spot nothing covered is [Settlement.UNSETTLED], which is a
+ * finding, while no zone at all is [Settlement.UNKNOWN], which is a gap. They
+ * must never collapse into each other: "we could not tell" is not "you owed
+ * nothing".
+ */
+fun settlementFor(zone: ZoneInfo?, outcome: ParkOutcome): Settlement = when {
+    outcome is ParkOutcome.Claimed -> Settlement.PERMIT
+    zone is ZoneInfo.Home -> Settlement.HOME
+    zone is ZoneInfo.ManualFree -> Settlement.FREE_ZONE
+    zone is ZoneInfo.FreeStreet -> Settlement.FREE_STREET
+    zone is ZoneInfo.Paid -> Settlement.UNSETTLED
+    else -> Settlement.UNKNOWN
 }

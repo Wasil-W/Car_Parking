@@ -40,6 +40,12 @@ data class BlockedInfo(
 )
 
 data class UiState(
+    /**
+     * Whether a permit account is stored. No longer a gate — it stopped being
+     * one in v0.6.4, when "no permit" stopped being treated as broken setup.
+     * It is read only to decide which of the three permit screens is true; see
+     * [PermitView].
+     */
     val needsSetup: Boolean = false,
     val loading: Boolean = false,
     val switching: String? = null,
@@ -138,8 +144,12 @@ class MainViewModel(
                             message = "The site still shows ${outcome.serverVrn ?: "no plate"} on the permit.",
                         )
                     }
+                    // Not "finish setup": there is nothing unfinished about an
+                    // install with no permit on it. The only honest reading of
+                    // this outcome is that there is no permit to move, which is
+                    // a fact about the account rather than a fault in the app.
                     ParkOutcome.NotConfigured -> _state.update {
-                        it.copy(switching = null, message = "Finish setup first (credentials + whose phone in Settings)")
+                        it.copy(switching = null, message = "No permit added yet — add one in Settings.")
                     }
                     else -> _state.update {
                         it.copy(switching = null, message = "Switch failed. Permit NOT changed - retry.")
