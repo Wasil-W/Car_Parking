@@ -52,6 +52,10 @@ other document under `docs/` is a deep-dive that this one points at.
 
 Ordered by value per effort. Nothing here is implemented.
 
+**Mockups come first.** Every UI release now opens with a published mockup —
+see `CLAUDE.md`, "Draw it before you build it". v0.6.4's:
+<https://claude.ai/code/artifact/9ac1d27a-05ea-4735-953d-d43443029b4c>
+
 **v0.6.4 is the UI release.** Items 1, 2 and 3 land together rather than in
 separate passes, so the map chrome, the session log and the wider design arrive
 as one coherent thing instead of a second pass partly undoing the first. Wasil's
@@ -73,6 +77,10 @@ two circular buttons. **There is currently no way to re-centre the map after
 panning.**
 
 ### 3. The session log
+**Also look at:** the permit website's own session history, which Wasil pointed
+out on 2026-08-05 — it already lists his past sessions and is the closest thing
+to a reference built for this exact permit. Needs a screenshot into `inspo/`;
+reading it directly would mean signing in as him, which is not something to do.
 **Source:** [`USER-MODEL.md`](USER-MODEL.md) recommendation 7.
 Zone badge, address, time range, price — the Q-Park record. **Not blocked on the
 payment question:** three of those four fields are obligation, which the app

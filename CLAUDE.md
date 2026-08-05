@@ -40,6 +40,26 @@ release spent undoing it.
   owed; what you hold decides how it is paid. Keep them apart — see
   [`docs/USE-CASES.md`](docs/USE-CASES.md).
 
+## Draw it before you build it
+
+**Any UI change beyond a copy fix starts as a mockup, not as code.** Agreed
+2026-08-05 after the v0.6.4 mockups: *"these really help with the way we are
+designing the system so we both know what we want."*
+
+That means every minor version that touches UI (`v0.7`, `v0.8`, …) and every
+design pass between them. Build the mockup as a self-contained HTML page and
+publish it as an artifact, using the **real tokens** from `ui/theme/` — copied,
+not approximated, so a mockup that disagrees with the app is a bug in the
+mockup.
+
+Three things a mockup must do, or it is decoration:
+- **Show the current screen beside the proposed one.** A complaint like "the
+  controls are crowded" is settled by seeing both, not by describing one.
+- **Say why, next to each choice.** The reasoning is the deliverable; the
+  picture is how it gets read.
+- **List what it does not settle.** The open questions are the most useful part,
+  because they are what the conversation is then about.
+
 ## Versioning
 
 Features take a minor bump. Bug fixes, layout and polish take a patch bump.
