@@ -86,16 +86,16 @@ class PermitPresentationTest {
     // --- the three truths (v0.6.4) ---
 
     @Test fun `two phones and a permit is the screen that ships today`() {
-        assertEquals(PermitView.Shared, permitViewFor(permitAdded = true, sharingConfigured = true))
+        assertEquals(PermitView.Shared, permitViewFor(permitAdded = true, hasSecondPlate = true))
     }
 
     @Test fun `a permit with no second phone has nowhere to hand it to`() {
-        assertEquals(PermitView.Sole, permitViewFor(permitAdded = true, sharingConfigured = false))
+        assertEquals(PermitView.Sole, permitViewFor(permitAdded = true, hasSecondPlate = false))
     }
 
     @Test fun `no permit is a screen of its own, whether or not sharing is on`() {
-        assertEquals(PermitView.NoPermit, permitViewFor(permitAdded = false, sharingConfigured = false))
-        assertEquals(PermitView.NoPermit, permitViewFor(permitAdded = false, sharingConfigured = true))
+        assertEquals(PermitView.NoPermit, permitViewFor(permitAdded = false, hasSecondPlate = false))
+        assertEquals(PermitView.NoPermit, permitViewFor(permitAdded = false, hasSecondPlate = true))
     }
 
     @Test fun `the sole mark keeps the holder's colour and drops the second arc`() {

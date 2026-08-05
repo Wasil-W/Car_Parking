@@ -99,10 +99,18 @@ fun spotDemandText(demand: SpotDemand): String = when (demand) {
  * the copy and the setup gate called those states broken. This is where the
  * difference stops being a defect and becomes a rendering.
  *
- * The signal for "is there anywhere to hand it to" is **sharing**, not the
- * roster. Two names in an enum is not two phones — a `MyCar` exists on a
- * single-phone install too. What actually decides whether a hand-over means
- * anything is whether a second phone is configured to hear about it.
+ * The signal is **two plates on the permit**, not whether the two phones are
+ * linked.
+ *
+ * v0.6.4 keyed this on sharing and that was wrong twice over. Handing the permit
+ * over is a call to the permit website, not a message between phones — it works
+ * with no sync at all; the other phone simply is not told. And the two-colour
+ * identity was never about phones, it is about there being two cars. Reported
+ * within a day of shipping: "i liked the 2 colour way in the app. now it is mono
+ * coloured", from an install whose sync URL happened to be unset.
+ *
+ * A permit that lists one plate genuinely has nowhere to send anything, and that
+ * is the case `Sole` is for.
  */
 sealed interface PermitView {
     /** Two phones, one permit: the hero card, the travelling dot, one button. */
@@ -115,9 +123,9 @@ sealed interface PermitView {
     data object NoPermit : PermitView
 }
 
-fun permitViewFor(permitAdded: Boolean, sharingConfigured: Boolean): PermitView = when {
+fun permitViewFor(permitAdded: Boolean, hasSecondPlate: Boolean): PermitView = when {
     !permitAdded -> PermitView.NoPermit
-    sharingConfigured -> PermitView.Shared
+    hasSecondPlate -> PermitView.Shared
     else -> PermitView.Sole
 }
 

@@ -98,7 +98,14 @@ fun HandoffTabs(
     // so adding a permit in Settings is visible the moment you come back.
     val permitView = permitViewFor(
         permitAdded = remember(tab) { app.credentialStore.load() != null },
-        sharingConfigured = remember(tab) { !app.parkStateStore.syncUrl.isNullOrBlank() },
+        // Two cars, not two phones. The permit moving between plates is a call
+        // to the permit site; the sync link only decides whether the other
+        // phone hears about it.
+        hasSecondPlate = remember(tab) {
+            app.credentialStore.load()?.let {
+                it.wasilPlate.isNotBlank() && it.walidPlate.isNotBlank()
+            } == true
+        },
     )
 
     // The parked spot's name, for the Now screen. Same geocoder and same
