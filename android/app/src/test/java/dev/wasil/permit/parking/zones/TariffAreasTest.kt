@@ -61,14 +61,12 @@ class TariffAreasTest {
         val areas = TariffAreas.parse(fixture)
         val t11 = areas.first { it.code == "T11V" }.windows.single()
         assertEquals("€8,05/h", t11.rateText)
-        assertEquals(805, t11.rateCents)
     }
 
     @Test
     fun `a stepped rate carries its first band as the number`() {
         val stepped = TariffAreas.parse(fixture).first { it.code == "T14_UA01" }.windows.single()
         assertEquals("€1,72/h", stepped.rateText)
-        assertEquals(172, stepped.rateCents)
     }
 
     @Test

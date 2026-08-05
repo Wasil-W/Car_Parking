@@ -44,12 +44,19 @@ other document under `docs/` is a deep-dive that this one points at.
 | `v0.6.0` | Live tariffs — what this spot costs *right now*, not its timetable |
 | `v0.6.1` | The obligation/settlement split made visible: "This spot" above the permit card |
 | `v0.6.2` | Live location while Bluetooth-connected, sealed at disconnect; coordinates removed from the wire; rate comparison built |
+| `v0.6.3` | Zone code and rate removed from the wire, comparison machinery deleted. `PhoneState` is three fields, all of them read. No UI change |
 
 ---
 
 ## Planned — decided, designed, not yet built
 
 Ordered by value per effort. Nothing here is implemented.
+
+**v0.6.4 is the UI release.** Items 1, 2 and 3 land together rather than in
+separate passes, so the map chrome, the session log and the wider design arrive
+as one coherent thing instead of a second pass partly undoing the first. Wasil's
+framing, and it is the right one: *"rather something perfect than more and
+imperfect"* — depth over width.
 
 ### 1. The standalone copy pass
 **Source:** [`USER-MODEL.md`](USER-MODEL.md) recommendation 3.
@@ -112,19 +119,17 @@ live APIs 2026-08-04.
 | Three or more cars | Not until a third car exists with a name attached. The roster refactor (4) is the whole insurance policy; more than that is buying a guess. |
 | Home-screen widget | Waiting for the map work to settle. |
 | Typing a tariff code by hand | Dropped in v0.5.0 design — nothing reads it. |
-| **Acting on the tariff comparison** | Decided 2026-08-05. "The expensive spot keeps the permit" only pays off once the cheaper car can **pay instead**; today it just gets a fine either way, so deciding by rate would only change which brother is fined. The comparison is built and tested in `TariffPreference.kt` and `SpotRate.kt` and is left **dormant** — nothing calls it. It is pure logic with no runtime cost, and the day paying works it is needed. |
+| **Deciding the permit by tariff** | Decided 2026-08-05. "The expensive spot keeps the permit" only pays off once the cheaper car can **pay instead**; today it gets a fine either way, so deciding by rate would change which brother is fined and nothing else. It was built and tested in v0.6.2 and **deleted again in v0.6.3** on Wasil's call — no unused machinery. It gets built against a working payment path, or not at all. Recoverable from git if that day comes, but likely to need different requirements by then anyway. |
 
 ---
 
 ## Open questions needing Wasil
 
-1. **Should `zoneCode` stop being published?** It is the last location signal on
-   the wire — it narrows the other car to a district up to 3 km wide. It was
-   meant for a "the other car is in zone T13B" display that was never built, and
-   **nothing reads it**, exactly as was true of `lat`/`lng` before v0.6.2
-   removed them. Dropping it is free.
+*(`zoneCode` was the other one. Answered 2026-08-05: dropped. Wasil's reasoning
+is worth keeping — for anything a person reads, the **name** of a place matters
+and the code does not, which is also why the map header shows a neighbourhood.)*
 
-2. **Can our app talk to a parking payment system at all?**
+1. **Can our app talk to a parking payment system at all?**
 
    Not "automatic versus manual" — those need the same thing and are a choice
    made *after* this is answered. The real question is whether Handoff can start

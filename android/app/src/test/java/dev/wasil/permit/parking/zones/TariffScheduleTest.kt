@@ -34,57 +34,6 @@ class TariffScheduleTest {
         assertEquals(setOf(5), parseDays("zaterdagavond,za"))
     }
 
-    /**
-     * The comma is the whole point: `"8,05".toDouble()` is null, and a null
-     * rate that got read as "free" would hand the permit away on every paid
-     * street in the city.
-     */
-    @Test
-    fun `a Dutch comma decimal becomes whole cents`() {
-        assertEquals(805, parseRateCents("8,05"))
-        assertEquals(301, parseRateCents("3,01"))
-        assertEquals(10, parseRateCents("0,10"))
-        assertEquals(1290, parseRateCents("12,90"))
-    }
-
-    @Test
-    fun `a stepped rate is priced at its first band`() {
-        // The band you are in the moment you park, and the one the label shows.
-        assertEquals(172, parseRateCents("1,72[0-180];4,19[180-999999]"))
-        assertEquals(10, parseRateCents("0,10[0-180];1,72[180-999999]"))
-    }
-
-    @Test
-    fun `a dot decimal is accepted too so a hand-edited asset still parses`() {
-        assertEquals(805, parseRateCents("8.05"))
-        assertEquals(500, parseRateCents(" 5 "))
-    }
-
-    /** Unreadable is null, never zero — a rate we cannot read is not a rate of nothing. */
-    @Test
-    fun `an unreadable rate is null rather than free`() {
-        assertNull(parseRateCents("gratis"))
-        assertNull(parseRateCents(""))
-        assertNull(parseRateCents("-1,00"))
-    }
-
-    @Test
-    fun `the numeric rate travels with the window into the answer`() {
-        val (day, minute) = at(1, 10, 30)
-        val priced = weekdays9to19.copy(rateCents = 301)
-        val now = tariffNow(listOf(priced), day, minute) as TariffNow.Charging
-        assertEquals(301, now.rateCents)
-        assertEquals("€3,01/h", now.rateText)
-    }
-
-    /** A window that never parsed a number reports none, rather than zero. */
-    @Test
-    fun `a window with no numeric rate answers with no number`() {
-        val (day, minute) = at(1, 10, 30)
-        val now = tariffNow(listOf(weekdays9to19), day, minute) as TariffNow.Charging
-        assertNull(now.rateCents)
-    }
-
     @Test
     fun `inside a window it charges and says how long is left`() {
         val (day, minute) = at(1, 10, 30) // Tuesday 10:30
