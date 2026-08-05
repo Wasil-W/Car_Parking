@@ -57,7 +57,40 @@ Ordered by value per effort. Nothing here is implemented.
 `CLAUDE.md`, "Draw it before you build it". v0.6.4's:
 <https://claude.ai/code/artifact/9ac1d27a-05ea-4735-953d-d43443029b4c>
 
-### 1. The full tariff table, when you tap an area
+### 1. The 66 places where the permit does not apply — POSSIBLE FINE
+
+**Found 2026-08-06**, from a map Wasil linked
+(`kaart.amsterdam.nl/parkeervergunninggebieden`). The highest-consequence thing
+found in this project so far, and it is not a bug in the code — it is a fact
+about Amsterdam the app has never known.
+
+`api.data.amsterdam.nl/v1/parkeerzones/parkeerzones_uitzondering/` lists **66
+currently-valid exception areas**, each carrying the hours in
+`gebiedsomschrijving`:
+
+> *"Uw parkeervergunning geldt niet van ma t/m za 9.00 tot 18.00 uur."*
+
+Twenty are 10:00–18:00, fourteen 09:00–18:00, twelve 12:00–17:00. The named
+places are shopping streets — **Haarlemmerdijk, Javastraat, Nieuwmarkt-Gelderse
+Kade, PC Hooftstraat, Cornelis Schuytstraat, Van Baerlestraat**.
+
+**Why this is worse than an ordinary bug.** Park on Haarlemmerdijk at 14:00 on a
+Tuesday and the app resolves a paid zone, claims the permit, and reports
+*"Covered."* It is not covered. Every safeguard built so far assumes *permit
+claimed = covered*, and in 66 places for part of the day that is false — so the
+app states as a fact the one thing it must never guess at.
+
+**Verify before building.** The wording says *"uw parkeervergunning"* generally;
+the data alone does not prove it binds Wasil's visitor permit rather than only
+resident permits. Confirm first — but the failure direction is a fine, so treat
+it as real until shown otherwise.
+
+**When confirmed, the shape is clear:** the geometry is in the same API and the
+same CRS as the zones (`Accept-Crs: EPSG:4326`), the hours parse like the tariff
+schedule already does, and `ZoneResolver` gains a case that outranks `Paid` —
+a spot where the permit is worthless is not a spot to claim on.
+
+### 2. The full tariff table, when you tap an area
 **Source:** Wasil, 2026-08-06: *"maybe i am curious about tommorows rate then i
 don't see that."* Correct, and it is a gap this project created rather than one
 it inherited.
@@ -81,7 +114,7 @@ days, parsed at app start. This is formatting, and a panel to put it in.
 
 Do it after v0.6.5, which is editing the same screen.
 
-### 2. Permit and paying as separate destinations, and what sits in the middle
+### 3. Permit and paying as separate destinations, and what sits in the middle
 **Source:** Wasil, 2026-08-05. **Mockup first** — see `CLAUDE.md`.
 
 Two parts, and they arrive together because both land on the tab bar.
@@ -107,7 +140,7 @@ Rejected candidates, with reasons, so they are not re-proposed: *hand over the
 permit* is contextual and already has its own screen; *pay* does not exist yet
 and would be a button that apologises for itself.
 
-### 3. The vehicle roster refactor
+### 4. The vehicle roster refactor
 **Source:** [`USER-MODEL.md`](USER-MODEL.md) recommendation 1.
 Replace the `MyCar` enum with `Vehicle(id, plate, name, bluetoothDevice)` plus a
 device-local `thisPhoneDrives`. **Nothing on screen changes.** Two-car behaviour
@@ -138,7 +171,7 @@ not use one.
 named. Keep it apart from the other RDW finding: dead end for zone *geometry*,
 right source for vehicle data.)
 
-### 4. The onboarding reversal
+### 5. The onboarding reversal
 **Source:** [`USER-MODEL.md`](USER-MODEL.md), "The onboarding sequence".
 Show something true before asking anything. The app currently opens on a
 four-field form. The permit moves from the first question to the fifth, asked at
@@ -146,7 +179,7 @@ the first park in a paid zone. Two steps become confirmations rather than
 questions — the Bluetooth device, and the home zone after several overnight
 parks in one place.
 
-### 5. The zone registry
+### 6. The zone registry
 **Source:** [`v0.6-zone-registry.md`](v0.6-zone-registry.md), verified against
 live APIs 2026-08-04.
 - `parkeerzones` — 107 permit zones, all `VERGUNP`, real names, WGS84 via one
@@ -166,7 +199,7 @@ live APIs 2026-08-04.
 | Paid parking sessions, started by Handoff | Researched 2026-08-06 — see Open questions. Writing a parking right to the NPR is limited to accredited providers, so this is a commercial barrier rather than a technical one. **Replaced by**: say what is owed and hand off to the provider's app. |
 | Payment details in the app | Prohibited regardless of the answer above. The provider's own flow owns this. |
 | Email, accounts, user profiles | No reader exists. The app has cars and phones, not users — see [`USER-MODEL.md`](USER-MODEL.md). |
-| Three or more cars | Not until a third car exists with a name attached. The roster refactor (3) is the whole insurance policy; more than that is buying a guess. |
+| Three or more cars | Not until a third car exists with a name attached. The roster refactor (4) is the whole insurance policy; more than that is buying a guess. |
 | Home-screen widget | Waiting for the map work to settle. |
 | Typing a tariff code by hand | Dropped in v0.5.0 design — nothing reads it. |
 | **Deciding the permit by tariff** | Decided 2026-08-05. "The expensive spot keeps the permit" only pays off once the cheaper car can **pay instead**; today it gets a fine either way, so deciding by rate would change which brother is fined and nothing else. It was built and tested in v0.6.2 and **deleted again in v0.6.3** on Wasil's call — no unused machinery. It gets built against a working payment path, or not at all. Recoverable from git if that day comes, but likely to need different requirements by then anyway. |
