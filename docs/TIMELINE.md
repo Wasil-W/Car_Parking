@@ -139,7 +139,7 @@ live APIs 2026-08-04.
 
 | Item | Why |
 |---|---|
-| Paid parking sessions | **Blocked on one unanswered question: can a session be started programmatically at all?** Real money and real liability, unlike the free permit. Nothing found so far touches it. |
+| Paid parking sessions, started by Handoff | Researched 2026-08-06 — see Open questions. Writing a parking right to the NPR is limited to accredited providers, so this is a commercial barrier rather than a technical one. **Replaced by**: say what is owed and hand off to the provider's app. |
 | Payment details in the app | Prohibited regardless of the answer above. The provider's own flow owns this. |
 | Email, accounts, user profiles | No reader exists. The app has cars and phones, not users — see [`USER-MODEL.md`](USER-MODEL.md). |
 | Three or more cars | Not until a third car exists with a name attached. The roster refactor (2) is the whole insurance policy; more than that is buying a guess. |
@@ -155,23 +155,35 @@ live APIs 2026-08-04.
 is worth keeping — for anything a person reads, the **name** of a place matters
 and the code does not, which is also why the map header shows a neighbourhood.)*
 
-1. **Can our app talk to a parking payment system at all?**
+1. **Can our app talk to a parking payment system at all?** — researched
+   2026-08-06, and the answer is *probably not, and it does not matter as much
+   as we thought.*
 
-   Not "automatic versus manual" — those need the same thing and are a choice
-   made *after* this is answered. The real question is whether Handoff can start
-   a session itself, or whether the most it can ever do is tell you what you owe
-   and send you to someone else's app:
+   **The app already starts parking sessions by code.** `ActivateResponse`
+   carries a `parking_session_id`; every permit move opens a real session on
+   Wasil's account. The capability is not missing — the paid variant is.
 
-   | | What it needs |
+   **The barrier is not technical.** Every Dutch parking right is registered in
+   the NPR, run by RDW. Reading anonymised data is open; *writing* a right is
+   limited to SHPV participants — municipalities, parking companies and
+   accredited providers — and SHPV is the procurement organisation for them.
+   That is a commercial contract, not a developer signup.
+
+   | Route | Verdict |
    |---|---|
-   | Handoff starts a session on its own | Handoff can reach a payment system |
-   | You tap a button in Handoff, it starts a session | **The same thing** |
-   | Handoff shows the rate, you pay in Q-Park | Nothing — works today |
+   | Become an accredited provider | A contract plus handling other people's money. Not proportionate here. |
+   | Partner API from EasyPark or Parkmobile | B2B and contract-gated. An email, not a plan. |
+   | Drive a provider's own app with the user's login | The same shape as the permit automation — but that is a free permit on the user's own account. This is money, on someone else's terms, in a flow that breaks on their next redesign. Advised against. |
+   | **Say what is owed and hand off to their app with the zone ready** | Needs nothing, works today, touches no money. |
 
-   If the answer is no, both of the first two vanish together and the app is an
-   informer rather than a payer. Still useful, much smaller, and honest.
+   **The last row is the one to build.** It is what the standalone screen already
+   gestures at, with a handoff at the payment step rather than an impersonation
+   of one.
 
-   This is research — reading what the providers expose — not a questionnaire.
+   **Confidence:** no source states outright that an individual may not register
+   rights. The picture is consistent but inferred. One email to SHPV
+   (info@shpv.nl) would settle in a week what this can only reason about —
+   Wasil's to send, and the only remaining way to close this properly.
 
 ---
 
