@@ -97,7 +97,33 @@ payment question:** three of those four fields are obligation, which the app
 already computes. The badge should carry *settlement kind*, making the
 obligation/settlement split visible in history.
 
-### 4. The vehicle roster refactor
+### 4. Permit and paying as separate destinations, and what sits in the middle
+**Source:** Wasil, 2026-08-05. **Mockup first** — see `CLAUDE.md`.
+
+Two parts, and they arrive together because both land on the tab bar.
+
+**Separate windows.** The obligation/settlement split currently shows as one
+strip above the permit card (v0.6.1). The full version gives each half its own
+destination: *what this spot demands* and *how it is being settled*. The paying
+window is useful before paying exists — rate now, when it goes free, and once
+the zone registry lands, the nearest machine. That is the "informer" app, and it
+is honest rather than a placeholder.
+
+**A centre action button**, as E-Flux has. Wasil's own test: *"if we find a
+usability for it"* — and that is the right bar, because E-Flux's works only
+because "Charge Now" is a real primary action.
+
+The strongest candidate is **"I parked here"**. The app has no manual way to be
+told this. Detection can miss entirely — Bluetooth off, someone else drove, you
+walked away — and today there is no recovery except waiting or correcting a pin
+that was never dropped. It is always relevant, and it is the one thing the app
+cannot currently be told.
+
+Rejected candidates, with reasons, so they are not re-proposed: *hand over the
+permit* is contextual and already has its own screen; *pay* does not exist yet
+and would be a button that apologises for itself.
+
+### 5. The vehicle roster refactor
 **Source:** [`USER-MODEL.md`](USER-MODEL.md) recommendation 1.
 Replace the `MyCar` enum with `Vehicle(id, plate, name, bluetoothDevice)` plus a
 device-local `thisPhoneDrives`. **Nothing on screen changes.** Two-car behaviour
@@ -106,7 +132,7 @@ paying features arrive, so they never have to reason about two brothers. Note:
 the source document estimates a day; `MyCar` reaches into detection, shared
 state, notifications and presentation, so plan for more.
 
-### 5. The onboarding reversal
+### 6. The onboarding reversal
 **Source:** [`USER-MODEL.md`](USER-MODEL.md), "The onboarding sequence".
 Show something true before asking anything. The app currently opens on a
 four-field form. The permit moves from the first question to the fifth, asked at
@@ -114,7 +140,7 @@ the first park in a paid zone. Two steps become confirmations rather than
 questions — the Bluetooth device, and the home zone after several overnight
 parks in one place.
 
-### 6. The zone registry
+### 7. The zone registry
 **Source:** [`v0.6-zone-registry.md`](v0.6-zone-registry.md), verified against
 live APIs 2026-08-04.
 - `parkeerzones` — 107 permit zones, all `VERGUNP`, real names, WGS84 via one
@@ -134,7 +160,7 @@ live APIs 2026-08-04.
 | Paid parking sessions | **Blocked on one unanswered question: can a session be started programmatically at all?** Real money and real liability, unlike the free permit. Nothing found so far touches it. |
 | Payment details in the app | Prohibited regardless of the answer above. The provider's own flow owns this. |
 | Email, accounts, user profiles | No reader exists. The app has cars and phones, not users — see [`USER-MODEL.md`](USER-MODEL.md). |
-| Three or more cars | Not until a third car exists with a name attached. The roster refactor (4) is the whole insurance policy; more than that is buying a guess. |
+| Three or more cars | Not until a third car exists with a name attached. The roster refactor (5) is the whole insurance policy; more than that is buying a guess. |
 | Home-screen widget | Waiting for the map work to settle. |
 | Typing a tariff code by hand | Dropped in v0.5.0 design — nothing reads it. |
 | **Deciding the permit by tariff** | Decided 2026-08-05. "The expensive spot keeps the permit" only pays off once the cheaper car can **pay instead**; today it gets a fine either way, so deciding by rate would change which brother is fined and nothing else. It was built and tested in v0.6.2 and **deleted again in v0.6.3** on Wasil's call — no unused machinery. It gets built against a working payment path, or not at all. Recoverable from git if that day comes, but likely to need different requirements by then anyway. |
