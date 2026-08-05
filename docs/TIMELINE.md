@@ -57,38 +57,35 @@ Ordered by value per effort. Nothing here is implemented.
 `CLAUDE.md`, "Draw it before you build it". v0.6.4's:
 <https://claude.ai/code/artifact/9ac1d27a-05ea-4735-953d-d43443029b4c>
 
-### 1. The 66 places where the permit does not apply — POSSIBLE FINE
+### 1. Read the permit's *type*, not just its plates
 
-**Found 2026-08-06**, from a map Wasil linked
-(`kaart.amsterdam.nl/parkeervergunninggebieden`). The highest-consequence thing
-found in this project so far, and it is not a bug in the code — it is a fact
-about Amsterdam the app has never known.
+**The 66 exception areas do not affect Wasil.** Checked with him 2026-08-06:
+`parkeerzones_uitzondering` lists 66 valid areas stating *"uw parkeervergunning
+geldt niet van ma t/m za 9.00 tot 18.00 uur"* — Haarlemmerdijk, Javastraat, PC
+Hooftstraat and other shopping streets. Those bind **regular resident permits**.
+His visitor permit has access at all times, so nothing is currently mis-stated
+and no fine is being risked.
 
-`api.data.amsterdam.nl/v1/parkeerzones/parkeerzones_uitzondering/` lists **66
-currently-valid exception areas**, each carrying the hours in
-`gebiedsomschrijving`:
+It was flagged as a probable fine for one turn before he corrected it. The
+caveat was attached at the time and the check took one question — which is the
+process working, not a near miss.
 
-> *"Uw parkeervergunning geldt niet van ma t/m za 9.00 tot 18.00 uur."*
+**What it leaves behind is a real requirement**, and it is Wasil's own framing:
+if the app extracts plates from the permit account, it should extract the
+**permit type** too. The app has no concept of one today — it assumes "there is
+a permit, permits work". That assumption is true for him and unverified for
+anybody else, and it is what decides whether those 66 areas are a hazard or
+noise.
 
-Twenty are 10:00–18:00, fourteen 09:00–18:00, twelve 12:00–17:00. The named
-places are shopping streets — **Haarlemmerdijk, Javastraat, Nieuwmarkt-Gelderse
-Kade, PC Hooftstraat, Cornelis Schuytstraat, Van Baerlestraat**.
+**Likely already in a response we fetch.** `ClientProductResponse` declares a
+single field, `vrns`, but the endpoint is `getClientProduct` — the *product* is
+the permit, so its name and type are very probably in the same JSON, discarded
+unparsed. The same shape as the plates: read what is already arriving before
+building anything new.
 
-**Why this is worse than an ordinary bug.** Park on Haarlemmerdijk at 14:00 on a
-Tuesday and the app resolves a paid zone, claims the permit, and reports
-*"Covered."* It is not covered. Every safeguard built so far assumes *permit
-claimed = covered*, and in 66 places for part of the day that is false — so the
-app states as a fact the one thing it must never guess at.
-
-**Verify before building.** The wording says *"uw parkeervergunning"* generally;
-the data alone does not prove it binds Wasil's visitor permit rather than only
-resident permits. Confirm first — but the failure direction is a fine, so treat
-it as real until shown otherwise.
-
-**When confirmed, the shape is clear:** the geometry is in the same API and the
-same CRS as the zones (`Accept-Crs: EPSG:4326`), the hours parse like the tariff
-schedule already does, and `ZoneResolver` gains a case that outranks `Paid` —
-a spot where the permit is worthless is not a spot to claim on.
+Belongs with the roster work (item 4), which is where the account is read.
+Until a permit type is known, the honest default is to assume the **restricted**
+kind, because that is the direction that cannot cost a fine.
 
 ### 2. The full tariff table, when you tap an area
 **Source:** Wasil, 2026-08-06: *"maybe i am curious about tommorows rate then i
