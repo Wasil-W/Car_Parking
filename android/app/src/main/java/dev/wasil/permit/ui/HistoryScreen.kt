@@ -43,40 +43,43 @@ import java.util.Locale
  */
 @Composable
 fun HistoryScreen(records: List<ParkRecord>) {
-    if (records.isEmpty()) {
-        EmptyHistory()
-        return
-    }
-
-    // Stored oldest-first (it is an append-only log); read newest-first,
-    // because the park you are asking about is almost always the last one.
-    val newestFirst = records.asReversed()
-
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 16.dp),
-    ) {
-        item {
-            Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 4.dp)) {
-                Text("History", style = MaterialTheme.typography.headlineSmall)
-                Text(
-                    "Every park, and what it cost.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+    Column(Modifier.fillMaxSize()) {
+        // Outside the list on purpose. It used to live inside it, and an empty
+        // log therefore rendered a tab with no name on it — seen on screen. A
+        // screen must say what it is whether or not it has anything in it.
+        Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 4.dp)) {
+            Text("History", style = MaterialTheme.typography.headlineSmall)
+            Text(
+                "Every park, and what it cost.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
 
-        // A month header whenever the month changes going down the list. The
-        // mockup put a total beside it; that number is left out on purpose.
-        var lastMonth: String? = null
-        newestFirst.forEach { record ->
-            val month = monthLabel(record.startedAtMs)
-            if (month != lastMonth) {
-                lastMonth = month
-                item(key = "month-$month") { MonthHeader(month) }
+        if (records.isEmpty()) {
+            EmptyHistory()
+            return@Column
+        }
+
+        // Stored oldest-first (it is an append-only log); read newest-first,
+        // because the park you are asking about is almost always the last one.
+        val newestFirst = records.asReversed()
+
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = 16.dp),
+        ) {
+            // A month header whenever the month changes going down the list. The
+            // mockup put a total beside it; that number is left out on purpose.
+            var lastMonth: String? = null
+            newestFirst.forEach { record ->
+                val month = monthLabel(record.startedAtMs)
+                if (month != lastMonth) {
+                    lastMonth = month
+                    item(key = "month-$month") { MonthHeader(month) }
+                }
+                item(key = "park-${record.startedAtMs}") { RecordCard(record) }
             }
-            item(key = "park-${record.startedAtMs}") { RecordCard(record) }
         }
     }
 }

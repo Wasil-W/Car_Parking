@@ -168,6 +168,22 @@ fun spotHeadlineFor(demand: SpotDemand, place: String?): SpotHeadline {
 }
 
 /**
+ * The sole-car card's two lines.
+ *
+ * Pure and here rather than inline in the composable for a specific reason:
+ * reaching this state on an emulator needs a live permit session, so these two
+ * strings are the one part of the screen that cannot be checked by eye. The
+ * next best thing is a test that cannot be skipped.
+ *
+ * "Covered" rather than a name. With one car there is no other car to
+ * distinguish it from, so printing "Wasil's car" would be answering a question
+ * nobody asked; what matters is that the spot is covered.
+ */
+fun soleCardTitle(covered: Boolean): String = if (covered) "Covered" else "No plate active"
+
+fun soleCardSubtitle(vrn: String): String = "$vrn · permit active"
+
+/**
  * The quiet line under the sole-car permit card.
  *
  * The mockup's words are "Nothing to do", and they are the point of the screen:

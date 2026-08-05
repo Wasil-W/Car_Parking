@@ -92,7 +92,11 @@ fun MainScreen(
                 HandoffMark(
                     when (view) {
                         PermitView.Shared -> markStateFor(holder)
-                        PermitView.Sole -> soleMarkStateFor(holder ?: myCar)
+                        // Never `holder ?: myCar`. Whose phone this is says
+                        // nothing about where the permit is, and lighting the
+                        // arc on that basis is the mark stating a fact it does
+                        // not have.
+                        PermitView.Sole -> soleMarkStateFor(holder)
                         // No permit, so nothing holds anything. The mark is a
                         // wordmark here, not a state display.
                         PermitView.NoPermit -> markStateFor(null)
@@ -121,24 +125,34 @@ fun MainScreen(
         // order you actually ask them: is anything owed here, and who is
         // covering it. Keeping them apart is what lets a paying action arrive
         // later without the permit card having to know about it.
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(bottom = 2.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                "This spot",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                spotDemandText(demand),
-                style = MaterialTheme.typography.bodyMedium,
-                color = when (demand) {
-                    is SpotDemand.Payable -> MaterialTheme.colorScheme.onSurface
-                    else -> MaterialTheme.colorScheme.onSurfaceVariant
-                },
-            )
+        //
+        // Dropped entirely with no permit, because there is no second question
+        // there and the card below *is* the answer to the first. Both drawn
+        // together read as a stutter on a real screen — "Not parked" in the
+        // strip and "Not parked" again at 26sp underneath it — and with a rate
+        // it is worse, the same "€3,01/h · until 19:00" said twice in two
+        // shapes. The mockup drew both; on a device only one of them earns its
+        // place.
+        if (view != PermitView.NoPermit) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 2.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "This spot",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    spotDemandText(demand),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = when (demand) {
+                        is SpotDemand.Payable -> MaterialTheme.colorScheme.onSurface
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+            }
         }
 
         when (view) {
@@ -207,15 +221,15 @@ fun MainScreen(
                             // One car: naming a brother would be answering a
                             // question nobody asked. What matters is that the
                             // spot is covered.
-                            HandoffMark(soleMarkStateFor(holder ?: myCar), size = 60.dp)
+                            HandoffMark(soleMarkStateFor(holder), size = 60.dp)
                             Text(
-                                if (holder != null) "Covered" else "No plate active",
+                                soleCardTitle(covered = holder != null),
                                 style = MaterialTheme.typography.headlineLarge,
                                 color = onCard,
                             )
                             state.activeVrn?.let {
                                 Text(
-                                    "$it · permit active",
+                                    soleCardSubtitle(it),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = onCard,
                                 )
@@ -238,7 +252,16 @@ fun MainScreen(
                     // No hand-over button, because there is nowhere to hand it
                     // to. A disabled one would be worse than none: it implies a
                     // second phone exists and is merely unavailable.
-                    QuietRow(soleStatusLine(parked, place, parkedSince))
+                    //
+                    // The line is only shown once a holder is actually known.
+                    // Seen on screen with the permit site unreachable: the card
+                    // said "No plate active" and this row underneath it said
+                    // "The permit is on your car" — the screen contradicting
+                    // itself, which is worse than the screen being short of an
+                    // answer. When we do not know, the card says so alone.
+                    if (holder != null && !state.loading) {
+                        QuietRow(soleStatusLine(parked, place, parkedSince))
+                    }
                 } else if (myCar != null && !state.loading) {
                     val action = primaryActionFor(myCar, holder)
                     val target = state.options.firstOrNull { it.car == action.target }

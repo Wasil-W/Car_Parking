@@ -68,6 +68,41 @@ imperfect"* — depth over width.
 the `needsSetup` gate call them broken. Fixing that is the single largest step
 toward the app standing on its own, and it introduces no new concepts.
 
+**Built, awaiting release — branch `v064-standalone-and-history`.**
+- The permit is no longer a wall. `MainActivity`'s gate no longer fires on
+  missing credentials; the four-field form left `SetupScreen.kt` and became
+  `PermitEditor`, reached from an **"Add a permit"** row in Settings. First run
+  is one question — whose phone — because that is the only thing detection
+  genuinely cannot work without.
+- "Setup incomplete" is gone. The summary card counts real faults
+  (`setupHeadline`), and permit, sharing and home zone are informational rows
+  that always read `ok = true`. **Verified on a device: a one-car, no-permit,
+  no-sharing install reads "Everything is set up".**
+- The permit screen has its three truths, selected on what is configured
+  (`permitViewFor`): two phones unchanged; one phone loses the hand-over button
+  and the mark's second arc; no permit shows the obligation half alone.
+- **The tab is now "Now"**, not "Permit". "Parked" would be false whenever you
+  are not; "Now" is true in all four states and reads as a set with Map,
+  History and Settings.
+
+**Found while in there, and bigger than the copy pass:
+`ACCESS_BACKGROUND_LOCATION` was declared in the manifest and never requested.**
+On API 29+ that is a runtime permission, and every position this app depends on
+is read from a background worker — `ParkDetectionUseCase` behind
+`enqueueDetection`, and the live-location sampler behind `LiveLocationWorker`.
+Both asked and both got null. That is the single cause behind three symptoms
+reported separately over weeks: no parked pin, being asked about the permit at
+home, and the car's location vanishing. Meanwhile the health check said
+*"Permissions all granted"*, because the list it counts holds four permissions
+and not this one — a false all-clear, and it was believed.
+
+Now: its own health row, worded as its consequence (*"Parks are only noticed
+while Handoff is open"*) with a hint naming the exact setting; `setupOk` can
+never be true without it on API 29+; and its fix opens
+`ACTION_APPLICATION_DETAILS_SETTINGS`, because "Allow all the time" exists
+nowhere else and a bundled `requestPermissions` for it is denied silently on
+API 30+. The permission row it sits under no longer says "all".
+
 ### 2. Map controls from layout into overlay, plus a locate-me button
 **Source:** [`USER-MODEL.md`](USER-MODEL.md) recommendation 8, from the reference
 screenshots in [`inspo/`](inspo/).
@@ -96,6 +131,38 @@ Zone badge, address, time range, price — the Q-Park record. **Not blocked on t
 payment question:** three of those four fields are obligation, which the app
 already computes. The badge should carry *settlement kind*, making the
 obligation/settlement split visible in history.
+
+**Built, awaiting release — branch `v064-standalone-and-history`.** A fourth
+tab, **History**, newest first, grouped by month.
+- **The badge carries settlement, not zone** — "Permit · Wasil", "Home", "Free
+  zone", "Free street", "Unsettled", "Not known". Identity colour appears on the
+  two permit badges and nowhere else: a record belongs to a specific car, while
+  free and unsettled are states of a place.
+- Storage is `PrefsParkLogStore`, following `PrefsFreeZoneStore`, capped at 300
+  records. The encode/decode, the cap, the corrupt-reads-as-empty rule and every
+  list operation are pure functions in `ParkLog.kt`, tested on the JVM like
+  `PendingDecision`. Nothing is reconstructed for parks from before it ships.
+- A park is written when detection confirms one, and re-badged if a claim lands
+  afterwards or the permit is handed away mid-park. `ParkRecord.paid` is kept
+  beside the settlement so that re-badging never has to guess whether the spot
+  charged.
+- **`endedAtMs` is only ever written from an observation** — the car's Bluetooth
+  coming back up, seen by `LiveLocationWorker`. A record the app never saw end
+  reads "from 09:12" rather than borrowing the next park's start and drawing an
+  arrow to it.
+
+**Two things left out of the mockup on purpose, both money:**
+1. **The monthly total.** It is genuinely unresolved whether it should count
+   what you paid or what the permit saved you; they are different numbers and
+   the second is flattering enough to be a bad default. The month header ships
+   without it.
+2. **The per-record total.** Same family of reason. A euro figure needs a rate
+   times a duration, and the duration needs an end the app only sometimes
+   observes — so an unsettled record shows **the rate that applied when you
+   parked** ("€3,01/h"), which is exactly what the app computed. A
+   confident-looking total that is wrong by however long the car sat there
+   unnoticed is the failure this project has a rule about. This is the one place
+   the implementation departs from the mockup, and it is the honest direction.
 
 ### 4. The vehicle roster refactor
 **Source:** [`USER-MODEL.md`](USER-MODEL.md) recommendation 1.

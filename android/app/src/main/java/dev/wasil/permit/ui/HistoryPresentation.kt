@@ -73,7 +73,10 @@ fun costTextFor(settlement: Settlement, rateText: String?): String = when (settl
     Settlement.PERMIT -> "covered"
     Settlement.HOME, Settlement.FREE_ZONE, Settlement.FREE_STREET -> "nothing owed"
     Settlement.UNSETTLED -> rateText?.let { splitRateLine(it).first } ?: "rate unknown"
-    Settlement.UNKNOWN -> "not known"
+    // A dash, not words. The badge on the same line already says "Not known";
+    // seen on screen, "Not known … not known" read as a stutter rather than as
+    // two facts.
+    Settlement.UNKNOWN -> "—"
 }
 
 /** Only an unsettled park is a bill; everything else is the absence of one. */

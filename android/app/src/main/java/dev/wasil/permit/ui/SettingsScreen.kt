@@ -165,6 +165,20 @@ fun SettingsScreen(
         add(Manifest.permission.ACCESS_FINE_LOCATION)
     }
     val missingPermissions = remember(revision) { needed.count { !granted(context, it) } }
+    // Deliberately NOT in `needed` above. Bundling ACCESS_BACKGROUND_LOCATION
+    // into an ordinary request makes the system deny it without showing
+    // anything on API 30+, and it may only be asked for once fine location is
+    // already granted — so it is checked here, reported as its own row, and
+    // fixed by sending the user to the one screen where "Allow all the time"
+    // exists at all.
+    val backgroundLocation = remember(revision) {
+        when {
+            Build.VERSION.SDK_INT < 29 -> BackgroundLocation.NOT_APPLICABLE
+            granted(context, Manifest.permission.ACCESS_BACKGROUND_LOCATION) ->
+                BackgroundLocation.GRANTED
+            else -> BackgroundLocation.MISSING
+        }
+    }
     val powerManager = context.getSystemService(PowerManager::class.java)
     val ignoringBatteryOpt = remember(revision) {
         powerManager?.isIgnoringBatteryOptimizations(context.packageName) == true
@@ -176,6 +190,7 @@ fun SettingsScreen(
         permitAdded = permit != null,
         syncConfigured = syncUrl.isNotBlank(),
         homeZoneSet = homeZone != null,
+        backgroundLocation = backgroundLocation,
     )
     val setupOk = rows.all { it.ok }
     val bluetoothGranted = granted(context, Manifest.permission.BLUETOOTH_CONNECT)
@@ -421,6 +436,19 @@ fun SettingsScreen(
         // Setup summary card, so both read the same facts. ---
         SectionHeader("System")
 
+        // The only screen where "Allow all the time" exists. Bumping `refresh`
+        // on the way out is what makes the row go green when you come back
+        // without having to restart the app.
+        val openAppSettings: () -> Unit = {
+            context.startActivity(
+                Intent(
+                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    Uri.fromParts("package", context.packageName, null),
+                ),
+            )
+            refresh++
+        }
+
         rows.forEach { row ->
             SettingRow(
                 label = row.label,
@@ -449,27 +477,15 @@ fun SettingsScreen(
                                         )
                                         refresh++
                                     }
+                                    FixAction.AppSettings -> openAppSettings()
                                 }
                             }) { Text(row.fixLabel ?: "Fix") }
                         }
                     }
                 },
             )
+            row.hint?.let { RowHint(it) }
         }
-        SettingRow(
-            label = "Open app settings",
-            onClick = {
-                context.startActivity(
-                    Intent(
-                        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                        Uri.fromParts("package", context.packageName, null),
-                    ),
-                )
-            },
-        )
-        RowHint(
-            "Background location must be set to \"Allow all the time\" in system settings " +
-                "for detection to work with the screen off.",
-        )
+        SettingRow(label = "Open app settings", onClick = openAppSettings)
     }
 }

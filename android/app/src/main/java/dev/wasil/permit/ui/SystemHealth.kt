@@ -13,9 +13,37 @@ sealed interface FixAction {
     data object GrantPermission : FixAction
     /** Open the battery-optimisation settings screen. */
     data object BatterySettings : FixAction
+    /**
+     * Open this app's own system settings page.
+     *
+     * Its own action because background location cannot be granted by a
+     * permission dialog at all on API 30+ — "Allow all the time" exists only on
+     * that page, and a `requestPermissions` call for it is denied without ever
+     * showing anything. Routing it through [GrantPermission] would produce a
+     * button that looks like it works and silently does nothing, which is the
+     * exact failure this whole row exists to undo.
+     */
+    data object AppSettings : FixAction
 }
 
-data class HealthRow(val label: String, val ok: Boolean, val fix: FixAction?, val fixLabel: String?)
+/**
+ * Whether this app may read a position while it is not on screen.
+ *
+ * [NOT_APPLICABLE] is not a polite way of saying "granted". Below API 29 there
+ * is no separate background permission — fine location covers both cases — so
+ * there is nothing to check and nothing to show, and the row is omitted rather
+ * than drawn as a tick for a thing that does not exist.
+ */
+enum class BackgroundLocation { GRANTED, MISSING, NOT_APPLICABLE }
+
+/** [hint] is the rare case where the row's consequence needs a sentence, not a label. */
+data class HealthRow(
+    val label: String,
+    val ok: Boolean,
+    val fix: FixAction?,
+    val fixLabel: String?,
+    val hint: String? = null,
+)
 
 /**
  * Permissions and battery only. Kept as-is (same two rows, same behaviour) so
@@ -24,7 +52,13 @@ data class HealthRow(val label: String, val ok: Boolean, val fix: FixAction?, va
  */
 fun healthRows(missingPermissions: Int, batteryOptimised: Boolean): List<HealthRow> = listOf(
     if (missingPermissions == 0) {
-        HealthRow("Permissions all granted", true, null, null)
+        // Not "Permissions all granted". That is what it said while background
+        // location was missing, and it was read exactly as intended — as an
+        // all-clear covering every permission the app has. It counts only the
+        // ones a dialog inside the app can grant; the one that decides whether
+        // detection works at all lives in system settings and has its own row
+        // below. The wording now says which set it is talking about.
+        HealthRow("Permissions granted in the app", true, null, null)
     } else {
         val noun = if (missingPermissions == 1) "permission" else "permissions"
         HealthRow("$missingPermissions $noun missing", false, FixAction.GrantPermission, "Grant")
@@ -62,7 +96,9 @@ fun healthRows(
     permitAdded: Boolean,
     syncConfigured: Boolean,
     homeZoneSet: Boolean,
-): List<HealthRow> = healthRows(missingPermissions, batteryOptimised) + listOf(
+    backgroundLocation: BackgroundLocation,
+): List<HealthRow> = healthRows(missingPermissions, batteryOptimised) +
+    backgroundLocationRow(backgroundLocation) + listOf(
     if (carPaired) {
         HealthRow("Car paired", true, null, null)
     } else {
@@ -78,6 +114,50 @@ fun healthRows(
     ),
     HealthRow(if (homeZoneSet) "Home zone set" else "No home zone set", true, null, null),
 )
+
+/**
+ * The row that was missing, and the most expensive omission in this file's
+ * history.
+ *
+ * `ACCESS_BACKGROUND_LOCATION` has been declared in the manifest since
+ * detection was built and never requested at runtime. On API 29+ that is a
+ * runtime permission, so declaring it does nothing on its own: fine location
+ * alone lets the app read a position only while it is in the foreground, and
+ * **every position this app depends on is read from a background worker** —
+ * `ParkDetectionUseCase` behind `enqueueDetection`, and the live-location
+ * sampler behind `LiveLocationWorker`. Both asked, both got null, every time.
+ *
+ * That is the single cause behind three symptoms reported over weeks: no parked
+ * pin, being asked about the permit at home, and the car's location
+ * disappearing. All three read as separate bugs and all three are this.
+ *
+ * And the health check said "Permissions all granted" throughout, because the
+ * list it counts contains four permissions and not this one. A check that
+ * reports a false all-clear is worse than no check — it was believed. So this
+ * gets its own row rather than joining that count, both because it cannot be
+ * fixed the same way and because it must be impossible to miss again.
+ *
+ * The label states the consequence rather than naming the permission: nobody
+ * can act on "background location missing", and everybody can act on "parks are
+ * only noticed while Handoff is open".
+ */
+private fun backgroundLocationRow(state: BackgroundLocation): List<HealthRow> = when (state) {
+    BackgroundLocation.NOT_APPLICABLE -> emptyList()
+    BackgroundLocation.GRANTED -> listOf(
+        HealthRow("Location allowed all the time", true, null, null),
+    )
+    BackgroundLocation.MISSING -> listOf(
+        HealthRow(
+            "Parks are only noticed while Handoff is open",
+            false,
+            FixAction.AppSettings,
+            "Fix",
+            hint = "Detection runs in the background, so a park is missed unless the " +
+                "app happens to be on screen. Open app settings, then Permissions → " +
+                "Location, and choose \"Allow all the time\".",
+        ),
+    )
+}
 
 /**
  * The headline over the Settings summary card.

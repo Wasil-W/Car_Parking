@@ -43,7 +43,16 @@ fun HandoffMark(state: MarkState, modifier: Modifier = Modifier, size: Dp = 56.d
             // stroke is the far (west) side of that circle, so the dot lands
             // just inside the curve exactly as it does in the pair.
             val x = this.size.width * 0.52f
-            val color = if (state.lit == Side.RIGHT) colors.walidStrong else colors.wasilStrong
+            // `null` is a real case and it is not "Wasil". Seen on screen: with
+            // the permit state unreadable the card said "No plate active" while
+            // the arc beside it glowed Wasil blue — the mark asserting a holder
+            // the text was denying. An unlit arc says the same thing as the
+            // text, which is what it is for.
+            val color = when (state.lit) {
+                Side.LEFT -> colors.wasilStrong
+                Side.RIGHT -> colors.walidStrong
+                null -> colors.arcInactive
+            }
             drawPath(arcPath(x, cy, r, opensRight = true), color, style = stroke)
             drawCircle(colors.dot, radius = this.size.height * 0.115f, center = Offset(x, cy))
             return@Canvas
