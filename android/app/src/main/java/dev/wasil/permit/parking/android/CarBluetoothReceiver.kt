@@ -45,11 +45,20 @@ class CarBluetoothReceiver : BroadcastReceiver() {
                 store.liveLocation = null
                 store.carLinkConnected = true
                 ParkWorkers.startLiveLocation(context)
-                // The parked pin is now wrong, not merely old — the car is
-                // wherever you are. Leaving it behind made the map point at
-                // the previous parking spot for the whole drive. It only has
-                // meaning once you have walked away from the car again.
-                store.lastParkLocation = null
+                // The pin is deliberately NOT cleared here any more.
+                //
+                // It used to be, and the reasoning was sound as far as it went:
+                // during a drive the old pin points at a spot the car has left.
+                // But deleting it made that the *only* copy, so a park that then
+                // failed to produce a position left no car location at all —
+                // permanently. Reported twice from real use: "the location
+                // disappears and just goes away".
+                //
+                // The pin is hidden while driving instead, by every screen that
+                // draws it, keyed on carLinkConnected. Storage keeps the last
+                // known spot, so a failed park falls back to where the car was
+                // last seen rather than to nothing. Showing a stale position and
+                // saying it is stale beats showing an empty map.
                 SharedSync.requestSync(context)
                 ParkNotifications.dismissEvents(context)
             }
