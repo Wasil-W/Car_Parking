@@ -131,6 +131,8 @@ fun SettingsScreen(
     credentialStore: CredentialStore,
     sharedStore: () -> SharedStateStore,
     onSavePermit: (String, String, String, String) -> Unit,
+    /** Signs in and returns the plates the account covers, or null if it could not ask. */
+    onFindPlates: suspend (String, String) -> List<String>?,
     onOpenMap: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -337,6 +339,7 @@ fun SettingsScreen(
                     permit = credentialStore.load()
                     editingPermit = false
                 },
+                onFindPlates = onFindPlates,
             )
         } else if (permit != null) {
             SettingRow(label = "Wasil's plate", value = permit?.wasilPlate)

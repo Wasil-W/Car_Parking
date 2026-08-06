@@ -45,6 +45,7 @@ other document under `docs/` is a deep-dive that this one points at.
 | `v0.6.1` | The obligation/settlement split made visible: "This spot" above the permit card |
 | `v0.6.2` | Live location while Bluetooth-connected, sealed at disconnect; coordinates removed from the wire; rate comparison built |
 | `v0.6.3` | Zone code and rate removed from the wire, comparison machinery deleted. `PhoneState` is three fields, all of them read. No UI change |
+| `v0.6.5` | Two-colour identity restored (it keyed on sync, not on plates); one cycling focus button; the layers toggle stops moving the camera; setup reads plates from the permit account; takeover alerts reach you mid-drive; a no-position park stops publishing a guess; screen and claim decision agree |
 | `v0.6.4` | **The background-location permission was never requested** — the cause of three long-standing symptoms. Map controls float; locate-me exists; the parked pin survives the drive; the app stops calling a one-car, no-permit install broken; a History tab; "Remove permit" |
 
 ---

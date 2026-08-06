@@ -180,5 +180,33 @@ class MainViewModel(
         refresh()
     }
 
+    /**
+     * Signs in and reports every plate the permit account covers, or null if it
+     * could not ask.
+     *
+     * The credentials have to be stored before the call, because
+     * `PermitAuthenticator` reads them from the store to obtain a token — there
+     * is no way to authenticate a request with credentials held only in a text
+     * field. Storing a username and password that turn out to be wrong is
+     * harmless and recoverable: nothing acts on a permit account until a plate
+     * has been chosen, and Settings can remove it.
+     *
+     * Plates are returned exactly as the account spells them. Normalising is
+     * [saveSetup]'s job, and doing it twice in two places is how the two
+     * eventually disagree.
+     */
+    suspend fun findPlates(username: String, password: String): List<String>? {
+        val existing = credentialStore.load()
+        credentialStore.save(
+            PermitConfig(
+                username = username.trim(),
+                password = password,
+                wasilPlate = existing?.wasilPlate.orEmpty(),
+                walidPlate = existing?.walidPlate.orEmpty(),
+            ),
+        )
+        return runCatching { repository.plates() }.getOrNull()?.takeIf { it.isNotEmpty() }
+    }
+
     fun consumeMessage() = _state.update { it.copy(message = null) }
 }
