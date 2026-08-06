@@ -15,6 +15,9 @@ import dev.wasil.permit.parking.PendingDecision
 import dev.wasil.permit.parking.PrefsParkStateStore
 import dev.wasil.permit.parking.myCarForLabel
 import dev.wasil.permit.parking.other
+import dev.wasil.permit.parking.shared.PhoneState
+import dev.wasil.permit.ui.blockedNotificationText
+import dev.wasil.permit.ui.blockedTitle
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -132,15 +135,23 @@ class ParkNotifications(private val context: Context) : ParkNotifier {
             .addAction(action(ParkActionReceiver.ACTION_IGNORE, "Keep it")))
     }
 
-    override fun blockedByOther(otherLabel: String, parkedAtMs: Long, heartbeatAtMs: Long) {
+    override fun blockedByOther(otherLabel: String, other: PhoneState) {
+        val known = other.parkedOutsideKnown
         val decision = PendingDecision.Blocked(
-            otherLabel, parkedAtMs, heartbeatAtMs, raisedAtMs = System.currentTimeMillis(),
+            otherLabel, other.parkedAtMs, other.heartbeatAtMs,
+            raisedAtMs = System.currentTimeMillis(), known = known,
         )
         // The permit is what's blocking the claim, so it's on the other car.
+        // Both strings come from DecisionPresentation so this notification and
+        // the screen it opens cannot describe the same situation differently —
+        // and so the unknown case gets its own wording rather than borrowing
+        // the confident one.
         notify(EVENT_ID, NotificationCompat.Builder(context, CHANNEL_EVENTS)
             .setSmallIcon(notificationIconFor(store.myCar?.other()))
-            .setContentTitle("$otherLabel's car is parked — permit NOT claimed")
-            .setContentText("$otherLabel parked at ${time(parkedAtMs)} (last seen ${time(heartbeatAtMs)}). Claiming would leave their car unpermitted.")
+            .setContentTitle(blockedTitle(otherLabel, known))
+            .setContentText(
+                blockedNotificationText(otherLabel, other.parkedAtMs, other.heartbeatAtMs, known),
+            )
             .setAutoCancel(true)
             .setContentIntent(raise(decision))
             .addAction(action(ParkActionReceiver.ACTION_CLAIM_FORCE, "Claim anyway"))

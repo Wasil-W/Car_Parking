@@ -20,8 +20,10 @@ class RecordingParkNotifier : ParkNotifier {
     override fun statusParkedNoClaim(reason: String) { calls += "noclaim:$reason" }
     override fun askManualDecision() { calls += "manual" }
     override fun askGiveBack(otherLabel: String) { calls += "askgiveback:$otherLabel" }
-    override fun blockedByOther(otherLabel: String, parkedAtMs: Long, heartbeatAtMs: Long) {
-        calls += "blocked:$otherLabel"
+    override fun blockedByOther(otherLabel: String, other: PhoneState) {
+        // The known/unknown split is recorded, because it decides which of two
+        // wordings the user sees and "blocked" alone cannot tell them apart.
+        calls += "blocked:$otherLabel" + if (other.parkedOutsideKnown) "" else ":unknown"
     }
     override fun takeover(byLabel: String) { calls += "takeover:$byLabel" }
     override fun switchFailed(reason: String?) { calls += "failed" }

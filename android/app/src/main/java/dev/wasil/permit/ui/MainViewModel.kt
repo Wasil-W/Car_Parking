@@ -37,6 +37,8 @@ data class BlockedInfo(
     val otherLabel: String,
     val parkedAtMs: Long,
     val heartbeatAtMs: Long,
+    /** False when the other phone never worked out where it parked — see [blockedBody]. */
+    val known: Boolean = true,
 )
 
 data class UiState(
@@ -126,7 +128,8 @@ class MainViewModel(
                 is GuardedResult.Blocked -> _state.update {
                     it.copy(switching = null, blocked = BlockedInfo(
                         option, result.otherLabel,
-                        result.other.parkedAtMs, result.other.heartbeatAtMs))
+                        result.other.parkedAtMs, result.other.heartbeatAtMs,
+                        known = result.other.parkedOutsideKnown))
                 }
                 is GuardedResult.Done -> when (val outcome = result.outcome) {
                     is ParkOutcome.Claimed -> _state.update {

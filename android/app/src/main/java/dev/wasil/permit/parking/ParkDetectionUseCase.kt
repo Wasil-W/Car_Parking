@@ -1,5 +1,6 @@
 package dev.wasil.permit.parking
 
+import dev.wasil.permit.parking.shared.PhoneState
 import dev.wasil.permit.parking.zones.TariffArea
 import dev.wasil.permit.parking.zones.ZoneInfo
 import dev.wasil.permit.parking.zones.ZoneResolver
@@ -18,7 +19,15 @@ interface ParkNotifier {
     fun statusParkedNoClaim(reason: String)
     fun askManualDecision()
     fun askGiveBack(otherLabel: String)
-    fun blockedByOther(otherLabel: String, parkedAtMs: Long, heartbeatAtMs: Long)
+
+    /**
+     * Takes the whole [PhoneState] rather than two timestamps out of it,
+     * because what the user is told has to branch on
+     * [dev.wasil.permit.parking.shared.PhoneState.parkedOutsideKnown] — the
+     * guard now blocks on an *unknown* park as well as a known one, and the two
+     * are not the same sentence.
+     */
+    fun blockedByOther(otherLabel: String, other: PhoneState)
     fun takeover(byLabel: String)
     fun switchFailed(reason: String?)
     fun mismatchWarning(serverVrn: String?)
@@ -219,9 +228,7 @@ class ParkDetectionUseCase(
 
         return when (val result = guardedClaim.claim(zoneText = zoneText(zone))) {
             is GuardedResult.Blocked -> {
-                notifier.blockedByOther(
-                    result.otherLabel, result.other.parkedAtMs, result.other.heartbeatAtMs,
-                )
+                notifier.blockedByOther(result.otherLabel, result.other)
                 ParkOutcome.ManualNeeded
             }
             is GuardedResult.Done -> {

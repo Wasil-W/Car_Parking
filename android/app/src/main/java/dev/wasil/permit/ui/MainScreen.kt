@@ -35,9 +35,6 @@ import dev.wasil.permit.parking.MyCar
 import dev.wasil.permit.parking.label
 import dev.wasil.permit.ui.theme.HandoffShapes
 import dev.wasil.permit.ui.theme.LocalHandoffColors
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 /**
  * What is true right now, here: what this spot demands, and what is covering
@@ -148,9 +145,27 @@ fun MainScreen(
                     spotDemandText(demand),
                     style = MaterialTheme.typography.bodyMedium,
                     color = when (demand) {
-                        is SpotDemand.Payable -> MaterialTheme.colorScheme.onSurface
+                        // The two states where the permit is taken while
+                        // nothing is owed read at full strength too: they are
+                        // the ones a person would otherwise scan past as
+                        // "free", having just had the permit moved for them.
+                        is SpotDemand.Payable, is SpotDemand.FreeForNow,
+                        SpotDemand.RateUnknown,
+                        -> MaterialTheme.colorScheme.onSurface
                         else -> MaterialTheme.colorScheme.onSurfaceVariant
                     },
+                )
+            }
+
+            // Why the permit is on this car when the line above says nothing is
+            // owed. Present only in the two states that need explaining, so no
+            // screen grows a permanent line that usually says nothing.
+            permitHeldNote(demand)?.let { note ->
+                Text(
+                    note,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 2.dp),
                 )
             }
         }
@@ -325,17 +340,19 @@ fun MainScreen(
     }
 
     // The blocked dialog belongs to the two-phone case by construction: it only
-    // ever appears when the *other* phone is parked outside on this permit.
+    // ever appears when the *other* phone is parked outside on this permit — or,
+    // since v0.6.5, when it could not tell whether it is. Both wordings come
+    // from DecisionPresentation, so this dialog, the notification and the
+    // full-screen decision cannot describe one situation three ways.
     state.blocked?.let { blocked ->
-        val time = { ms: Long -> SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(ms)) }
         AlertDialog(
             onDismissRequest = onDismissBlocked,
-            title = { Text("${blocked.otherLabel}'s car is parked") },
+            title = { Text(blockedTitle(blocked.otherLabel, blocked.known)) },
             text = {
                 Text(
-                    "${blocked.otherLabel} parked at ${time(blocked.parkedAtMs)} " +
-                        "(last seen ${time(blocked.heartbeatAtMs)}) and the permit is on their car. " +
-                        "Claiming now would leave it unpermitted — that's a fine if it's still there.",
+                    blockedBody(
+                        blocked.otherLabel, blocked.parkedAtMs, blocked.heartbeatAtMs, blocked.known,
+                    ),
                 )
             },
             confirmButton = { TextButton(onClick = onConfirmBlocked) { Text("Claim anyway") } },

@@ -25,6 +25,7 @@ import dev.wasil.permit.parking.label
 import dev.wasil.permit.parking.other
 import dev.wasil.permit.parking.shared.ClaimGuard
 import dev.wasil.permit.parking.shared.PhoneState
+import dev.wasil.permit.parking.takeoverBy
 import dev.wasil.permit.ui.formatCoordinates
 import java.util.concurrent.TimeUnit
 
@@ -63,6 +64,31 @@ object SharedSync {
             .build()
         WorkManager.getInstance(context)
             .enqueueUniqueWork(FREE_HERE_WORK, ExistingWorkPolicy.REPLACE, request)
+    }
+
+    /**
+     * Reads the shared permit node and says so if the other phone has taken it.
+     *
+     * Lifted out of [HeartbeatWorker] in v0.6.5 because it had been trapped
+     * there. The heartbeat runs only while this phone is parked outside, so the
+     * takeover check ran only then too — and the case it most needed to cover
+     * was the drive, when the heartbeat is deliberately cancelled. Two callers
+     * now: the heartbeat, which no longer gates it on being parked outside, and
+     * the live-location sampler, which is awake every 20 s while the car's
+     * Bluetooth is up (throttled — see `shouldWatchForTakeover`).
+     *
+     * Throws whatever the network throws; the callers decide whether that is
+     * worth a retry, and for the sampler it never is.
+     */
+    suspend fun watchForTakeover(context: Context) {
+        val app = context.applicationContext as? PermitApp ?: return
+        val store = PrefsParkStateStore.from(context)
+        val shared = app.sharedStateStore()
+        if (!shared.configured) return
+        val permit = shared.readPermit() ?: return
+        val by = takeoverBy(permit, store.myCar, store.lastAlertedClaimMs) ?: return
+        ParkNotifications(context).takeover(by.label())
+        store.lastAlertedClaimMs = permit.claimedAtMs
     }
 
     /** Heartbeat runs only while parked outside; KEEP avoids resetting the period. */
@@ -121,13 +147,19 @@ class SyncStateWorker(context: Context, params: WorkerParameters) :
         val shared = app.sharedStateStore()
         if (!shared.configured) return Result.success()
         return try {
-            // Three fields, and every one of them is read by the other phone.
+            // Four fields, and every one of them is read by the other phone.
             // No position, no zone code, no rate — see PhoneState for why each
             // went, and why not publishing beats filtering when there is no
             // server to filter at.
+            //
+            // parkedOutsideKnown joined them in v0.6.5. It had been recorded
+            // locally since v0.6.2 and published by nothing, which left the fix
+            // half done: the phone knew its own parkedOutside was a leftover
+            // and the other phone was still handed it as a fact.
             shared.writeMine(PhoneState(
                 parkedOutside = store.parkedOutside,
                 parkedAtMs = store.parkedAtMs,
+                parkedOutsideKnown = store.parkedOutsideKnown,
             ))
             SharedSync.ensureHeartbeat(applicationContext, store.parkedOutside)
             Result.success()
@@ -137,29 +169,33 @@ class SyncStateWorker(context: Context, params: WorkerParameters) :
     }
 }
 
-/** While parked outside: refresh my heartbeat and watch for permit takeovers. */
+/**
+ * Refresh my heartbeat, and watch for permit takeovers.
+ *
+ * The two used to be one thing, gated together on `parkedOutside`, and that was
+ * the bug. Refreshing a heartbeat while not parked outside is genuinely
+ * pointless — it stamps freshness onto a "not parked outside" nobody acts on —
+ * but *watching* is not, and the early return took both out at once. It also
+ * meant [SharedSync.requestImmediateHeartbeat], which runs whenever the app is
+ * brought to the foreground, checked nothing at all during a drive.
+ *
+ * So the heartbeat write keeps its gate and the watch loses it.
+ */
 class HeartbeatWorker(context: Context, params: WorkerParameters) :
     CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
         val app = applicationContext as PermitApp
         val store = PrefsParkStateStore.from(applicationContext)
-        if (!store.parkedOutside) {
-            SharedSync.ensureHeartbeat(applicationContext, false)
-            return Result.success()
-        }
         val shared = app.sharedStateStore()
         if (!shared.configured) return Result.success()
+        // Unschedule the periodic work as soon as it stops applying, exactly as
+        // before — but after the watch below has had its turn, not instead of it.
+        if (!store.parkedOutside) SharedSync.ensureHeartbeat(applicationContext, false)
         return try {
-            shared.heartbeat()
-            val permit = shared.readPermit()
-            val me = store.myCar
-            if (permit != null && me != null && permit.holder != me.name.lowercase() &&
-                permit.claimedAtMs > store.lastAlertedClaimMs
-            ) {
-                ParkNotifications(applicationContext).takeover(me.other().label())
-                store.lastAlertedClaimMs = permit.claimedAtMs
-            }
+            if (store.parkedOutside) shared.heartbeat()
+            SharedSync.watchForTakeover(applicationContext)
+            store.lastTakeoverCheckMs = System.currentTimeMillis()
             Result.success()
         } catch (e: Exception) {
             Result.retry()

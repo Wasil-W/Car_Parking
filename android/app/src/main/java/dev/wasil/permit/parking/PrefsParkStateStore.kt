@@ -109,6 +109,10 @@ class PrefsParkStateStore(private val prefs: SharedPreferences) : ParkStateStore
         get() = prefs.getLong("last_alerted_claim_ms", 0L)
         set(value) { prefs.edit().putLong("last_alerted_claim_ms", value).apply() }
 
+    override var lastTakeoverCheckMs: Long
+        get() = prefs.getLong("last_takeover_check_ms", 0L)
+        set(value) { prefs.edit().putLong("last_takeover_check_ms", value).apply() }
+
     // Stored as plain Strings/Longs, never a serialized blob: the encode/decode
     // between these primitives and PendingDecision is a pure function
     // (PendingDecision.kt) so the round-trip is unit-testable without Android.
@@ -119,6 +123,9 @@ class PrefsParkStateStore(private val prefs: SharedPreferences) : ParkStateStore
             parkedAtMs = prefs.getLong("pending_decision_parked_at_ms", 0L),
             heartbeatAtMs = prefs.getLong("pending_decision_heartbeat_at_ms", 0L),
             raisedAtMs = prefs.getLong("pending_decision_raised_at_ms", 0L),
+            // True by default, so a decision stored by v0.6.4 or earlier reads
+            // back with the wording it was written for.
+            known = prefs.getBoolean("pending_decision_known", true),
         ).toDecision()
         set(value) {
             val record = value?.toRecord()
@@ -128,6 +135,7 @@ class PrefsParkStateStore(private val prefs: SharedPreferences) : ParkStateStore
                 .putLong("pending_decision_parked_at_ms", record?.parkedAtMs ?: 0L)
                 .putLong("pending_decision_heartbeat_at_ms", record?.heartbeatAtMs ?: 0L)
                 .putLong("pending_decision_raised_at_ms", record?.raisedAtMs ?: 0L)
+                .putBoolean("pending_decision_known", record?.known ?: true)
                 .apply()
         }
 }
