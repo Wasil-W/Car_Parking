@@ -126,11 +126,11 @@ class ParkDetectionWorker(context: Context, params: WorkerParameters) :
             notifier = ParkNotifications(applicationContext),
             scheduler = WorkManagerScheduler(applicationContext),
             parkLog = app.parkLogStore,
-            // The same geocoder, and the same two-level name, the map header
+            // The same lookup, and the same two-level name, the map header
             // shows — so a history record and the map can never disagree about
             // what a place is called.
             namePlace = { point ->
-                reverseGeocodePlace(applicationContext, point)
+                placeLabelAt(applicationContext, point)
                     ?.let { listOfNotNull(it.district, it.detail).joinToString(" · ") }
             },
             // The live line, not the timetable: "€3,01/h · until 19:00" is what
