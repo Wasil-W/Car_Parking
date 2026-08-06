@@ -10,6 +10,18 @@ class PermitRepository(private val api: PermitApi) {
         api.getClientProduct(ApiConstants.PRODUCT_ID)
             .vrns.firstOrNull { it.hasParkingSession }?.vrn
 
+    /**
+     * Every plate the permit account covers.
+     *
+     * The same call [activePlate] has made since v0.1 — it read this list,
+     * picked the one holding a session and threw the rest away. Meanwhile setup
+     * asked the user to type those plates in by hand. Wasil, on seeing the form:
+     * *"instead of making myself put the licences show them to me."* Quite
+     * right; the answer was already arriving.
+     */
+    suspend fun plates(): List<String> =
+        api.getClientProduct(ApiConstants.PRODUCT_ID).vrns.map { it.vrn }
+
     sealed interface SwitchResult {
         data class Confirmed(val activeVrn: String) : SwitchResult
         data class Mismatch(val serverActiveVrn: String?) : SwitchResult

@@ -10,6 +10,78 @@ change as a minor.
 
 ---
 
+## v0.6.5 — the map stops fighting you, and setup stops asking
+
+### Your blue and Walid's terracotta are back
+
+v0.6.4 decided "is this a two-car app" by asking whether the **sync link** was
+set. Sharing is about whether the two phones talk to each other; it says nothing
+about how many cars exist. With sync unset, a two-plate permit rendered as the
+one-car mono view.
+
+It keys on two plates now. And the argument that put it there was wrong twice
+over: handing the permit across is a call to the permit website, not a message
+between phones — it works with no sync at all, the other phone simply is not
+told.
+
+### One focus button instead of two
+
+*"2 buttons in map i am uncertain about. They seem to do the same thing."*
+Right — when the car is parked near you, "centre on me" and "frame both" produce
+almost the same picture, so two buttons asked you to predict a difference you
+could not see.
+
+One button now cycles: **you → both → the car**. Its icon shows where the *next*
+tap goes rather than what the map is doing, so it announces its outcome instead
+of its category. And it corrects itself for what is actually on the map — caught
+on screen, it was offering to frame a car that was not parked.
+
+### The layers button leaves your camera alone
+
+Toggling the tariff overlay zoomed out first, throwing away wherever you had
+navigated and costing a second tap. Reported across two versions, and misread
+here as a complaint about zone precision rather than about the camera.
+
+The zoom-out earned its place in v0.5.1, when the map was small and the overlay
+invisible at parking zoom. The map is bigger now and gets navigated, so the reset
+costs more than it gave. **It toggles, and nothing moves.**
+
+### Setup stops asking for what your account already knows
+
+The permit form asked you to type both plates. **The account lists them** — and
+has since v0.1, when `activePlate()` began reading the whole list, taking the one
+holding a session and discarding the rest.
+
+Sign in, and the app asks which of your cars is yours. Two plates settle the
+second without a second tap. Typing them by hand is still there for when the
+site cannot be reached, because a network failure is not your fault and must not
+leave the permit unenterable.
+
+### Three bugs from the decision-table audit
+
+**Takeover alerts can reach you while driving.** The check lived in the
+heartbeat, and the heartbeat is cancelled the whole time you are not parked —
+so the one moment you would most want to know the permit had moved was the one
+moment nothing could tell you.
+
+**A park with no position stops telling the other phone it is free to claim.**
+The app recorded that it could not tell, and then published the guess anyway.
+
+**The screen and the decision agree.** Two cases where the app claimed the
+permit while its own screen said nothing was owed: inside a paid area outside
+its charging hours — which now reads *"free until 09:00"* — and a paid area
+whose tariff will not parse, which now says the rate is unknown rather than
+free. Claiming stays as it was in both: parking Sunday night rolls into Monday
+morning, so the permit belongs there even when nothing is owed yet.
+
+### Also
+
+**"Remove permit"** clears the username and password from this phone, and
+nothing else — zones, history, the sync link and the parked state all stay, and
+a permit currently on your car stays there.
+
+---
+
 ## v0.6.4 — the permission that was never asked for
 
 ### The bug behind three of your reports

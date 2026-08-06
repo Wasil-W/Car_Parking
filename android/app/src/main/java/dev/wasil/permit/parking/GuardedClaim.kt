@@ -126,6 +126,7 @@ class GuardedClaim(
         parkedOutside = stateStore.parkedOutside,
         parkedAtMs = stateStore.parkedAtMs,
         heartbeatAtMs = nowMs(),   // local state is by definition fresh
+        parkedOutsideKnown = stateStore.parkedOutsideKnown,
     )
 
     /**

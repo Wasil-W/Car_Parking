@@ -173,8 +173,9 @@ fun MapControlStack(
     tariffShowing: Boolean,
     tariffEnabled: Boolean,
     locating: Boolean,
-    onLocate: () -> Unit,
-    onFrame: () -> Unit,
+    /** What the next tap of the focus button will centre on. */
+    nextFocus: MapFocus,
+    onFocus: () -> Unit,
     onToggleTariff: () -> Unit,
     onSetHomeZone: () -> Unit,
     onAddFreeZone: () -> Unit,
@@ -182,18 +183,14 @@ fun MapControlStack(
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(CONTROL_GAP)) {
+        // One button, cycling, rather than the two v0.6.4 shipped. Its icon and
+        // label say where the *next* tap goes, so it is never a guess: the
+        // control announces its outcome rather than its category.
         MapControlButton(
-            icon = painterResource(R.drawable.ic_map_locate),
-            // Named for what it does to the map, not for what it reads: the
-            // position is re-read on every tap, never reused from app start.
-            label = "Centre on my position",
-            onClick = onLocate,
+            icon = painterResource(focusIcon(nextFocus)),
+            label = focusLabel(nextFocus),
+            onClick = onFocus,
             busy = locating,
-        )
-        MapControlButton(
-            icon = painterResource(R.drawable.ic_map_frame),
-            label = "Frame the car and me",
-            onClick = onFrame,
         )
         MapControlButton(
             icon = painterResource(R.drawable.ic_map_layers),
@@ -209,13 +206,21 @@ fun MapControlStack(
                 onClick = { menuOpen = true },
                 active = menuOpen,
             )
+            // Shaped and coloured like the rest of the app. Left stock, it was
+            // the one thing on this screen drawn by Material rather than by us —
+            // Wasil: "the menu it opens doesnt match the style".
             DropdownMenu(
                 expanded = menuOpen,
                 onDismissRequest = { menuOpen = false },
                 containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                shape = HandoffShapes.Control,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
             ) {
                 DropdownMenuItem(
                     text = { Text(homeZoneMenuLabel(homeZoneSet)) },
+                    leadingIcon = {
+                        Icon(painterResource(R.drawable.ic_zone_home), contentDescription = null)
+                    },
                     onClick = {
                         menuOpen = false
                         onSetHomeZone()
@@ -223,6 +228,9 @@ fun MapControlStack(
                 )
                 DropdownMenuItem(
                     text = { Text("Add free zone") },
+                    leadingIcon = {
+                        Icon(painterResource(R.drawable.ic_zone_free), contentDescription = null)
+                    },
                     onClick = {
                         menuOpen = false
                         onAddFreeZone()
@@ -357,4 +365,21 @@ fun MapNotice(text: String, modifier: Modifier = Modifier) {
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
         )
     }
+}
+
+/**
+ * The icon for what the next tap will do — not for what the map is showing now.
+ * A control that pictures its outcome needs no explaining.
+ */
+internal fun focusIcon(next: MapFocus): Int = when (next) {
+    MapFocus.ME -> R.drawable.ic_map_locate
+    MapFocus.BOTH -> R.drawable.ic_map_frame
+    MapFocus.CAR -> R.drawable.ic_map_car
+}
+
+/** Screen-reader and long-press label, in the same "what happens next" voice. */
+internal fun focusLabel(next: MapFocus): String = when (next) {
+    MapFocus.ME -> "Centre on my position"
+    MapFocus.BOTH -> "Frame the car and me"
+    MapFocus.CAR -> "Centre on the car"
 }

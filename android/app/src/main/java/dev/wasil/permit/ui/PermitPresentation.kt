@@ -3,6 +3,9 @@ package dev.wasil.permit.ui
 import dev.wasil.permit.parking.MyCar
 import dev.wasil.permit.parking.label
 import dev.wasil.permit.parking.other
+import dev.wasil.permit.parking.zones.TariffNow
+import dev.wasil.permit.parking.zones.ZoneInfo
+import dev.wasil.permit.parking.zones.tariffNow
 
 /** Wasil is always the left arc, Walid the right — identical on both phones. */
 enum class Side { LEFT, RIGHT }
@@ -58,36 +61,141 @@ fun holderFor(activeVrn: String?, options: List<PlateOption>): MyCar? =
  * lets a paying action slot in later without the permit having to know.
  */
 sealed interface SpotDemand {
+    /**
+     * Whether the app treats this spot as paid — which is to say, whether the
+     * claim path takes the permit here.
+     *
+     * This exists because the screen and the decision had drifted apart in two
+     * places, and both were on the expensive side of the line. Inside a paid
+     * polygon outside its charging hours the strip read "Free · from 09:00"
+     * while the permit moved; with a tariff file that would not parse it read
+     * "Nothing to pay — outside a paid zone" while the permit moved. Neither
+     * was a claim bug — the claim is right both times — but a screen may be
+     * short of an answer and may not contradict the rest of the app.
+     *
+     * Every value below fixes this to the one test [dev.wasil.permit.parking.
+     * zones.ZoneResolver] makes, so a test can assert the two agree for every
+     * shape of zone rather than for the cases someone remembered.
+     */
+    val paidSpot: Boolean
+
     /** Nothing is parked, so nothing is owed and nothing needs settling. */
-    data object Unparked : SpotDemand
+    data object Unparked : SpotDemand {
+        override val paidSpot = false
+    }
+
+    /**
+     * Parked, but with no position — so what is owed cannot be said at all.
+     *
+     * Previously collapsed into [Unparked], which put "Not parked" in the strip
+     * directly above a card reading "Parked — location unknown". Same screen,
+     * two beliefs.
+     */
+    data object LocationUnknown : SpotDemand {
+        override val paidSpot = false
+    }
 
     /** Parked somewhere nothing is charged — home, a marked free zone, a free street. */
-    data class Free(val reason: String) : SpotDemand
+    data class Free(val reason: String) : SpotDemand {
+        override val paidSpot = false
+    }
 
-    /** Parked where money is due. [nowText] already reads as "€3,01/h · until 19:00". */
-    data class Payable(val nowText: String) : SpotDemand
+    /** Parked where money is due now. [nowText] already reads as "€3,01/h · until 19:00". */
+    data class Payable(val nowText: String) : SpotDemand {
+        override val paidSpot = true
+    }
+
+    /**
+     * A paid zone, outside its charging hours. Nothing is owed this minute and
+     * the permit is taken anyway.
+     *
+     * That is deliberate and was decided against the alternative: park on a
+     * Sunday night in a `ma-za 09-24` zone and you are still there at 09:00 on
+     * Monday, with nothing to wake the app and claim then. [untilClock] is when
+     * charging resumes, or null for an area that carries no windows at all.
+     */
+    data class FreeForNow(val untilClock: String?) : SpotDemand {
+        override val paidSpot = true
+    }
+
+    /** A paid zone whose tariff data would not parse. Claimed, and said so. */
+    data object RateUnknown : SpotDemand {
+        override val paidSpot = true
+    }
 }
 
 /**
- * [zoneReason] is null when the spot is chargeable; it carries the wording for
- * a free spot ("at home", "in a free zone") that the notifier already uses, so
- * the screen and the notification cannot describe the same place differently.
+ * What this spot demands, from the same zone the claim path resolved.
+ *
+ * Takes a [ZoneInfo] rather than the two loose strings it used to, because the
+ * strings were where the disagreement got in: "no free-zone reason and no rate
+ * text" was indistinguishable from "outside every paid polygon", so an
+ * unreadable tariff file rendered as "Nothing to pay". A zone cannot be
+ * mistaken for its own absence.
+ *
+ * [zone] is null when the park resolved no position at all — a gap, not a
+ * finding, and the one thing this function must never turn into "nothing owed".
  */
-fun spotDemandFor(parked: Boolean, zoneReason: String?, nowText: String?): SpotDemand = when {
+fun spotDemandFor(
+    parked: Boolean,
+    zone: ZoneInfo?,
+    dayIndex: Int,
+    minuteOfDay: Int,
+): SpotDemand = when {
     !parked -> SpotDemand.Unparked
-    zoneReason != null -> SpotDemand.Free(zoneReason)
-    nowText != null -> SpotDemand.Payable(nowText)
-    // Parked outside a known free zone, but with no readable tariff: the app
-    // does not know what is owed, and saying "free" would be a guess that
-    // could cost a fine.
-    else -> SpotDemand.Free("outside a paid zone")
+    zone == null -> SpotDemand.LocationUnknown
+    zone !is ZoneInfo.Paid -> SpotDemand.Free(freeReasonFor(zone))
+    zone.area == null -> SpotDemand.RateUnknown
+    else -> when (val now = tariffNow(zone.area.windows, dayIndex, minuteOfDay)) {
+        is TariffNow.Charging -> SpotDemand.Payable(tariffNowText(now, minuteOfDay))
+        is TariffNow.Free -> SpotDemand.FreeForNow(
+            untilClock = now.startsInMin?.let { clock(minuteOfDay + it) },
+        )
+    }
+}
+
+/**
+ * Why a spot owes nothing, in the words the parked-without-claiming
+ * notification already uses — so the screen and the notification cannot
+ * describe the same place differently.
+ */
+fun freeReasonFor(zone: ZoneInfo): String = when (zone) {
+    ZoneInfo.Home -> "at home"
+    is ZoneInfo.ManualFree ->
+        "in a free zone" + (zone.label.takeIf { it.isNotBlank() }?.let { " ($it)" } ?: "")
+    ZoneInfo.FreeStreet -> "free street parking"
+    // Unreachable: spotDemandFor never routes a Paid zone here.
+    is ZoneInfo.Paid -> ""
 }
 
 /** One line for the strip above the permit card. */
 fun spotDemandText(demand: SpotDemand): String = when (demand) {
     SpotDemand.Unparked -> "Not parked"
+    SpotDemand.LocationUnknown -> "Parked — location unknown"
     is SpotDemand.Free -> "Nothing to pay — ${demand.reason}"
     is SpotDemand.Payable -> demand.nowText
+    is SpotDemand.FreeForNow -> demand.untilClock
+        ?.let { "Free until $it · permit held" } ?: "No paid hours · permit held"
+    SpotDemand.RateUnknown -> "Paid area — rate unavailable"
+}
+
+/**
+ * The line that explains a permit sitting on a car that owes nothing this
+ * minute, or null when there is nothing to explain.
+ *
+ * The strip alone cannot carry it: "Free until 09:00 · permit held" states both
+ * facts but not the connection between them, and a permit taken for a spot the
+ * same screen calls free is exactly the thing that needs a sentence. Null for
+ * every other state, so no screen grows a line that says nothing.
+ */
+fun permitHeldNote(demand: SpotDemand): String? = when (demand) {
+    is SpotDemand.FreeForNow -> demand.untilClock?.let {
+        "Nothing is owed right now. The permit is held because charging starts " +
+            "at $it and the car will still be here."
+    } ?: "Nothing is owed right now. The permit is held because this is a paid zone."
+    SpotDemand.RateUnknown ->
+        "This area's rates couldn't be read. The permit is held rather than risk a fine."
+    else -> null
 }
 
 // --- the three truths this screen has (v0.6.4) ---
@@ -99,10 +207,18 @@ fun spotDemandText(demand: SpotDemand): String = when (demand) {
  * the copy and the setup gate called those states broken. This is where the
  * difference stops being a defect and becomes a rendering.
  *
- * The signal for "is there anywhere to hand it to" is **sharing**, not the
- * roster. Two names in an enum is not two phones — a `MyCar` exists on a
- * single-phone install too. What actually decides whether a hand-over means
- * anything is whether a second phone is configured to hear about it.
+ * The signal is **two plates on the permit**, not whether the two phones are
+ * linked.
+ *
+ * v0.6.4 keyed this on sharing and that was wrong twice over. Handing the permit
+ * over is a call to the permit website, not a message between phones — it works
+ * with no sync at all; the other phone simply is not told. And the two-colour
+ * identity was never about phones, it is about there being two cars. Reported
+ * within a day of shipping: "i liked the 2 colour way in the app. now it is mono
+ * coloured", from an install whose sync URL happened to be unset.
+ *
+ * A permit that lists one plate genuinely has nowhere to send anything, and that
+ * is the case `Sole` is for.
  */
 sealed interface PermitView {
     /** Two phones, one permit: the hero card, the travelling dot, one button. */
@@ -115,9 +231,9 @@ sealed interface PermitView {
     data object NoPermit : PermitView
 }
 
-fun permitViewFor(permitAdded: Boolean, sharingConfigured: Boolean): PermitView = when {
+fun permitViewFor(permitAdded: Boolean, hasSecondPlate: Boolean): PermitView = when {
     !permitAdded -> PermitView.NoPermit
-    sharingConfigured -> PermitView.Shared
+    hasSecondPlate -> PermitView.Shared
     else -> PermitView.Sole
 }
 
@@ -156,6 +272,13 @@ fun spotHeadlineFor(demand: SpotDemand, place: String?): SpotHeadline {
             "Not parked",
             "Park anywhere and this says what it costs.",
         )
+        // No permit means no "permit held" to explain — this screen answers
+        // only the obligation question, and the honest answer is that we
+        // cannot see the spot at all.
+        SpotDemand.LocationUnknown -> SpotHeadline(
+            "Location unknown",
+            "Parked, but the phone couldn't work out where.",
+        )
         is SpotDemand.Free -> SpotHeadline(
             "Nothing to pay",
             listOfNotNull(here, demand.reason).joinToString(" · "),
@@ -164,6 +287,16 @@ fun spotHeadlineFor(demand: SpotDemand, place: String?): SpotHeadline {
             val (rate, until) = splitRateLine(demand.nowText)
             SpotHeadline(rate, listOfNotNull(here, until).joinToString(" · "))
         }
+        is SpotDemand.FreeForNow -> SpotHeadline(
+            "Free now",
+            listOfNotNull(here, demand.untilClock?.let { "charges from $it" })
+                .joinToString(" · ")
+                .ifBlank { "No paid hours here." },
+        )
+        SpotDemand.RateUnknown -> SpotHeadline(
+            "Paid area",
+            listOfNotNull(here, "rate unavailable").joinToString(" · "),
+        )
     }
 }
 

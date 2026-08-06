@@ -8,7 +8,7 @@ package dev.wasil.permit.ui
  * car and you into one view. [NONE] leaves whatever the user panned to alone,
  * which is the answer far more often than the other three.
  */
-enum class MapCameraCommand { NONE, OVERVIEW, LOCATE, FRAME }
+enum class MapCameraCommand { NONE, OVERVIEW, LOCATE, FRAME, CAR }
 
 /**
  * Which camera move wins when more than one is pending in the same pass.
@@ -28,7 +28,9 @@ enum class MapCameraCommand { NONE, OVERVIEW, LOCATE, FRAME }
  *  2. [LOCATE] — an explicit tap, and only when there is a position to centre
  *     on. Without one the honest answer is to do nothing and say so; moving the
  *     map to a stale or invented point would be publishing a guess.
- *  3. [FRAME] — the explicit tap, then the automatic first fit, which are the
+ *  3. [CAR] — the third stop of the focus cycle, and only when a car pin
+ *     exists. Ranked above framing for the same reason as LOCATE: it is a tap.
+ *  4. [FRAME] — the explicit tap, then the automatic first fit, which are the
  *     same move for different reasons.
  *
  * Pure and outside the composable so the precedence can be held still by a
@@ -39,10 +41,13 @@ fun mapCameraCommand(
     locatePending: Boolean,
     haveMyPosition: Boolean,
     framePending: Boolean,
+    carPending: Boolean,
+    haveCar: Boolean,
     autoFramePending: Boolean,
 ): MapCameraCommand = when {
     overviewPending -> MapCameraCommand.OVERVIEW
     locatePending && haveMyPosition -> MapCameraCommand.LOCATE
+    carPending && haveCar -> MapCameraCommand.CAR
     framePending || autoFramePending -> MapCameraCommand.FRAME
     else -> MapCameraCommand.NONE
 }

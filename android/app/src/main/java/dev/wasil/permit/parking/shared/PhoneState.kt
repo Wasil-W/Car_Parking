@@ -35,7 +35,8 @@ import kotlinx.serialization.Serializable
  * see docs/TIMELINE.md, "Parked".
  *
  * What remains is the answer to one question: *is the other car sitting on a
- * paid street right now, and is that information fresh enough to trust?*
+ * paid street right now, and is that information fresh enough to trust?* —
+ * plus, since v0.6.5, whether that answer is a finding at all.
  *
  * Removing fields is safe across an upgrade in both directions. The decoder
  * ignores unknown keys, so a phone still on an older version publishing
@@ -48,6 +49,24 @@ data class PhoneState(
     val parkedOutside: Boolean = false,
     val parkedAtMs: Long = 0,
     val heartbeatAtMs: Long = 0,
+    /**
+     * Whether [parkedOutside] is a finding or a leftover.
+     *
+     * False means the phone that wrote this parked without ever resolving a
+     * position, so the value above is simply whatever the previous park left
+     * standing. It was recorded locally from v0.6.2 and **read by nothing**;
+     * publishing it is the other half of that fix. [ClaimGuard.evaluate] is
+     * where it lands, and the rule there is the one this project pays for: an
+     * unknown state is never more permissive than a known one.
+     *
+     * Defaults **true**, which is the compatible answer rather than the timid
+     * one. A node written by a phone that predates this field is a phone whose
+     * `parkedOutside` was always published as a fact, so reading it as a fact
+     * is exactly the behaviour that phone expects. Defaulting to false would
+     * mean no claim could ever be made against an un-upgraded phone without a
+     * prompt.
+     */
+    val parkedOutsideKnown: Boolean = true,
 )
 
 @Serializable

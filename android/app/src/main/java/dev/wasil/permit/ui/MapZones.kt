@@ -150,7 +150,7 @@ fun tariffShort(area: TariffArea): String =
     listOf(area.tariffText, tariffHours(area)).filter { it.isNotBlank() }.joinToString(" · ")
 
 /** Clock time [minutes] from midnight, as "19:00". */
-private fun clock(minutes: Int): String {
+internal fun clock(minutes: Int): String {
     val wrapped = ((minutes % 1440) + 1440) % 1440
     return "%02d:%02d".format(wrapped / 60, wrapped % 60)
 }

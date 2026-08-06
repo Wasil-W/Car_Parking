@@ -20,6 +20,7 @@ import dev.wasil.permit.parking.LiveLocation
 import dev.wasil.permit.parking.ParkDetectionUseCase
 import dev.wasil.permit.parking.ParkOutcome
 import dev.wasil.permit.parking.PrefsParkStateStore
+import dev.wasil.permit.parking.shouldWatchForTakeover
 import dev.wasil.permit.parking.zones.tariffNow
 import dev.wasil.permit.ui.tariffNowText
 import java.util.Calendar
@@ -161,6 +162,13 @@ class ParkDetectionWorker(context: Context, params: WorkerParameters) :
  * [dev.wasil.permit.parking.LiveLocation.captured] here and no expression in
  * this file can get one back out. A late poll is therefore uninteresting rather
  * than dangerous, which is the property that was asked for.
+ *
+ * Since v0.6.5 it carries one passenger that is not about location at all: the
+ * takeover watch. That needs no new alarm, no foreground service and no revived
+ * heartbeat — this worker is already awake every 20 s for the length of every
+ * drive, which is exactly the stretch the watch could not previously cover, and
+ * exactly the stretch where the phone is demonstrably in a car with a person in
+ * it. Throttled to one read every few minutes; see `shouldWatchForTakeover`.
  */
 class LiveLocationWorker(context: Context, params: WorkerParameters) :
     CoroutineWorker(context, params) {
@@ -192,6 +200,18 @@ class LiveLocationWorker(context: Context, params: WorkerParameters) :
             store.liveLocation = LiveLocation.captured(point, System.currentTimeMillis())
         }
 
+        // Mid-drive: has the other phone taken the permit? Deliberately last,
+        // deliberately swallowed, and deliberately not a retry. This worker's
+        // job is to sample and re-book itself; a network failure on a courtesy
+        // read must not cost the trail its next sample, and the next tick is
+        // three minutes away in any case. The stamp is written before the read
+        // so a hanging call cannot let the throttle fire again behind it.
+        val nowMs = System.currentTimeMillis()
+        if (store.carLinkConnected && shouldWatchForTakeover(store.lastTakeoverCheckMs, nowMs)) {
+            store.lastTakeoverCheckMs = nowMs
+            runCatching { SharedSync.watchForTakeover(applicationContext) }
+        }
+
         if (store.carLinkConnected) {
             ParkWorkers.enqueueLiveLocation(applicationContext, LIVE_POLL_INTERVAL_MS)
         }
@@ -221,9 +241,7 @@ class ClaimPermitWorker(context: Context, params: WorkerParameters) :
         return when (val result = app.guardedClaim()
             .claim(force = force, userInitiated = userInitiated, zoneText = zoneText)) {
             is GuardedResult.Blocked -> {
-                notifications.blockedByOther(
-                    result.otherLabel, result.other.parkedAtMs, result.other.heartbeatAtMs,
-                )
+                notifications.blockedByOther(result.otherLabel, result.other)
                 Result.success()
             }
             is GuardedResult.Done -> when (result.outcome) {

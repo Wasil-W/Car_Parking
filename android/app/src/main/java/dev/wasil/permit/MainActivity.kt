@@ -150,6 +150,7 @@ class MainActivity : ComponentActivity() {
                                 onRefresh = viewModel::refresh,
                                 onMessageShown = viewModel::consumeMessage,
                                 onSavePermit = viewModel::saveSetup,
+                                onFindPlates = viewModel::findPlates,
                                 onConfirmBlocked = viewModel::confirmBlockedSwitch,
                                 onDismissBlocked = viewModel::dismissBlocked,
                             )

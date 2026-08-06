@@ -34,8 +34,6 @@ import dev.wasil.permit.PermitApp
 import dev.wasil.permit.parking.GeoPoint
 import dev.wasil.permit.parking.android.PlayServicesSignals
 import dev.wasil.permit.parking.android.reverseGeocodePlace
-import dev.wasil.permit.parking.zones.ZoneInfo
-import dev.wasil.permit.parking.zones.tariffNow
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -81,6 +79,7 @@ fun HandoffTabs(
     onRefresh: () -> Unit,
     onMessageShown: () -> Unit,
     onSavePermit: (String, String, String, String) -> Unit,
+    onFindPlates: suspend (String, String) -> List<String>?,
     onConfirmBlocked: () -> Unit,
     onDismissBlocked: () -> Unit,
 ) {
@@ -98,7 +97,14 @@ fun HandoffTabs(
     // so adding a permit in Settings is visible the moment you come back.
     val permitView = permitViewFor(
         permitAdded = remember(tab) { app.credentialStore.load() != null },
-        sharingConfigured = remember(tab) { !app.parkStateStore.syncUrl.isNullOrBlank() },
+        // Two cars, not two phones. The permit moving between plates is a call
+        // to the permit site; the sync link only decides whether the other
+        // phone hears about it.
+        hasSecondPlate = remember(tab) {
+            app.credentialStore.load()?.let {
+                it.wasilPlate.isNotBlank() && it.walidPlate.isNotBlank()
+            } == true
+        },
     )
 
     // The parked spot's name, for the Now screen. Same geocoder and same
@@ -211,6 +217,7 @@ fun HandoffTabs(
                     credentialStore = app.credentialStore,
                     sharedStore = { app.sharedStateStore() },
                     onSavePermit = onSavePermit,
+                    onFindPlates = onFindPlates,
                     onOpenMap = { tab = Tab.MAP },
                 )
             }
@@ -222,31 +229,25 @@ fun HandoffTabs(
  * Resolves the parked spot into an obligation, reusing the same [ZoneResolver]
  * the claim decision uses so the screen can never disagree with the app about
  * whether a spot is free.
+ *
+ * Thin on purpose. Everything that used to be decided here — which zone counts
+ * as free, what an unreadable tariff means, what to say outside charging
+ * hours — moved into [spotDemandFor], where it is one total function over
+ * [ZoneInfo] and a test can walk every branch of it. What is left is reading
+ * the clock, which is the one thing that cannot be pure.
+ *
+ * Note the parked-with-no-position case: it hands `zone = null` through rather
+ * than reporting "not parked", which is what this file used to do a line above
+ * a card saying "Parked — location unknown".
  */
 private fun spotDemand(app: PermitApp): SpotDemand {
     val store = app.parkStateStore
     val car = store.lastParkLocation
-    if (!store.parked || car == null) return spotDemandFor(false, null, null)
-    val zone = app.zoneResolver().resolve(car)
-    if (zone !is ZoneInfo.Paid) {
-        return spotDemandFor(true, freeReasonFor(zone), null)
-    }
-    val area = zone.area ?: return spotDemandFor(true, null, null)
     val now = Calendar.getInstance()
-    val dayIndex = (now.get(Calendar.DAY_OF_WEEK) + 5) % 7
-    val minuteOfDay = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE)
     return spotDemandFor(
-        parked = true,
-        zoneReason = null,
-        nowText = tariffNowText(tariffNow(area.windows, dayIndex, minuteOfDay), minuteOfDay),
+        parked = store.parked,
+        zone = car?.let { app.zoneResolver().resolve(it) },
+        dayIndex = (now.get(Calendar.DAY_OF_WEEK) + 5) % 7,
+        minuteOfDay = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE),
     )
-}
-
-/** The same wording the parked-without-claiming notification already uses. */
-private fun freeReasonFor(zone: ZoneInfo): String = when (zone) {
-    ZoneInfo.Home -> "at home"
-    is ZoneInfo.ManualFree ->
-        "in a free zone" + (zone.label.takeIf { it.isNotBlank() }?.let { " ($it)" } ?: "")
-    ZoneInfo.FreeStreet -> "free street parking"
-    is ZoneInfo.Paid -> ""
 }

@@ -66,6 +66,18 @@ interface ParkStateStore {
     var syncUrl: String?
     /** claimedAtMs of the last permit takeover we already alerted about. */
     var lastAlertedClaimMs: Long
+
+    /**
+     * When the takeover watch last read the shared permit node.
+     *
+     * Only the drive-time watch uses it. The live-location sampler wakes every
+     * 20 s while the car's Bluetooth is up, and reading the permit on every one
+     * of those would be ninety network calls for a half-hour drive; this is
+     * what throttles it to [TAKEOVER_CHECK_INTERVAL_MS]. Stored rather than
+     * held in memory because each poll is a fresh worker with no memory of the
+     * last one.
+     */
+    var lastTakeoverCheckMs: Long
     /**
      * The one decision currently waiting on the user, if any. Raised alongside
      * a notification, read by the tappable-notification screen, cleared when

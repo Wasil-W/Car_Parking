@@ -20,6 +20,13 @@ sealed interface PendingDecision {
         val parkedAtMs: Long,
         val heartbeatAtMs: Long,
         override val raisedAtMs: Long,
+        /**
+         * Whether the other phone actually resolved where it parked. False
+         * means it did not, so "their car is parked outside" is not something
+         * this decision may claim — see
+         * [dev.wasil.permit.ui.blockedBody] for the two wordings.
+         */
+        val known: Boolean = true,
     ) : PendingDecision
 
     /** Parked, but detection couldn't tell what to do automatically. */
@@ -44,6 +51,8 @@ data class PendingDecisionRecord(
     val parkedAtMs: Long = 0L,
     val heartbeatAtMs: Long = 0L,
     val raisedAtMs: Long = 0L,
+    /** Defaults true so a record written before v0.6.5 decodes to the old wording. */
+    val known: Boolean = true,
 )
 
 private const val KIND_BLOCKED = "BLOCKED"
@@ -58,6 +67,7 @@ fun PendingDecision.toRecord(): PendingDecisionRecord = when (this) {
         parkedAtMs = parkedAtMs,
         heartbeatAtMs = heartbeatAtMs,
         raisedAtMs = raisedAtMs,
+        known = known,
     )
     is PendingDecision.Manual -> PendingDecisionRecord(
         kind = KIND_MANUAL,
@@ -83,7 +93,7 @@ fun PendingDecision.toRecord(): PendingDecisionRecord = when (this) {
  */
 fun PendingDecisionRecord.toDecision(): PendingDecision? = when (kind) {
     KIND_BLOCKED -> label?.let {
-        PendingDecision.Blocked(it, parkedAtMs, heartbeatAtMs, raisedAtMs)
+        PendingDecision.Blocked(it, parkedAtMs, heartbeatAtMs, raisedAtMs, known)
     }
     KIND_MANUAL -> PendingDecision.Manual(raisedAtMs)
     KIND_GIVE_BACK -> label?.let { PendingDecision.GiveBack(it, raisedAtMs) }
