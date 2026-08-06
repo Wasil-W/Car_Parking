@@ -5,6 +5,9 @@ import dev.wasil.permit.parking.zones.TariffNow
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import dev.wasil.permit.parking.zones.TariffArea
+import dev.wasil.permit.parking.zones.TariffWindow
+import dev.wasil.permit.parking.zones.ZoneInfo
 import org.junit.Test
 
 class PermitPresentationTest {
@@ -48,39 +51,68 @@ class PermitPresentationTest {
         assertNull(holderFor("ZZ999Z", options))
     }
 
-    // --- obligation, separate from settlement (v0.6.1) ---
+    // --- obligation, separate from settlement (v0.6.1, reshaped v0.6.5) ---
+
+    private val paidAllDay = TariffArea(
+        code = "T11V",
+        name = "Basistarief TC1 ma-zo 00-24",
+        tariffText = "€8,05/h",
+        polygons = emptyList(),
+        windows = listOf(TariffWindow("€8,05/h", 0, 1440, setOf(0, 1, 2, 3, 4, 5, 6))),
+    )
+
+    /** Charges 09:00-19:00 on weekdays only — free at night and at weekends. */
+    private val paidWeekdays = paidAllDay.copy(
+        code = "T13B",
+        windows = listOf(TariffWindow("€5,37/h", 9 * 60, 19 * 60, setOf(0, 1, 2, 3, 4))),
+    )
 
     @Test
     fun `not parked owes nothing and says so plainly`() {
-        assertEquals(SpotDemand.Unparked, spotDemandFor(false, null, "€8,05/h · all day"))
-        assertEquals("Not parked", spotDemandText(SpotDemand.Unparked))
+        val demand = spotDemandFor(parked = false, zone = null, dayIndex = 1, minuteOfDay = 600)
+        assertEquals(SpotDemand.Unparked, demand)
+    }
+
+    @Test
+    fun `parked with no position says the position is unknown, never that it is free`() {
+        // The distinction v0.6.5 exists for: "we could not tell" is not "nothing
+        // to pay", and guessing the second costs a fine.
+        val demand = spotDemandFor(parked = true, zone = null, dayIndex = 1, minuteOfDay = 600)
+        assertEquals(SpotDemand.LocationUnknown, demand)
     }
 
     @Test
     fun `a free zone reports why it is free, in the notifier's own words`() {
-        val demand = spotDemandFor(true, "at home", null)
+        val demand = spotDemandFor(true, ZoneInfo.Home, dayIndex = 1, minuteOfDay = 600)
         assertEquals(SpotDemand.Free("at home"), demand)
-        assertEquals("Nothing to pay — at home", spotDemandText(demand))
     }
 
     @Test
-    fun `a free zone wins even when a tariff could be read for the same point`() {
-        // Home and free zones are hand-placed and beat geometry, exactly as
-        // ZoneResolver already orders them.
-        assertEquals(SpotDemand.Free("at home"), spotDemandFor(true, "at home", "€8,05/h · all day"))
+    fun `a hand-placed free zone beats geometry, as ZoneResolver already orders it`() {
+        val demand = spotDemandFor(true, ZoneInfo.ManualFree("Mum's street"), 1, 600)
+        assertTrue(demand is SpotDemand.Free)
     }
 
     @Test
-    fun `a chargeable spot carries the live rate through unchanged`() {
-        val demand = spotDemandFor(true, null, "€3,01/h · until 19:00")
-        assertEquals(SpotDemand.Payable("€3,01/h · until 19:00"), demand)
-        assertEquals("€3,01/h · until 19:00", spotDemandText(demand))
+    fun `a charging spot carries the live rate`() {
+        val demand = spotDemandFor(true, ZoneInfo.Paid(paidAllDay), dayIndex = 1, minuteOfDay = 600)
+        assertEquals(SpotDemand.Payable("€8,05/h · all day"), demand)
     }
 
     @Test
-    fun `parked with no readable tariff never claims to be free without saying why`() {
-        val demand = spotDemandFor(true, null, null)
-        assertEquals(SpotDemand.Free("outside a paid zone"), demand)
+    fun `inside a paid area outside its hours is free for now, not payable`() {
+        // The v0.6.4 contradiction: the app claimed the permit here while the
+        // screen said nothing was owed. The screen now says what is true, and
+        // says when it stops being true.
+        val sundayNoon = spotDemandFor(true, ZoneInfo.Paid(paidWeekdays), dayIndex = 6, minuteOfDay = 720)
+        assertTrue("expected FreeForNow, got $sundayNoon", sundayNoon is SpotDemand.FreeForNow)
+        assertEquals("09:00", (sundayNoon as SpotDemand.FreeForNow).untilClock)
+    }
+
+    @Test
+    fun `a paid area whose tariff will not parse says the rate is unknown, not free`() {
+        val demand = spotDemandFor(true, ZoneInfo.Paid(null), dayIndex = 1, minuteOfDay = 600)
+        assertEquals(SpotDemand.RateUnknown, demand)
     }
 
     // --- the three truths (v0.6.4) ---
