@@ -1,5 +1,6 @@
 package dev.wasil.permit.ui
 
+import dev.wasil.permit.parking.zones.ZonePlace
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -82,5 +83,39 @@ class ZoneAddressTest {
     @Test
     fun `nothing usable gives no label at all, so the caller can fall back`() {
         assertNull(formatPlaceLabel(GeocodedAddress(thoroughfare = "Damstraat")))
+    }
+
+    // --- the same two levels, from the bundled registry (v0.6 zone registry) ---
+
+    @Test
+    fun `the stadsdeel leads and the neighbourhood sits under it`() {
+        val label = formatPlaceLabel(
+            ZonePlace(zoneCode = "AN05C", zoneName = "Noord 5c NDSM",
+                neighbourhood = "NDSM terrein", district = "Noord"),
+        )!!
+        assertEquals("Noord", label.district)
+        assertEquals("NDSM terrein", label.detail)
+    }
+
+    @Test
+    fun `a permit zone with no neighbourhood over it still names the stadsdeel`() {
+        val label = formatPlaceLabel(
+            ZonePlace("CE01", "Centrum 1", neighbourhood = null, district = null),
+        )
+        assertNull(label)
+    }
+
+    @Test
+    fun `a neighbourhood with no stadsdeel leads on its own`() {
+        val label = formatPlaceLabel(ZonePlace(null, null, "Molenwijk", null))!!
+        assertEquals("Molenwijk", label.district)
+        assertNull(label.detail)
+    }
+
+    @Test
+    fun `a neighbourhood named after its stadsdeel is not repeated underneath it`() {
+        val label = formatPlaceLabel(ZonePlace(null, null, "Weesp", "Weesp"))!!
+        assertEquals("Weesp", label.district)
+        assertNull(label.detail)
     }
 }

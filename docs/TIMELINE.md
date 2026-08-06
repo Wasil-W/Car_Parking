@@ -188,6 +188,22 @@ live APIs 2026-08-04.
   data problem: the reference apps draw points with cluster counts, Handoff
   draws 3 km polygons. Restyling cannot fix it.
 
+**Built, awaiting release** — branch `v066-zone-registry`. Both collections are
+bundled as `amsterdam_zones.json` (123 KB, against the tariff file's 631 KB):
+rings re-encoded as polylines at full source precision, nothing simplified, so
+no boundary moves. `ZoneRegistry` resolves a position to a permit zone and a
+neighbourhood, and every screen that names a spot now goes through it, with the
+geocoder kept as the fallback outside Amsterdam. The map header reads "Centrum
+/ Waterloopleinbuurt" and "Noord / NDSM terrein" — stadsdeel over buurt, which
+is [`USER-MODEL`](USER-MODEL.md)'s two-level label finally said literally.
+**The claim decision is untouched**: `ZoneResolver` still reads the tariff
+polygons alone, asserted by a test rather than promised.
+
+What it left open: the 107 permit zones are bundled and resolved but named
+nowhere on screen, because *where permit parking applies* is one step from *is
+the permit valid here*, and that step is item 1's. The paying window (item 3) is
+the screen they belong on.
+
 ---
 
 ## Parked — deliberately not being built

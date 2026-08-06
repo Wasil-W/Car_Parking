@@ -26,6 +26,7 @@ import dev.wasil.permit.parking.shared.UnconfiguredSharedStateStore
 import dev.wasil.permit.parking.shared.roomIdFor
 import dev.wasil.permit.parking.zones.TariffArea
 import dev.wasil.permit.parking.zones.TariffAreas
+import dev.wasil.permit.parking.zones.ZoneRegistry
 import dev.wasil.permit.parking.zones.ZoneResolver
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -70,6 +71,17 @@ class PermitApp : Application() {
             assets.open("amsterdam_tarieven.json").bufferedReader().use { it.readText() }
         }.mapCatching { json -> TariffAreas.parse(json).takeIf { it.isNotEmpty() } }
             .getOrNull()
+    }
+
+    /**
+     * Amsterdam's 107 permit zones and 518 neighbourhoods; null when the asset
+     * is missing or corrupt. Names only — see [ZoneRegistry]. The claim
+     * decision is [zoneResolver]'s and reads the tariff polygons alone.
+     */
+    val zoneRegistry: ZoneRegistry? by lazy {
+        runCatching {
+            assets.open("amsterdam_zones.json").bufferedReader().use { it.readText() }
+        }.mapCatching { ZoneRegistry.parse(it) }.getOrNull()
     }
 
     /** Rebuilt per call: settings (URL, my car, credentials) can change at runtime. */
