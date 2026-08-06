@@ -105,6 +105,8 @@ fun MapCanvas(
     locateRequest: Int = 0,
     /** Bumped to re-run the car-and-me fit that otherwise happens only once. */
     frameRequest: Int = 0,
+    /** Bumped to centre on the parked car. */
+    carRequest: Int = 0,
     onMapTap: ((GeoPoint) -> Unit)? = null,
 ) {
     val context = LocalContext.current
@@ -119,6 +121,7 @@ fun MapCanvas(
     val lastOverviewRequest = remember { mutableStateOf(overviewRequest) }
     val lastLocateRequest = remember { mutableStateOf(locateRequest) }
     val lastFrameRequest = remember { mutableStateOf(frameRequest) }
+    val lastCarRequest = remember { mutableStateOf(carRequest) }
     val lastFraming = remember { mutableStateOf<Pair<List<GeoPoint>, Boolean>?>(null) }
     AndroidView(
         modifier = modifier.fillMaxSize(),
@@ -142,9 +145,11 @@ fun MapCanvas(
             val overviewPending = overviewRequest != lastOverviewRequest.value
             val locatePending = locateRequest != lastLocateRequest.value
             val framePending = frameRequest != lastFrameRequest.value
+            val carPending = carRequest != lastCarRequest.value
             lastOverviewRequest.value = overviewRequest
             lastLocateRequest.value = locateRequest
             lastFrameRequest.value = frameRequest
+            lastCarRequest.value = carRequest
 
             // lastFraming tracks only the framing WE last set, never the map's
             // live (possibly user-panned) position — otherwise re-framing on
@@ -162,6 +167,8 @@ fun MapCanvas(
                     locatePending = locatePending,
                     haveMyPosition = me != null,
                     framePending = framePending,
+                    carPending = carPending,
+                    haveCar = car != null,
                     autoFramePending = autoFramePending,
                 )
             ) {
@@ -169,6 +176,10 @@ fun MapCanvas(
                 // is about seeing boundaries around where you already are.
                 MapCameraCommand.OVERVIEW -> map.controller.setZoom(OVERVIEW_ZOOM)
                 MapCameraCommand.LOCATE -> me?.let {
+                    map.controller.setCenter(OsmGeoPoint(it.lat, it.lng))
+                    map.controller.setZoom(zoom)
+                }
+                MapCameraCommand.CAR -> car?.let {
                     map.controller.setCenter(OsmGeoPoint(it.lat, it.lng))
                     map.controller.setZoom(zoom)
                 }

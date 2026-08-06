@@ -207,6 +207,15 @@ fun MapScreen(
     // second tap has to move the map again even though nothing else changed.
     var locateRequest by remember { mutableIntStateOf(0) }
     var frameRequest by remember { mutableIntStateOf(0) }
+    var carRequest by remember { mutableIntStateOf(0) }
+    // Where the *next* tap of the focus button goes. Starts at BOTH because
+    // that is what the screen already does on open, so the first tap moves you
+    // on rather than repeating what you are looking at.
+    var focus by remember { mutableStateOf(MapFocus.BOTH) }
+    // Corrected for what is actually on the map, every pass — the cycle only
+    // advances on a tap, so a focus chosen while a car pin existed would
+    // otherwise keep offering to frame it after the pin was cleared.
+    val shownFocus = focusOrFallback(focus, car != null, me != null)
     var locating by remember { mutableStateOf(false) }
 
     // The one thing these controls can fail at, said out loud and then gone.
@@ -270,6 +279,7 @@ fun MapScreen(
             overviewRequest = overviewRequest,
             locateRequest = locateRequest,
             frameRequest = frameRequest,
+            carRequest = carRequest,
             onCarTap = {
                 if (car != null && stateStore.parked) {
                     movingPin = true
@@ -457,25 +467,49 @@ fun MapScreen(
                 tariffShowing = showTariff,
                 tariffEnabled = tariffAreas.isNotEmpty(),
                 locating = locating,
-                onLocate = {
-                    // Guarded rather than queued: two reads in flight would
-                    // race to be the one that moves the map.
-                    if (!locating) {
-                        locating = true
-                        scope.launch {
-                            val fix = onLocate()
-                            locating = false
-                            // A failed read is "we do not know", not "you are
-                            // still where you were an hour ago". Nothing moves.
-                            if (fix != null) locateRequest++ else notice = NO_POSITION
+                nextFocus = shownFocus,
+                onFocus = {
+                    // Guarded rather than queued: two position reads in flight
+                    // would race to be the one that moves the map.
+                    if (!locating) when (shownFocus) {
+                        MapFocus.ME -> {
+                            locating = true
+                            scope.launch {
+                                val fix = onLocate()
+                                locating = false
+                                // A failed read is "we do not know", not "you
+                                // are still where you were an hour ago".
+                                // Nothing moves, and the focus does not advance
+                                // past a step that never happened.
+                                if (fix != null) {
+                                    locateRequest++
+                                    focus = nextFocus(shownFocus, car != null, true)
+                                } else {
+                                    notice = NO_POSITION
+                                }
+                            }
+                        }
+                        MapFocus.BOTH -> {
+                            frameRequest++
+                            focus = nextFocus(shownFocus, car != null, me != null)
+                        }
+                        MapFocus.CAR -> {
+                            carRequest++
+                            focus = nextFocus(shownFocus, car != null, me != null)
                         }
                     }
                 },
-                onFrame = { frameRequest++ },
-                // Unchanged from the old text button, zoom-out included.
+                // No camera move. Toggling the overlay used to zoom out to
+                // OVERVIEW_ZOOM first, which threw away wherever you had
+                // navigated to and meant two taps to see anything — reported
+                // across two versions: "it goes back to the standard map...
+                // then next tap it will work. (dont want that ofc)". The
+                // zoom-out was added in v0.5.1 when the map was small and the
+                // overlay was invisible at parking zoom; the map is bigger now
+                // and gets navigated, so the reset costs more than it gave.
                 onToggleTariff = {
                     showTariff = !showTariff
-                    if (showTariff) overviewRequest++ else selectedHit = null
+                    if (!showTariff) selectedHit = null
                 },
                 onSetHomeZone = { addingKind = ZoneKind.HOME },
                 onAddFreeZone = { addingKind = ZoneKind.FREE },

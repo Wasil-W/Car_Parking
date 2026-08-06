@@ -10,8 +10,10 @@ class MapCameraTest {
         locate: Boolean = false,
         haveMe: Boolean = true,
         frame: Boolean = false,
+        car: Boolean = false,
+        haveCar: Boolean = true,
         auto: Boolean = false,
-    ) = mapCameraCommand(overview, locate, haveMe, frame, auto)
+    ) = mapCameraCommand(overview, locate, haveMe, frame, car, haveCar, auto)
 
     @Test
     fun `nothing pending leaves the camera where the user panned it`() {
@@ -23,6 +25,17 @@ class MapCameraTest {
         assertEquals(MapCameraCommand.OVERVIEW, command(overview = true))
         assertEquals(MapCameraCommand.LOCATE, command(locate = true))
         assertEquals(MapCameraCommand.FRAME, command(frame = true))
+        assertEquals(MapCameraCommand.CAR, command(car = true))
+    }
+
+    @Test
+    fun `centring on the car needs a car, and says nothing rather than guessing`() {
+        assertEquals(MapCameraCommand.NONE, command(car = true, haveCar = false, auto = false))
+    }
+
+    @Test
+    fun `a tap on the car beats the automatic fit, like the other taps do`() {
+        assertEquals(MapCameraCommand.CAR, command(car = true, auto = true))
     }
 
     @Test
