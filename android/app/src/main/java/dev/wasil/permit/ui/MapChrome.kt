@@ -20,6 +20,11 @@ import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.IconButton
+import dev.wasil.permit.parking.zones.TariffArea
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -382,4 +387,94 @@ internal fun focusLabel(next: MapFocus): String = when (next) {
     MapFocus.ME -> "Centre on my position"
     MapFocus.BOTH -> "Frame the car and me"
     MapFocus.CAR -> "Centre on the car"
+}
+
+/**
+ * The full week for one tariff area, opened by tapping it and closed by the X.
+ *
+ * The header answers "now" in one line; this answers "and tomorrow". Both exist
+ * because v0.6.0 collapsed the timetable into the live line and deleted the
+ * timetable rather than moving it, which left "what does this cost on Sunday"
+ * with no answer anywhere in the app.
+ *
+ * It takes the walk pill's place rather than stacking above it. Two floating
+ * cards over a map is the crowding this release spent its time removing, and
+ * the pill is one tap away again the moment this closes.
+ */
+@Composable
+fun TariffWeekPanel(
+    area: TariffArea,
+    placeName: String?,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val rows = remember(area) { weekSchedule(area) }
+    Surface(
+        modifier = modifier,
+        shape = HandoffShapes.Card,
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+        shadowElevation = 3.dp,
+    ) {
+        Column(Modifier.padding(start = 14.dp, end = 6.dp, top = 10.dp, bottom = 12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    // The name if we have one, the code if we do not — a person
+                    // reads "Nieuwmarkt", never "T13B".
+                    Text(
+                        placeName ?: area.code,
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    if (placeName != null) {
+                        Text(
+                            area.code,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                IconButton(onClick = onDismiss) {
+                    Icon(
+                        Icons.Filled.Close,
+                        contentDescription = "Close",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            if (rows.isEmpty()) {
+                Text(
+                    "No hours published for this area.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp, end = 8.dp),
+                )
+            }
+            rows.forEach { row ->
+                Row(
+                    Modifier.fillMaxWidth().padding(top = 6.dp, end = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        row.days,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.width(78.dp),
+                    )
+                    Text(
+                        row.hours ?: "free all day",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (row.free) {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        },
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        row.rate.orEmpty(),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+            }
+        }
+    }
 }

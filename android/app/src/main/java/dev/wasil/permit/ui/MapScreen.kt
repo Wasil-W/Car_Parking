@@ -518,7 +518,7 @@ fun MapScreen(
                     .padding(end = CHROME_SIDE_INSET, bottom = CHROME_BOTTOM_INSET),
             )
 
-            if (car != null) {
+            if (car != null && selectedHit == null) {
                 val here = me
                 WalkPill(
                     label = walkPillText(routing, route?.let(::walkSummary), here != null),
@@ -540,6 +540,23 @@ fun MapScreen(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .padding(bottom = CHROME_BOTTOM_INSET, start = 60.dp, end = 60.dp),
+                )
+            }
+
+            // The whole week for a tapped area, and only for a tapped area.
+            // Wasil: "i dont want to always see it, just when i press it."
+            selectedHit?.let { hit ->
+                TariffWeekPanel(
+                    area = hit.area,
+                    placeName = place?.district,
+                    onDismiss = { selectedHit = null },
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(
+                            bottom = CHROME_BOTTOM_INSET,
+                            start = 16.dp,
+                            end = 16.dp + 56.dp,
+                        ),
                 )
             }
         }
