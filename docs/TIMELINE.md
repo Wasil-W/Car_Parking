@@ -199,10 +199,37 @@ is [`USER-MODEL`](USER-MODEL.md)'s two-level label finally said literally.
 **The claim decision is untouched**: `ZoneResolver` still reads the tariff
 polygons alone, asserted by a test rather than promised.
 
-What it left open: the 107 permit zones are bundled and resolved but named
-nowhere on screen, because *where permit parking applies* is one step from *is
-the permit valid here*, and that step is item 1's. The paying window (item 3) is
-the screen they belong on.
+Checked side by side on the emulator against the build before it, which is the
+only way the difference is arguable:
+
+| Where | Before (geocoder) | After (bundled) |
+|---|---|---|
+| Waterlooplein | Amsterdam-Centrum / Waterlooplein | Centrum / **Waterloopleinbuurt** |
+| NDSM | Amsterdam-Noord / Ms. van Riemsdijkweg | Noord / **NDSM terrein** |
+
+NDSM is the case that settles it: the geocoder names a third of the city and
+then a street nobody uses, where the buurt layer says the thing you would say
+out loud.
+
+**Three things it does not settle**, all on the top line and all for Wasil:
+
+1. **The "Amsterdam-" prefix is gone** — "Centrum", not "Amsterdam-Centrum".
+   Not an oversight: the city publishes the bare names, and there is no field
+   distinguishing the seven stadsdelen that take the prefix from Weesp, which
+   is a town and does not. Inventing it would make "Amsterdam-Weesp".
+2. **The big line may be the wrong one.** The specific name is what he asked
+   for and it is in the small grey line, because his own wording put the larger
+   area on top — *"Amsterdam Noord and then a bit smaller underneath it
+   Molenwijk"*. Implemented as recorded rather than as preferred. Swapping them
+   is a mockup, not a patch.
+3. **The street is no longer shown inside Amsterdam.** "Ms. van Riemsdijkweg"
+   was arguably the more useful line when walking back to the car, and a buurt
+   name is not a substitute for it.
+
+What it left open beyond the header: the 107 permit zones are bundled and
+resolved but named nowhere on screen, because *where permit parking applies* is
+one step from *is the permit valid here*, and that step is item 1's. The paying
+window (item 3) is the screen they belong on.
 
 ---
 
