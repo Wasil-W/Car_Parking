@@ -139,7 +139,24 @@ days, parsed at app start. This is formatting, and a panel to put it in.
 
 Do it after v0.6.5, which is editing the same screen.
 
-### 3. Permit and paying as separate destinations, and what sits in the middle
+### 3. Permit and paying as separate destinations — DECIDED: neither, for now
+**Mockup:** <https://claude.ai/code/artifact/5e388efc-0ee1-4974-bcef-530a716f23de>
+
+Drawn as two options and rejected on 2026-08-07 after seeing them. Option A put
+the permit in a coloured centre button; Wasil turned it down for a reason the
+mockup did not anticipate: *"because i want to eventually switch away from my
+brother and i."* Putting identity colour in the most permanent place on screen
+is the strongest version of a thing he intends to stop doing.
+
+Neither option is being built. Four tabs stay. Revisit when paying exists and
+there is a real second destination to justify a fifth — until then the paying
+window is a rate, some hours, and a nearest-machine line whose data is not
+bundled.
+
+Kept because the reasoning cost something to reach, and the next person to
+propose a centre button should read it first.
+
+### 3b. The old plan, for reference
 **Source:** Wasil, 2026-08-05. **Mockup first** — see `CLAUDE.md`.
 
 Two parts, and they arrive together because both land on the tab bar.
@@ -319,6 +336,35 @@ one step from *is the permit valid here*, and that step is item 1's. The paying
 window (item 3) is the screen they belong on.
 
 ---
+
+### Identify the car by its Bluetooth address, not by whose phone it is
+
+**Wasil's idea, 2026-08-07**, and it is better than the roster work that
+preceded it: *"in the way we have mapped out the car1 car2 to a name plate, we
+also could connect the bluetooth address to each car and then based on that
+check which car needs the permit."*
+
+**It removes the question rather than answering it.** The app currently asks
+"whose phone is this" so it can infer which car you drive. But the car announces
+itself: a phone connects to *that* stereo's MAC, so the pairing already says
+which car it is riding in. Store the MAC **on the vehicle** and the app knows
+which car needs the permit without anyone being named.
+
+This also settles the thing v0.6.7's roster deliberately left open. That work
+kept `carMac` on `ParkStateStore`, reasoning the MAC is a fact about this phone
+and its stereo. That reasoning holds for *one* phone's pairing, but it misses
+this: with a MAC per vehicle, "which car am I in" stops being a stored answer and
+becomes an observation, and observations do not go stale when someone borrows a
+car.
+
+**Why it matters beyond tidiness.** Wasil: *"i want to eventually switch away
+from my brother and i."* Names are the last two-person assumption in the app.
+The Bluetooth address is the one identifier that is about the *car*, needs no
+agreement between phones, and cannot be typed in wrong.
+
+Open, and worth thinking about before building: a car with no Bluetooth, two
+phones paired to the same car, and what happens on a phone that has never
+connected to any of them.
 
 ## Parked — deliberately not being built
 
