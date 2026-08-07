@@ -141,5 +141,11 @@ class PermitApp : Application() {
     }
 
     fun zoneResolver(): ZoneResolver =
-        ZoneResolver(parkStateStore.homeZone, freeZoneStore.all(), tariffAreas)
+        ZoneResolver(
+            parkStateStore.homeZone, freeZoneStore.all(), tariffAreas,
+            // What gives an area-backed free zone its edges. The registry is the
+            // same bundle the map header names places from, so a zone called
+            // "Molenwijk" is the Molenwijk the header shows.
+            areaShape = { name -> zoneRegistry?.shapeOf(name) },
+        )
 }

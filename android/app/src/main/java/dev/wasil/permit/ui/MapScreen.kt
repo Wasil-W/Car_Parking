@@ -41,7 +41,12 @@ import dev.wasil.permit.parking.ParkStateStore
 import dev.wasil.permit.parking.distanceMeters
 import dev.wasil.permit.parking.android.ParkActionReceiver
 import dev.wasil.permit.parking.android.SharedSync
+import dev.wasil.permit.parking.areaSizeText
+import dev.wasil.permit.parking.areaSqKm
+import dev.wasil.permit.parking.zones.LatLng
 import dev.wasil.permit.parking.zones.TariffArea
+import dev.wasil.permit.parking.zones.ZonePolygon
+import dev.wasil.permit.parking.zones.ZoneRegistry
 import dev.wasil.permit.parking.route.WalkRoute
 import dev.wasil.permit.parking.route.fetchWalkRoute
 import dev.wasil.permit.parking.route.walkSummary
@@ -126,6 +131,16 @@ fun MapScreen(
     freeZoneStore: FreeZoneStore,
     me: GeoPoint?,
     tariffAreas: List<TariffArea>,
+    /**
+     * Amsterdam's neighbourhoods, which is what a free zone is made of since
+     * v0.6.8 — Wasil, 2026-08-08, looking at the council's map of Molenwijk:
+     * *"we can put those for the free zones, with outline."*
+     *
+     * Null when the bundled asset is missing, and null is a working state
+     * rather than a broken one: the placing flow then offers the circle it
+     * always did, which is also what happens anywhere outside the city.
+     */
+    zoneRegistry: ZoneRegistry?,
     // A factory, not an instance: the resolver closes over the home zone and
     // the free-zone list, both of which this very screen can change.
     zoneResolver: () -> ZoneResolver,
@@ -153,9 +168,18 @@ fun MapScreen(
     var homeZone by remember { mutableStateOf(stateStore.homeZone) }
     var freeZones by remember { mutableStateOf(freeZoneStore.all()) }
 
+    // How an area-backed zone gets its edges, everywhere on this screen: drawn,
+    // hit-tested and resolved from the one bundle, so the outline you tap is the
+    // outline the claim decision uses.
+    val areaShape: (String) -> List<ZonePolygon>? =
+        remember(zoneRegistry) { { name -> zoneRegistry?.shapeOf(name) } }
+
     var addingKind by remember { mutableStateOf<ZoneKind?>(null) }
     var candidatePoint by remember { mutableStateOf<GeoPoint?>(null) }
     var candidateRadius by remember { mutableFloatStateOf(ZONE_RADIUS_DEFAULT_M.toFloat()) }
+    // The neighbourhood under the candidate point, when there is one and the
+    // zone is a free one. Home zones never take an area — see ZoneResolver.
+    var candidateBuurt by remember { mutableStateOf<String?>(null) }
     // Tapping an existing zone opens the rename/remove dialog below.
     var zoneDialogTarget by remember { mutableStateOf<ZoneRef?>(null) }
 
@@ -186,7 +210,18 @@ fun MapScreen(
     var tooFarM by remember { mutableStateOf<Double?>(null) }
     var flipToConfirm by remember { mutableStateOf<Flip?>(null) }
 
-    val candidateZone = candidatePoint?.let { FreeZone(it.lat, it.lng, candidateRadius.toDouble()) }
+    val candidateBuurtInUse = candidateBuurt?.takeIf { addingKind != ZoneKind.HOME }
+    val candidateZone = candidatePoint?.let {
+        FreeZone(it.lat, it.lng, candidateRadius.toDouble(), buurt = candidateBuurtInUse)
+    }
+    // The size of what is being offered, worked out once. A whole neighbourhood
+    // marked free is a strong claim — the app will never take the permit
+    // anywhere inside it — and buurten run from a few streets to most of a
+    // district, so the number belongs in front of the person choosing rather
+    // than in a document nobody reads.
+    val candidateAreaSize = remember(candidateBuurtInUse) {
+        candidateBuurtInUse?.let { name -> areaShape(name)?.let { areaSizeText(areaSqKm(it)) } }
+    }
 
     // Off by default: the car's own area is named in the header and outlined on
     // the map, without 29 filled polygons burying the zone circles. The button
@@ -280,8 +315,19 @@ fun MapScreen(
     // too, by swapping the button card for the hint card in the same slot.
     val placing = addingKind != null || candidatePoint != null || movingPin || pending != null
 
-    /** Drops a candidate at an exactly known point, skipping the map tap. */
-    val placeAt: (GeoPoint) -> Unit = { point -> candidatePoint = point }
+    /**
+     * Drops a candidate, and names the neighbourhood it landed in.
+     *
+     * The lookup is the whole free-zone flow: tap, and the app already knows the
+     * area is called Molenwijk and can offer it. It is a point-in-polygon test
+     * against a bundled asset, so it is instant and offline — there is nothing
+     * to wait for and no failure to handle beyond "no buurt here", which is what
+     * being outside Amsterdam looks like.
+     */
+    val placeAt: (GeoPoint) -> Unit = { point ->
+        candidatePoint = point
+        candidateBuurt = zoneRegistry?.resolve(LatLng(point.lat, point.lng))?.neighbourhood
+    }
 
     Box(Modifier.fillMaxSize()) {
         MapCanvas(
@@ -290,6 +336,7 @@ fun MapScreen(
             homeZone = homeZone,
             freeZones = freeZones,
             candidateZone = candidateZone,
+            areaShape = areaShape,
             tariffAreas = visibleTariffAreas,
             highlightRing = highlight?.ring,
             ghostCar = pending?.point,
@@ -311,7 +358,7 @@ fun MapScreen(
             // Below them, mapHitAt is the single precedence rule.
             onMapTap = { point ->
                 when {
-                    addingKind != null -> candidatePoint = point
+                    addingKind != null -> placeAt(point)
                     movingPin && car != null -> {
                         // Anchored to where detection put the car, not to
                         // the current pin: measuring from the pin let a
@@ -337,7 +384,7 @@ fun MapScreen(
                     // v0.6.6 and was unreachable without first finding the
                     // layers button. Selecting an area is about what is under
                     // your finger, never about which layer happens to be drawn.
-                    else -> when (val hit = mapHitAt(point, homeZone, freeZones, tariffAreas)) {
+                    else -> when (val hit = mapHitAt(point, homeZone, freeZones, tariffAreas, areaShape)) {
                         is MapHit.Zone -> zoneDialogTarget = hit.ref
                         is MapHit.Tariff -> {
                             selectedHit = hit.hit
@@ -374,6 +421,11 @@ fun MapScreen(
                     TariffChip(
                         area = area,
                         placeName = place?.district,
+                        // Resolved for the point that was actually tapped (see
+                        // `namePoint`), so selecting a different section names
+                        // that section's own neighbourhood — "for every section
+                        // their own thing ofcourse".
+                        placeDetail = place?.detail,
                         placeResolved = placeResolved,
                         dayIndex = dayIndex,
                         minuteOfDay = minuteOfDay,
@@ -437,6 +489,8 @@ fun MapScreen(
                         kind = addingKind ?: ZoneKind.FREE,
                         radiusM = candidateRadius,
                         onRadiusChange = { candidateRadius = it },
+                        areaName = candidateBuurtInUse,
+                        areaSize = candidateAreaSize,
                         // Both null-checked: an offer that cannot work is worse
                         // than no offer, and "we do not know where you are" is
                         // a state this app is careful never to paper over.
@@ -445,6 +499,7 @@ fun MapScreen(
                         onCancel = {
                             addingKind = null
                             candidatePoint = null
+                            candidateBuurt = null
                         },
                         onConfirm = {
                             candidatePoint?.let { point ->
@@ -470,25 +525,22 @@ fun MapScreen(
                                             }
                                         }
                                     }
-                                    ZoneKind.FREE, null -> {
-                                        val zone = FreeZone(point.lat, point.lng, radius, placeholder)
-                                        freeZoneStore.add(zone)
+                                    // A free zone is a neighbourhood or it is
+                                    // nothing. Already named by the city, so no
+                                    // geocode is wanted: "Molenwijk" is the
+                                    // answer, and a street address would be a
+                                    // worse one for a whole neighbourhood.
+                                    ZoneKind.FREE, null -> candidateBuurtInUse?.let { area ->
+                                        freeZoneStore.add(
+                                            FreeZone(point.lat, point.lng, radius, label = area, buurt = area),
+                                        )
                                         freeZones = freeZoneStore.all()
-                                        val index = freeZones.lastIndex
-                                        scope.launch {
-                                            val address = reverseGeocodeAddress(context, point) ?: return@launch
-                                            // Only apply if that slot still holds this same placeholder zone.
-                                            val current = freeZoneStore.all()
-                                            if (index in current.indices && current[index] == zone) {
-                                                freeZoneStore.updateLabel(index, address)
-                                                freeZones = freeZoneStore.all()
-                                            }
-                                        }
                                     }
                                 }
                             }
                             addingKind = null
                             candidatePoint = null
+                            candidateBuurt = null
                         },
                     )
                     addingKind != null -> ZonePlaceHintCard(
@@ -564,16 +616,28 @@ fun MapScreen(
             // No longer hidden while an area is selected: the week has moved
             // into the header, so nothing is standing in the pill's place.
             if (car != null) {
-                val here = me
                 WalkPill(
-                    label = walkPillText(routing, route?.let(::walkSummary), here != null),
+                    label = walkPillText(routing, route?.let(::walkSummary)),
                     enabled = !routing,
+                    // The route starts from where you are standing when you press
+                    // it, and that is now asked for at press time rather than
+                    // assumed from `me`. `me` is a fix taken when a tab was
+                    // opened; by the time you have panned around looking for the
+                    // car it is neither fresh nor, if it failed, final. The
+                    // hand-off to a maps app survives as what happens when the
+                    // phone genuinely cannot say where it is — with the reason
+                    // on screen, rather than as a label chosen in advance.
                     onClick = {
-                        when {
-                            route != null -> route = null
-                            here == null -> openWalkingDirections(context, car)
-                            else -> scope.launch {
-                                routing = true
+                        if (route != null) {
+                            route = null
+                        } else scope.launch {
+                            routing = true
+                            val here = onLocate() ?: me
+                            if (here == null) {
+                                routing = false
+                                notice = NO_POSITION
+                                openWalkingDirections(context, car)
+                            } else {
                                 route = fetchWalkRoute(routeClient, here, car)
                                 routing = false
                             }
@@ -613,6 +677,8 @@ fun MapScreen(
                 target = target,
                 zone = currentZone,
                 onDismiss = { zoneDialogTarget = null },
+                areaSize = currentZone.buurt
+                    ?.let { name -> areaShape(name)?.let { areaSizeText(areaSqKm(it)) } },
                 // Both fields land in one write. Resizing is new in v0.6.8 —
                 // before it, a zone that turned out to be too small had to be
                 // deleted and placed again, which is why the free-zone store
@@ -666,6 +732,7 @@ fun MapScreen(
                 addingKind = ZoneKind.FREE
             },
             onDismiss = { zoneListOpen = false },
+            sizeText = { zoneSizeText(it.zone, areaShape) },
         )
     }
 

@@ -14,8 +14,26 @@ import org.junit.Test
 
 class MapZonesTest {
     private val home = FreeZone(52.3702, 4.8952, radiusM = 60.0, label = "Home")
-    private val zoneA = FreeZone(52.3800, 4.9000, radiusM = 50.0)
-    private val zoneB = FreeZone(52.3900, 4.9100, radiusM = 50.0)
+    // Free zones are neighbourhoods since v0.6.8. Each fixture gets a square
+    // boundary standing in for the buurt polygon the app would look up.
+    private val zoneA = FreeZone(52.3800, 4.9000, radiusM = 50.0, buurt = "A")
+    private val zoneB = FreeZone(52.3900, 4.9100, radiusM = 50.0, buurt = "B")
+    private val shapes: (String) -> List<ZonePolygon>? = { name ->
+        when (name) {
+            "A" -> squareAround(52.3800, 4.9000)
+            "B" -> squareAround(52.3900, 4.9100)
+            "big" -> squareAround(52.0, 4.0, halfLat = 0.0020)
+            "small" -> squareAround(52.0009, 4.0, halfLat = 0.0004)
+            else -> null
+        }
+    }
+
+    /** A square of [halfLat] degrees either side, widened for longitude at 52 N. */
+    private fun squareAround(lat: Double, lng: Double, halfLat: Double = 0.00045) =
+        listOf(ZonePolygon(outer = listOf(
+            LatLng(lat - halfLat, lng - halfLat * 1.63), LatLng(lat - halfLat, lng + halfLat * 1.63),
+            LatLng(lat + halfLat, lng + halfLat * 1.63), LatLng(lat + halfLat, lng - halfLat * 1.63),
+        )))
 
     @Test
     fun `tap inside the home zone hits Home`() {
@@ -26,13 +44,13 @@ class MapZonesTest {
     fun `tap inside a free zone hits its index`() {
         assertEquals(
             ZoneRef.Free(1),
-            zoneHitAt(GeoPoint(52.3900, 4.9100, 0f), home, listOf(zoneA, zoneB)),
+            zoneHitAt(GeoPoint(52.3900, 4.9100, 0f), home, listOf(zoneA, zoneB), shapes),
         )
     }
 
     @Test
     fun `tap outside every zone hits nothing`() {
-        assertNull(zoneHitAt(GeoPoint(10.0, 10.0, 0f), home, listOf(zoneA, zoneB)))
+        assertNull(zoneHitAt(GeoPoint(10.0, 10.0, 0f), home, listOf(zoneA, zoneB), shapes))
     }
 
     @Test
@@ -42,10 +60,11 @@ class MapZonesTest {
 
     @Test
     fun `overlapping zones — the nearest centre wins`() {
-        val big = FreeZone(52.0, 4.0, radiusM = 200.0)
-        val small = FreeZone(52.0009, 4.0, radiusM = 30.0) // ~100 m north of big, inside both
+        val big = FreeZone(52.0, 4.0, radiusM = 200.0, buurt = "big")
+        // ~100 m north of big, inside both.
+        val small = FreeZone(52.0009, 4.0, radiusM = 30.0, buurt = "small")
         val tap = GeoPoint(52.0009, 4.0, 0f) // dead centre of the small zone
-        assertEquals(ZoneRef.Free(1), zoneHitAt(tap, null, listOf(big, small)))
+        assertEquals(ZoneRef.Free(1), zoneHitAt(tap, null, listOf(big, small), shapes))
     }
 
     @Test
@@ -169,7 +188,7 @@ class MapZonesTest {
     @Test
     fun `a tap on a tariff area with no zone under it hits the tariff area`() {
         val tap = GeoPoint(52.3650, 4.8850, 0f)
-        val hit = mapHitAt(tap, home, listOf(zoneA, zoneB), listOf(paidArea))
+        val hit = mapHitAt(tap, home, listOf(zoneA, zoneB), listOf(paidArea), shapes)
         assertEquals(paidArea, (hit as MapHit.Tariff).hit.area)
     }
 
@@ -206,16 +225,16 @@ class MapZonesTest {
 
     @Test
     fun `a tap outside everything hits nothing`() {
-        assertNull(mapHitAt(GeoPoint(10.0, 10.0, 0f), home, listOf(zoneA), listOf(paidArea)))
+        assertNull(mapHitAt(GeoPoint(10.0, 10.0, 0f), home, listOf(zoneA), listOf(paidArea), shapes))
     }
 
     @Test
     fun `zone precedence still uses the nearest centre inside mapHitAt`() {
-        val big = FreeZone(52.0, 4.0, radiusM = 200.0)
-        val small = FreeZone(52.0009, 4.0, radiusM = 30.0)
+        val big = FreeZone(52.0, 4.0, radiusM = 200.0, buurt = "big")
+        val small = FreeZone(52.0009, 4.0, radiusM = 30.0, buurt = "small")
         assertEquals(
             MapHit.Zone(ZoneRef.Free(1)),
-            mapHitAt(GeoPoint(52.0009, 4.0, 0f), null, listOf(big, small), emptyList()),
+            mapHitAt(GeoPoint(52.0009, 4.0, 0f), null, listOf(big, small), emptyList(), shapes),
         )
     }
 

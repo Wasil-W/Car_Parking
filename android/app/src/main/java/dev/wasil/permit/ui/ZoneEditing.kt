@@ -45,6 +45,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import dev.wasil.permit.R
@@ -233,21 +234,32 @@ internal fun ZonePlaceHintCard(
  * per `Color.kt`: a distinction that still reads when colour does not.
  */
 @Composable
-private fun ZoneRing(home: Boolean) {
+private fun ZoneRing(home: Boolean, area: Boolean = false) {
     val color = MaterialTheme.colorScheme.onSurfaceVariant
     Canvas(Modifier.size(18.dp)) {
         val stroke = 2.dp.toPx()
+        val dashes = PathEffect.dashPathEffect(floatArrayOf(stroke * 1.6f, stroke * 1.3f))
+        if (area) {
+            // A blob rather than a circle, dashed like every other free zone.
+            // A neighbourhood is not round and the row should not imply it is —
+            // this is the same distinction the map draws, at 18dp.
+            val w = size.width
+            val h = size.height
+            val path = Path().apply {
+                moveTo(w * 0.10f, h * 0.36f)
+                lineTo(w * 0.42f, h * 0.08f)
+                lineTo(w * 0.90f, h * 0.26f)
+                lineTo(w * 0.80f, h * 0.78f)
+                lineTo(w * 0.34f, h * 0.92f)
+                close()
+            }
+            drawPath(path, color = color, style = Stroke(width = stroke, pathEffect = dashes))
+            return@Canvas
+        }
         drawCircle(
             color = color,
             radius = (size.minDimension - stroke) / 2f,
-            style = Stroke(
-                width = stroke,
-                pathEffect = if (home) {
-                    null
-                } else {
-                    PathEffect.dashPathEffect(floatArrayOf(stroke * 1.6f, stroke * 1.3f))
-                },
-            ),
+            style = Stroke(width = stroke, pathEffect = if (home) null else dashes),
         )
     }
 }
@@ -270,7 +282,30 @@ internal fun ZoneHintCard(text: String, onCancel: () -> Unit) {
 }
 
 /**
- * The card that stands where a zone is being placed.
+ * The card that stands where a zone is being placed — in one of two modes,
+ * chosen by whether the tap landed in a neighbourhood the city has named.
+ *
+ * **The area mode is the answer to "home zones and free zones feel identical".**
+ * They did, because both were a circle with the same slider, and Wasil's own
+ * fix — 2026-08-08, looking at the council's map of Molenwijk — was: *"do you
+ * see the molenwijk. We could do that we can put those for the free zones, with
+ * outline."* So a free zone in Amsterdam is a neighbourhood, offered by name,
+ * with the city's boundary. Nothing is dragged, so nothing is approximate, and
+ * the sizing complaint stops being a UI problem.
+ *
+ * The home zone keeps the circle and the slider, and the difference is now
+ * meaningful rather than incidental: a home zone is *a point you own* — your
+ * street, deliberately 30–200 m — while a free zone is *an area you know about*,
+ * and areas have published edges.
+ *
+ * [areaSize] is shown rather than hidden because marking an area free is a
+ * standing instruction never to claim the permit anywhere inside it. Buurten run
+ * from a few streets to most of a district, and being wrong here costs a fine,
+ * so the person choosing gets the number.
+ *
+ * [onUseCircleInstead] is the escape from the area, and it is not a
+ * formality: a free car park at the edge of a large buurt is a real thing to
+ * want, and the neighbourhood would be a far bigger claim than was meant.
  *
  * [onUseMyPosition] and [onUseCarSpot] are the precision that a map tap cannot
  * give. Aiming at a map at parking zoom is worth maybe ten metres on a good
@@ -288,19 +323,66 @@ internal fun ZoneCandidateCard(
     onUseCarSpot: (() -> Unit)?,
     onCancel: () -> Unit,
     onConfirm: () -> Unit,
+    /** The neighbourhood under the tap, or null when there is none there. */
+    areaName: String? = null,
+    /** "0.6 km²" — how much ground [areaName] covers. */
+    areaSize: String? = null,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
     ) {
         Column(Modifier.fillMaxWidth().padding(14.dp)) {
-            Text(kind.title(), style = MaterialTheme.typography.bodyLarge)
-            Text(
-                "Tap the map to move it, or type a radius.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            RadiusControl(radiusM, onRadiusChange, Modifier.padding(top = 10.dp))
+            val offerable = kind == ZoneKind.HOME || areaName != null
+            when {
+                kind == ZoneKind.HOME -> {
+                    Text(kind.title(), style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "Tap the map to move it, or type a radius.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    RadiusControl(radiusM, onRadiusChange, Modifier.padding(top = 10.dp))
+                }
+                areaName != null -> {
+                    // Full strength, like the size under it. The card's own
+                    // content colour is onSurfaceVariant, which left the
+                    // question paler than its own answer — seen on the emulator,
+                    // and it read as an accident rather than a hierarchy.
+                    Text(
+                        zoneAreaOffer(areaName),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    // The size at full strength, not as a footnote. It is the
+                    // one moment a person can tell a street corner from half a
+                    // district, and the consequence of getting it wrong is
+                    // silent — see [zoneAreaSizeLine].
+                    Text(
+                        zoneAreaSizeLine(areaSize),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                    Text(
+                        ZONE_AREA_CONSEQUENCE,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
+                // No published area covers this point, so there is nothing to
+                // mark and no Confirm to offer. Said about *this spot* rather
+                // than about a city — see [NO_NEIGHBOURHOOD_HERE].
+                else -> {
+                    Text("No area published here", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        NO_NEIGHBOURHOOD_HERE,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
             if (onUseMyPosition != null || onUseCarSpot != null) {
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     onUseMyPosition?.let {
@@ -313,7 +395,7 @@ internal fun ZoneCandidateCard(
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 TextButton(onClick = onCancel) { Text("Cancel") }
-                TextButton(onClick = onConfirm) { Text("Confirm") }
+                if (offerable) TextButton(onClick = onConfirm) { Text("Confirm") }
             }
         }
     }
@@ -335,6 +417,8 @@ internal fun ZoneEditDialog(
     onDismiss: () -> Unit,
     onSave: (label: String, radiusM: Double) -> Unit,
     onRemove: () -> Unit,
+    /** "0.6 km²" for a neighbourhood-backed zone; null for a circle. */
+    areaSize: String? = null,
 ) {
     var name by remember(target) { mutableStateOf(zone.label) }
     var radius by remember(target) { mutableFloatStateOf(zone.radiusM.toFloat()) }
@@ -350,7 +434,23 @@ internal fun ZoneEditDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                RadiusControl(radius, onRadiusChange = { radius = it })
+                // A neighbourhood has no radius to change, so it is not offered
+                // one. Showing a disabled slider would imply the boundary is
+                // ours to move; it is the city's, which is the whole reason
+                // this kind of zone exists. Removing and re-picking is the way
+                // to change which area it is — one tap either way.
+                if (zone.isArea) {
+                    Text(
+                        listOfNotNull(
+                            zone.buurt?.let { "The whole of $it, with the city's own boundary" },
+                            areaSize?.let { "about $it" },
+                        ).joinToString(" · ") + ".",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    RadiusControl(radius, onRadiusChange = { radius = it })
+                }
                 Text(
                     when (target) {
                         ZoneRef.Home ->
@@ -403,6 +503,8 @@ internal fun ZoneListSheet(
     onPick: (ZoneEntry) -> Unit,
     onAddFreeZone: () -> Unit,
     onDismiss: () -> Unit,
+    /** "60 m" or "0.6 km²" — the row's own unit; see [zoneSizeText]. */
+    sizeText: (ZoneEntry) -> String = { "" },
 ) {
     val colors = LocalHandoffColors.current
     ModalBottomSheet(
@@ -438,7 +540,7 @@ internal fun ZoneListSheet(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        ZoneRing(home = entry.ref == ZoneRef.Home)
+                        ZoneRing(home = entry.ref == ZoneRef.Home, area = entry.isArea)
                         Text(
                             entry.label,
                             style = MaterialTheme.typography.bodyMedium,
@@ -447,7 +549,7 @@ internal fun ZoneListSheet(
                             modifier = Modifier.weight(1f),
                         )
                         Text(
-                            "${radiusFieldText(entry.radiusM)} m",
+                            sizeText(entry),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

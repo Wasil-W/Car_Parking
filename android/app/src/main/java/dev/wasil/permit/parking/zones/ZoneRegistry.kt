@@ -81,6 +81,27 @@ class ZoneRegistry(
      * points across the city's bounding box produced no double hit in either
      * collection, so there is no tie to break.
      */
+    /**
+     * The boundary of a neighbourhood by name, or null if this build does not
+     * have one under that name.
+     *
+     * Added in v0.6.8, when a free zone stopped being a circle and became a
+     * neighbourhood. Names are the key rather than indices — see
+     * [dev.wasil.permit.parking.FreeZone.buurt] — and a name that no longer
+     * resolves returns null rather than the nearest match, because a zone
+     * silently moving to a different neighbourhood is worse than one that stops
+     * matching.
+     *
+     * Ambiguity is real and settled by taking all of them: the city has more
+     * than one buurt called "Amstel III deel A/B/C" and similar, and a person
+     * who marked one of those free almost certainly meant the place, not one of
+     * its administrative halves.
+     */
+    fun shapeOf(neighbourhood: String): List<ZonePolygon>? =
+        neighbourhoods.filter { it.name.equals(neighbourhood, ignoreCase = true) }
+            .flatMap { it.polygons }
+            .takeIf { it.isNotEmpty() }
+
     fun resolve(point: LatLng): ZonePlace? {
         val zone = zones.firstOrNull { it.polygons.any { p -> pointInPolygon(point, p) } }
         val hood = neighbourhoods.firstOrNull { it.polygons.any { p -> pointInPolygon(point, p) } }

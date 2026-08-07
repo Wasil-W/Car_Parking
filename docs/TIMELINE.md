@@ -45,6 +45,7 @@ other document under `docs/` is a deep-dive that this one points at.
 | `v0.6.1` | The obligation/settlement split made visible: "This spot" above the permit card |
 | `v0.6.2` | Live location while Bluetooth-connected, sealed at disconnect; coordinates removed from the wire; rate comparison built |
 | `v0.6.3` | Zone code and rate removed from the wire, comparison machinery deleted. `PhoneState` is three fields, all of them read. No UI change |
+| `v0.6.8` | **A wrong permit password looked like success** — the request went out on the previous session's token. Also: a park recorded at a traffic light, a failed refresh that erased the permit holder, the timetable made reachable and merged into the header chip, and free zones became real Amsterdam neighbourhoods with the city's own boundaries |
 | `v0.6.7` | **The plates were stored swapped on the second phone** — a claim could move the permit to the wrong car. `MyCar` replaced by a vehicle roster, nothing on screen changed, setup survives the upgrade. Permit-kind foundation, unread |
 | `v0.6.6` | The full tariff week on tap, free days included; real zone and neighbourhood names bundled from the city's own data (107 zones, 518 buurten, 123 KB) replacing the geocoder inside Amsterdam |
 | `v0.6.5` | Two-colour identity restored (it keyed on sync, not on plates); one cycling focus button; the layers toggle stops moving the camera; setup reads plates from the permit account; takeover alerts reach you mid-drive; a no-position park stops publishing a guess; screen and claim decision agree |
@@ -137,7 +138,22 @@ zo      free all day
 **No new data.** `TariffArea.windows` already holds every band with its rate and
 days, parsed at app start. This is formatting, and a panel to put it in.
 
-Do it after v0.6.5, which is editing the same screen.
+**Shipped in v0.6.8, and it took two goes.** v0.6.6 built the panel and it was
+unreachable: the tap that opens it was matched against the *drawn* tariff areas,
+which are an empty list whenever the overlay is off — and the overlay is off by
+default. Tapping the very area the header was naming did nothing, silently.
+Wasil, correctly, reported it as *"still no way to see the full timetable"*, and
+the whole feature had shipped without anyone being able to reach it.
+
+The lesson is not "test the tap". It is that **one word chose the wrong list**,
+and a test asserting `mapHitAt(..., emptyList())` finds nothing passed happily
+because it was describing the bug. What caught it was somebody trying to use it.
+
+v0.6.8 also merged the panel into the header chip — *"my initial idea was that
+the small thing expands instead of another one"* — so the rate is stated once
+rather than twice in two shapes, and the chip grows downward from itself. The
+expanded view names the **neighbourhood**, not the tariff code: `T13B` now
+appears only as a last-resort heading when no name resolves at all.
 
 ### 3. Permit and paying as separate destinations — DECIDED: neither, for now
 **Mockup:** <https://claude.ai/code/artifact/5e388efc-0ee1-4974-bcef-530a716f23de>
@@ -335,6 +351,64 @@ resolved but named nowhere on screen, because *where permit parking applies* is
 one step from *is the permit valid here*, and that step is item 1's. The paying
 window (item 3) is the screen they belong on.
 
+### 7. Free zones are neighbourhoods — SHIPPED in v0.6.8
+
+**Source:** Wasil, 2026-08-08, pointing at the council's own map: *"do you see
+the molenwijk. We could do that we can put those for the free zones, with
+outline."*
+
+The complaint it answers had been standing for a while: home zones and free
+zones **felt identical** — same circle, same radius slider — and sizing an area
+by dragging over a map is not precise. His answer is better than the one this
+file was carrying (which guessed free zones might split by size): an area has
+published edges, so nothing needs sizing at all.
+
+A free zone is now one of Amsterdam's 518 buurten, with the city's boundary,
+picked by tapping the map once and confirming. **The home zone stays a circle**,
+30–200 m, per `BACKLOG.md`'s locked decision — and that difference is now the
+whole distinction rather than an accident: *a home is a point you own, a free
+zone is an area you know about.*
+
+The data cost nothing: `amsterdam_zones.json` has been bundled since v0.6.6 and
+`ZoneRegistry` already resolved a point to its neighbourhood. This was selection,
+drawing and containment, not integration.
+
+**Two decisions worth arguing with:**
+
+- **The confirmation states the area's size**, at full strength rather than as a
+  footnote — *"0.17 km² · the whole neighbourhood"*, then *"The permit will never
+  be claimed anywhere inside it."* Marking a buurt free switches off claiming
+  across all of it, buurten run from a few streets to most of a stadsdeel, and
+  the failure is **silent**: what goes wrong is that nothing happens, which is
+  exactly what a fine looks like beforehand.
+- **Free zones saved before v0.6.8 are dropped, not migrated.** Cleared with
+  Wasil — *"Dont really need them as i only have one for my home zone, 1sec
+  fix"*; his one circle is the *home* zone, which is untouched. They are filtered
+  out on read rather than left listed, because a row in "Your zones" that the
+  claim decision quietly ignores is worse than no row.
+
+### Amsterdam-only, deliberately — stated as of v0.6.8
+
+Worth writing down because it has always been true and was never said: **this app
+works where Amsterdam's published parking data reaches, and nowhere else.** The
+tariff areas are Amsterdam's, the 518 buurten are Amsterdam's, the permit is an
+Amsterdam visitor permit.
+
+Free zones were the one feature that happened to work anywhere, and only because
+a circle does not need to know what city it is in. v0.6.8 ended that, and the
+scope is now consistent rather than accidentally broader in one corner. Wasil on
+the rest of the country: *"Utrecht will get its own update hahaha."*
+
+**Coverage is containment, never a name.** His own framing: *"just where the
+amsterdam jurisdiction goes over. so all the places on the map we got from
+amsterdam vergunning parkeren."* So "are we in scope here?" is `ZoneRegistry`
+returning a match for a point — testable, with no latitude ranges and no
+hard-coded city name. This matters at the edges: **Weesp** is in the municipality
+and in this data while not taking the "Amsterdam-" prefix, which is the same trap
+item 6 hit when it declined to synthesise that prefix. Anything checking scope by
+string would be wrong exactly there, so the refusal copy talks about *this spot*
+rather than about a city.
+
 ---
 
 ### Identify the car by its Bluetooth address, not by whose phone it is
@@ -434,6 +508,8 @@ and the code does not, which is also why the map header shows a neighbourhood.)*
 | "The `V` in tariff codes means *vergunning*" | It means round-the-clock. Every `V` code carries `ma-zo 00-24` and no other does. |
 | "The RD-versus-WGS84 coordinate system is a hazard" | It is one HTTP header. |
 | Tariff comparison is out of scope | Reinstated by Wasil 2026-08-04, and more feasible than when it was dropped, since v0.6.0 built the schedule engine. |
+| "`sealAtDisconnect` stops a Bluetooth blip that reconnects mid-detection" (comment in `ParkDetectionUseCase`, v0.6.2) | **Half true, and the wrong half.** The seal only ever guarded the *fallback* trail, reached when no live fix exists. At a traffic light in the open the GPS answers fine, so a fresh fix took the other branch and was never checked against the link at all. That is how v0.6.8's stoplight park happened. The comment was carried for three releases stating a guarantee the code did not make. |
+| "Storing permit credentials that turn out to be wrong is harmless and recoverable" (`MainViewModel.findPlates`) | True only while nothing could tell they were wrong — which was itself the bug. A working install re-typed with a slip was left signing in with a rejected password on every background claim. v0.6.8 rolls back a refused pair. |
 
 ---
 

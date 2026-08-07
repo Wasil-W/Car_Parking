@@ -98,16 +98,25 @@ fun homeZoneMenuLabel(homeZoneSet: Boolean): String =
     if (homeZoneSet) "Move home zone" else "Set home zone"
 
 /**
- * The one label on the walk pill, in the four states it has.
+ * The one label on the walk pill, in the three states it has.
  *
- * The no-position case is the one that matters: without a fix of our own there
- * is no line to draw, so the pill stays the old hand-off to a maps app rather
- * than becoming a button that appears to work and does nothing.
+ * **It used to have four**, and the fourth was a guess dressed as a fact. When
+ * the last known position was null the pill relabelled itself "Open walk in
+ * Maps" — announcing a hand-off to another app on the strength of a fix that had
+ * failed, possibly hours earlier, and possibly for a reason that no longer
+ * applied. Wasil, 2026-08-08: *"why does it now say walk with google maps even
+ * though it always was within the app."* Nothing had been removed; the app had
+ * simply stopped being able to see itself, and said so in the wrong tense.
+ *
+ * The app cannot know whether it has a position until it asks, so the label no
+ * longer pretends to. The pill says what it is for, the tap asks, and a read
+ * that genuinely fails then hands off to a maps app *and says why* — see
+ * `MapScreen`. Announcing the fallback before attempting the thing is the same
+ * mistake as publishing a guess, pointed at a button.
  */
-fun walkPillText(routing: Boolean, routeSummary: String?, haveMyPosition: Boolean): String = when {
+fun walkPillText(routing: Boolean, routeSummary: String?): String = when {
     routing -> "Finding the way…"
     routeSummary != null -> "Hide route · $routeSummary"
-    !haveMyPosition -> "Open walk in Maps"
     else -> "Walk to car"
 }
 
@@ -322,12 +331,22 @@ fun WalkPill(
  * Both get their own translucent backing, because both would otherwise be bare
  * text on streets.
  *
- * [chipExpanded] is the whole layout rule for the merged timetable. A week of
- * days, hours and rates does not fit in the half-width the chip normally takes,
- * so while it is open the left half stands down and the chip has the row. The
- * title is the least surprising thing on this screen — it says "Map", on the
- * map tab — and the parked line is one tap away again the moment the chip
- * closes.
+ * [chipExpanded] widens the chip's share of the row, and does nothing else.
+ *
+ * It used to hide the left half outright, arguing that a week of days, hours and
+ * rates needs more than half the width and that the title is the least
+ * surprising thing on screen — it says "Map", on the map tab. The first half of
+ * that is true; the second was wrong, because the *line underneath* the title is
+ * "Car parked 7 aug 23:10", which is how you know the pin is real and when it
+ * was set. It vanished exactly when you opened the thing beside it. Wasil,
+ * 2026-08-08: *"i like the timetable you did now, so it expands but then you go
+ * and remove the parked thing (upper left corner)."*
+ *
+ * Both halves stay. The chip takes two thirds of the row instead of all of it,
+ * and the timetable grows **downward from the chip** rather than appearing at
+ * the opposite end of the screen from its own heading — see [TariffChip]. The
+ * room below the header is free: the control stack and the walk pill are both
+ * anchored to the bottom.
  */
 @Composable
 fun MapHeaderOverlay(
@@ -342,30 +361,30 @@ fun MapHeaderOverlay(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.Top,
     ) {
-        if (!chipExpanded) {
-            Surface(
-                // fill = false so the backing wraps its two lines instead of
-                // claiming half the width. A translucent slab over map it is not
-                // saying anything about is just a smudge on the tiles.
-                modifier = Modifier.weight(1f, fill = false),
-                shape = HandoffShapes.Control,
-                color = MaterialTheme.colorScheme.surface.copy(alpha = OVER_TILES_ALPHA),
-                contentColor = MaterialTheme.colorScheme.onSurface,
-            ) {
-                Column(Modifier.padding(horizontal = 10.dp, vertical = 7.dp)) {
-                    Text(title, style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        subtitle,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+        Surface(
+            // fill = false so the backing wraps its two lines instead of
+            // claiming half the width. A translucent slab over map it is not
+            // saying anything about is just a smudge on the tiles.
+            modifier = Modifier.weight(1f, fill = false),
+            shape = HandoffShapes.Control,
+            color = MaterialTheme.colorScheme.surface.copy(alpha = OVER_TILES_ALPHA),
+            contentColor = MaterialTheme.colorScheme.onSurface,
+        ) {
+            Column(Modifier.padding(horizontal = 10.dp, vertical = 7.dp)) {
+                Text(title, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
         if (chip != null) {
             Box(
                 if (chipExpanded) {
-                    Modifier.weight(1f)
+                    // Two thirds, not all of it. Enough for the table's three
+                    // columns while the parked line keeps its own corner.
+                    Modifier.weight(2f).padding(start = 10.dp)
                 } else {
                     Modifier.weight(1f, fill = false).padding(start = 10.dp)
                 },
@@ -388,16 +407,25 @@ fun MapHeaderOverlay(
  * one."* He is right, and the merged version is smaller in every state: one
  * heading, one rate, and the timetable folded behind a chevron.
  *
- * Two things the old pair showed that this deliberately does not:
+ * **Where it says the code, and where it says the name.** Nowhere and
+ * everywhere, respectively. Wasil, 2026-08-08, holding a screenshot whose header
+ * read *"Noord / Molenwijk"* over a panel reading *"Noord / T13B"*: *"i need the
+ * names back underneath Noord. and also remove the area codes again and replace
+ * them with what is written underneath Noord (for every section their own thing
+ * ofcourse)."*
  *
- * - **The area code.** The expanded panel repeated `T13B` under the name —
- *   *"in the expanded timetable i see the area zone again (no need for that)"*.
- *   The code only ever appears now as a last-resort heading, when no name could
- *   be resolved at all, because a code still beats a blank.
- * - **The street you tapped.** The collapsed chip carried a second line naming
- *   it — *"in the small timetable i see the streetname of where i press
- *   (unnecessary for now)"*. Gone; the district heading is the answer to "where
- *   is this".
+ * That is a rule, not a tweak, and it is the same one that removed the zone code
+ * from the wire in v0.6.3 and put buurt names on the map header in v0.6.6: **a
+ * person reads the name of a place and never the code.** So the expanded view's
+ * second line is [placeDetail] — the neighbourhood of the area you actually
+ * tapped, resolved per selection, which is what "for every section their own
+ * thing" asks for. `T13B` survives in exactly one place: as a heading of last
+ * resort when no name resolved at all, because a code still beats a blank.
+ *
+ * The detail line is expanded-only. Collapsed, the chip carried it and he asked
+ * for it gone — *"in the small timetable i see the streetname of where i press
+ * (unnecessary for now)"* — and the two asks agree rather than conflict: a
+ * collapsed chip is glanced at, an open panel is read.
  *
  * The chevron is not decoration. The week has been in the app for a version and
  * unreachable in practice (see `MapScreen`'s tap handler), so the control that
@@ -408,6 +436,12 @@ fun TariffChip(
     area: TariffArea,
     /** The place name, or null while the lookup is still in flight. */
     placeName: String?,
+    /**
+     * The neighbourhood inside [placeName] — "Molenwijk" under "Noord" — for the
+     * area that is actually selected. Shown only while expanded, and it is what
+     * replaced the tariff code there.
+     */
+    placeDetail: String?,
     /** False while resolving, so the heading can stay blank rather than flicker a code. */
     placeResolved: Boolean,
     dayIndex: Int,
@@ -456,6 +490,17 @@ fun TariffChip(
                     val heading = placeName ?: area.code.takeIf { placeResolved }
                     if (heading != null) {
                         Text(heading, style = MaterialTheme.typography.titleMedium)
+                    }
+                    // The neighbourhood, where the code used to be. Only when
+                    // open, and only when it adds something the heading did not
+                    // already say — an area whose buurt name *is* its district
+                    // name would otherwise print it twice.
+                    if (expanded && placeDetail != null && placeDetail != heading) {
+                        Text(
+                            placeDetail,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                     Text(
                         tariffNowText(tariffNow(area.windows, dayIndex, minuteOfDay), minuteOfDay),

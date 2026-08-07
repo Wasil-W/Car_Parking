@@ -1,12 +1,15 @@
 package dev.wasil.permit.ui
 
 import dev.wasil.permit.parking.FreeZone
+import dev.wasil.permit.parking.areaSizeText
+import dev.wasil.permit.parking.areaSqKm
 import dev.wasil.permit.parking.GeoPoint
 import dev.wasil.permit.parking.distanceMeters
 import dev.wasil.permit.parking.zones.LatLng
 import dev.wasil.permit.parking.zones.TariffArea
 import dev.wasil.permit.parking.zones.TariffNow
 import dev.wasil.permit.parking.zones.ZonePolygon
+import dev.wasil.permit.parking.containsPoint
 import dev.wasil.permit.parking.zones.pointInPolygon
 import kotlin.math.ceil
 import kotlin.math.floor
@@ -91,7 +94,48 @@ sealed interface ZoneRef {
  */
 data class ZoneEntry(val ref: ZoneRef, val label: String, val zone: FreeZone) {
     val radiusM: Double get() = zone.radiusM
+    /** True when this row is a neighbourhood rather than a circle. */
+    val isArea: Boolean get() = zone.isArea
 }
+
+/**
+ * The size column in "Your zones": "60 m" for a circle, "0.6 km²" for a
+ * neighbourhood, and the bare word when a neighbourhood's boundary is missing.
+ *
+ * The two units are the honest ones rather than a formatting preference. A
+ * radius is the only number a circle has; a radius means nothing for a buurt,
+ * and a buurt is described by how much ground it covers. Forcing both into one
+ * unit would make one of them a lie.
+ */
+fun zoneSizeText(zone: FreeZone, areaShape: (String) -> List<ZonePolygon>?): String {
+    val buurt = zone.buurt ?: return "${radiusFieldText(zone.radiusM)} m"
+    return areaShape(buurt)?.let { areaSizeText(areaSqKm(it)) } ?: "area"
+}
+
+/**
+ * What the app says when no published area covers the spot that was tapped.
+ *
+ * **The scope of the app catching up with itself.** The tariff data is
+ * Amsterdam's, the 518 neighbourhoods are Amsterdam's, and the permit is an
+ * Amsterdam visitor permit. Free zones were the one feature that happened to
+ * work anywhere, and only because a circle does not need to know what city it is
+ * in. Losing that is not a regression — it is the app no longer implying a reach
+ * it never had. Wasil on the rest of the country, 2026-08-08: *"Utrecht will get
+ * its own update hahaha."*
+ *
+ * **The wording is about this spot, not about a city, and that is deliberate.**
+ * Coverage is the extent of the bundled polygons — *"just where the amsterdam
+ * jurisdiction goes over. so all the places on the map we got from amsterdam
+ * vergunning parkeren"* — so the honest sentence is that nothing is published
+ * here. "Only works in Amsterdam" would be vaguer *and*, at the edges, false:
+ * Weesp is in the municipality and in this data while not taking the
+ * "Amsterdam-" prefix, which is the same trap the zone-registry work hit when it
+ * declined to synthesise that prefix. Scope is answered by containment, never by
+ * a name.
+ */
+const val NO_NEIGHBOURHOOD_HERE: String =
+    "A free zone is one of the neighbourhoods the city publishes, and none of them covers " +
+        "this spot. Tap inside a published area, or cancel."
 
 /**
  * Home first, then the free zones **in store order** — never sorted. The index
@@ -116,23 +160,91 @@ fun zoneListMenuLabel(count: Int): String =
     if (count > 0) "Your zones · $count" else "Your zones"
 
 /**
+ * "Mark Molenwijk as free?" — the whole free-zone flow in one question.
+ *
+ * Phrased as a question rather than as a label, because it is one: the app has
+ * worked out what the place is called and is asking whether that is what was
+ * meant. Against the old flow — drop a pin, drag a radius, hope — this is one
+ * tap and one confirmation, and the boundary is the city's rather than a guess.
+ */
+fun zoneAreaOffer(name: String): String = "Mark $name as free?"
+
+/**
+ * The line under it, and the size is the point of it.
+ *
+ * Marking an area free is a standing instruction never to claim the permit
+ * anywhere inside it, and Amsterdam's buurten run from a few streets to most of
+ * a district. Being wrong costs a fine, so the number goes in front of the
+ * person choosing. Null when the size could not be worked out — which says
+ * nothing about the boundary itself, so the offer stands without it rather than
+ * inventing a figure.
+ */
+fun zoneAreaOfferDetail(sizeText: String?): String =
+    listOfNotNull(
+        "The whole neighbourhood, with the city's own boundary",
+        sizeText?.let { "about $it" },
+    ).joinToString(" · ") + "."
+
+/**
+ * How much ground is about to be marked free — at full strength, not as a
+ * footnote.
+ *
+ * **This is the one moment a person can tell a street corner from half a
+ * district.** Marking a buurt free is a standing instruction never to claim the
+ * permit anywhere inside it, and Amsterdam's buurten run from a few streets to
+ * most of a stadsdeel. Get it wrong on a large one and protection is switched
+ * off across a whole neighbourhood — and the failure is *silent*, because what
+ * goes wrong is that nothing happens. Nothing happening is exactly what a fine
+ * looks like beforehand.
+ *
+ * Confirmed as a requirement by Wasil, 2026-08-08: *"last point was good that
+ * some buurten are large and that a small indicator is good for it."*
+ *
+ * The number is stated and never editorialised on. An unusually large buurt
+ * shows up as a large number, which is the whole job; adding "that's big!" would
+ * be the app guessing at what somebody meant to do.
+ */
+fun zoneAreaSizeLine(sizeText: String?): String =
+    sizeText?.let { "$it · the whole neighbourhood" } ?: "The whole neighbourhood"
+
+/** Why the size above matters, in one sentence, under it. */
+const val ZONE_AREA_CONSEQUENCE: String =
+    "The permit will never be claimed anywhere inside it."
+
+/**
  * Which existing zone circle, if any, contains [point] — used to let a tap on
  * the map remove a zone instead of needing a separate list. When circles
  * overlap, the one whose centre is nearest to the tap wins, so a tap near the
  * shared edge of a big zone and a small zone inside it hits the small one.
  */
-fun zoneHitAt(point: GeoPoint, home: FreeZone?, freeZones: List<FreeZone>): ZoneRef? {
+fun zoneHitAt(
+    point: GeoPoint,
+    home: FreeZone?,
+    freeZones: List<FreeZone>,
+    /** Boundaries for the area-backed zones; see [FreeZone.buurt]. */
+    areaShape: (String) -> List<ZonePolygon>? = { null },
+): ZoneRef? {
     val hits = buildList {
-        home?.let { zone -> if (withinZone(point, zone)) add(ZoneRef.Home to zone) }
+        // The home zone is tested as the circle it is, and the free zones as the
+        // neighbourhoods they are. Two rules because there are two kinds of
+        // thing — a home is a point you own, a free zone is an area the city has
+        // drawn — and running the area rule over the home zone made it
+        // untappable, since a home zone has no neighbourhood on it.
+        home?.let { zone ->
+            if (distanceMeters(point, zone.centre()) <= zone.radiusM) add(ZoneRef.Home to zone)
+        }
         freeZones.forEachIndexed { index, zone ->
-            if (withinZone(point, zone)) add(ZoneRef.Free(index) to zone)
+            if (containsPoint(zone, point, areaShape)) add(ZoneRef.Free(index) to zone)
         }
     }
+    // Nearest centre still breaks a tie, and an area-backed zone still has one:
+    // the point that was tapped when it was made. It is a worse centre than a
+    // circle's — a neighbourhood is not radially symmetrical — but this only
+    // ever decides *which* of two overlapping zones a tap opens, and both are
+    // then editable. Precision here would be geometry for its own sake.
     return hits.minByOrNull { (_, zone) -> distanceMeters(point, zone.centre()) }?.first
 }
 
-private fun withinZone(point: GeoPoint, zone: FreeZone): Boolean =
-    distanceMeters(point, zone.centre()) <= zone.radiusM
 
 private fun FreeZone.centre(): GeoPoint = GeoPoint(lat, lng, 0f)
 
@@ -179,8 +291,9 @@ fun mapHitAt(
     home: FreeZone?,
     freeZones: List<FreeZone>,
     tariffAreas: List<TariffArea>,
+    areaShape: (String) -> List<ZonePolygon>? = { null },
 ): MapHit? {
-    zoneHitAt(point, home, freeZones)?.let { return MapHit.Zone(it) }
+    zoneHitAt(point, home, freeZones, areaShape)?.let { return MapHit.Zone(it) }
     return tariffHitAt(point, tariffAreas)?.let { MapHit.Tariff(it) }
 }
 

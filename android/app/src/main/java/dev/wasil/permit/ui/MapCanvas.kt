@@ -75,6 +75,12 @@ fun MapCanvas(
     homeZone: FreeZone? = null,
     freeZones: List<FreeZone> = emptyList(),
     candidateZone: FreeZone? = null,
+    /**
+     * Where an area-backed free zone gets its outline. A zone whose
+     * neighbourhood cannot be found here is not drawn at all rather than drawn
+     * as the circle it is not — see [dev.wasil.permit.parking.FreeZone.buurt].
+     */
+    areaShape: (String) -> List<ZonePolygon>? = { null },
     /** Every tariff area to draw as a boundary. Empty means the overlay is off. */
     tariffAreas: List<TariffArea> = emptyList(),
     /**
@@ -246,15 +252,28 @@ fun MapCanvas(
                     zoneCircle(map, it, colors.zoneHome, dashed = false, fillAlpha = 0.18f, strokeWidthPx = 4f),
                 )
             }
-            freeZones.forEach {
-                map.overlays.add(
-                    zoneCircle(map, it, colors.zoneFree, dashed = true, fillAlpha = 0.12f, strokeWidthPx = 4f),
-                )
+            // Circle or outline, same colour and same dashes either way.
+            // `zoneFree` is the app's one free-zone hue and there is no second
+            // one here on purpose: the *shape* already says which kind it is,
+            // and adding a hue would mean inventing a colour whose only job is
+            // to repeat what is plainly visible. Dashed in both cases, which is
+            // what Color.kt says distinguishes free from home when colour does
+            // not read — over tiles, at a glance, in either theme.
+            // Heavier than the 4f a circle takes, and the difference is not
+            // taste. `ZoneFree` (#8C8676) was chosen for a small closed circle,
+            // where a light tint reads fine because the *shape* carries it. A
+            // neighbourhood boundary is a long thin line threading dense street
+            // detail, and at 4f it vanished outright — the zone was saved,
+            // listed and editable, and simply was not on the map. Seen on the
+            // emulator in light mode, which is the only way this was ever going
+            // to be caught. Same hue, same dashes, more of them.
+            freeZones.forEach { zone ->
+                zoneShapes(map, zone, areaShape, colors.zoneFree, fillAlpha = 0.16f, strokeWidthPx = 9f)
+                    .forEach { map.overlays.add(it) }
             }
-            candidateZone?.let {
-                map.overlays.add(
-                    zoneCircle(map, it, colors.zoneCandidate, dashed = true, fillAlpha = 0.24f, strokeWidthPx = 6f),
-                )
+            candidateZone?.let { zone ->
+                zoneShapes(map, zone, areaShape, colors.zoneCandidate, fillAlpha = 0.24f, strokeWidthPx = 6f)
+                    .forEach { map.overlays.add(it) }
             }
 
             // Above the zones but below the markers, so neither end of the
@@ -373,6 +392,47 @@ private fun tariffPolygon(
     strokeWidth = strokeWidthPx
     setOnClickListener { _, _, _ -> false }
     infoWindow = null
+}
+
+/**
+ * One free zone, drawn as whatever it actually is.
+ *
+ * A neighbourhood is many rings — some buurten are split by water — so this
+ * returns a list rather than one polygon. An area-backed zone whose boundary is
+ * missing draws **nothing**: falling back to its stored radius would put a 60 m
+ * circle on the map in the middle of a neighbourhood the app is not actually
+ * treating as free, and a shape that disagrees with the decision is worse than
+ * no shape. The zone is still listed in "Your zones", where it can be removed.
+ */
+private fun zoneShapes(
+    map: MapView,
+    zone: FreeZone,
+    areaShape: (String) -> List<ZonePolygon>?,
+    color: Color,
+    fillAlpha: Float,
+    strokeWidthPx: Float,
+): List<Polygon> {
+    val buurt = zone.buurt
+        ?: return listOf(zoneCircle(map, zone, color, dashed = true, fillAlpha, strokeWidthPx))
+    val rings = areaShape(buurt) ?: return emptyList()
+    return rings.map { ring ->
+        Polygon(map).apply {
+            points = ring.outer.map { OsmGeoPoint(it.lat, it.lng) }
+            // Holes drawn as well as tested. A buurt with a park or a dock
+            // punched out of it is common, and the app's own point-in-polygon
+            // honours them — a fill that ignored them would show the map
+            // claiming ground the decision does not.
+            if (ring.holes.isNotEmpty()) {
+                holes = ring.holes.map { hole -> hole.map { OsmGeoPoint(it.lat, it.lng) } }
+            }
+            fillColor = color.copy(alpha = fillAlpha).toArgb()
+            strokeColor = color.toArgb()
+            strokeWidth = strokeWidthPx
+            outlinePaint.pathEffect = DashPathEffect(floatArrayOf(18f, 14f), 0f)
+            setOnClickListener { _, _, _ -> false }
+            infoWindow = null
+        }
+    }
 }
 
 private fun zoneCircle(
