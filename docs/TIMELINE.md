@@ -45,6 +45,7 @@ other document under `docs/` is a deep-dive that this one points at.
 | `v0.6.1` | The obligation/settlement split made visible: "This spot" above the permit card |
 | `v0.6.2` | Live location while Bluetooth-connected, sealed at disconnect; coordinates removed from the wire; rate comparison built |
 | `v0.6.3` | Zone code and rate removed from the wire, comparison machinery deleted. `PhoneState` is three fields, all of them read. No UI change |
+| `v0.6.6` | The full tariff week on tap, free days included; real zone and neighbourhood names bundled from the city's own data (107 zones, 518 buurten, 123 KB) replacing the geocoder inside Amsterdam |
 | `v0.6.5` | Two-colour identity restored (it keyed on sync, not on plates); one cycling focus button; the layers toggle stops moving the camera; setup reads plates from the permit account; takeover alerts reach you mid-drive; a no-position park stops publishing a guess; screen and claim decision agree |
 | `v0.6.4` | **The background-location permission was never requested** — the cause of three long-standing symptoms. Map controls float; locate-me exists; the parked pin survives the drive; the app stops calling a one-car, no-permit install broken; a History tab; "Remove permit" |
 
@@ -187,6 +188,49 @@ live APIs 2026-08-04.
 - **This is what fixes "the map is not specific enough per area."** That is a
   data problem: the reference apps draw points with cluster counts, Handoff
   draws 3 km polygons. Restyling cannot fix it.
+
+**Built, awaiting release** — branch `v066-zone-registry`. Both collections are
+bundled as `amsterdam_zones.json` (123 KB, against the tariff file's 631 KB):
+rings re-encoded as polylines at full source precision, nothing simplified, so
+no boundary moves. `ZoneRegistry` resolves a position to a permit zone and a
+neighbourhood, and every screen that names a spot now goes through it, with the
+geocoder kept as the fallback outside Amsterdam. The map header reads "Centrum
+/ Waterloopleinbuurt" and "Noord / NDSM terrein" — stadsdeel over buurt, which
+is [`USER-MODEL`](USER-MODEL.md)'s two-level label finally said literally.
+**The claim decision is untouched**: `ZoneResolver` still reads the tariff
+polygons alone, asserted by a test rather than promised.
+
+Checked side by side on the emulator against the build before it, which is the
+only way the difference is arguable:
+
+| Where | Before (geocoder) | After (bundled) |
+|---|---|---|
+| Waterlooplein | Amsterdam-Centrum / Waterlooplein | Centrum / **Waterloopleinbuurt** |
+| NDSM | Amsterdam-Noord / Ms. van Riemsdijkweg | Noord / **NDSM terrein** |
+
+NDSM is the case that settles it: the geocoder names a third of the city and
+then a street nobody uses, where the buurt layer says the thing you would say
+out loud.
+
+**Three things it does not settle**, all on the top line and all for Wasil:
+
+1. **The "Amsterdam-" prefix is gone** — "Centrum", not "Amsterdam-Centrum".
+   Not an oversight: the city publishes the bare names, and there is no field
+   distinguishing the seven stadsdelen that take the prefix from Weesp, which
+   is a town and does not. Inventing it would make "Amsterdam-Weesp".
+2. **The big line may be the wrong one.** The specific name is what he asked
+   for and it is in the small grey line, because his own wording put the larger
+   area on top — *"Amsterdam Noord and then a bit smaller underneath it
+   Molenwijk"*. Implemented as recorded rather than as preferred. Swapping them
+   is a mockup, not a patch.
+3. **The street is no longer shown inside Amsterdam.** "Ms. van Riemsdijkweg"
+   was arguably the more useful line when walking back to the car, and a buurt
+   name is not a substitute for it.
+
+What it left open beyond the header: the 107 permit zones are bundled and
+resolved but named nowhere on screen, because *where permit parking applies* is
+one step from *is the permit valid here*, and that step is item 1's. The paying
+window (item 3) is the screen they belong on.
 
 ---
 

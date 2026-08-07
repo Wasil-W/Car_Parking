@@ -10,6 +10,58 @@ change as a minor.
 
 ---
 
+## v0.6.6 — tomorrow's rate, and the map knows where it is
+
+### The whole week, when you tap an area
+
+*"Maybe i am curious about tommorows rate then i dont see that."* Fair — and it
+was a gap this app made rather than inherited. v0.6.0 replaced the timetable with
+a single live line, which was right for the header, but the full view was deleted
+instead of moved. "What does this cost on Sunday" then had no answer anywhere.
+
+Tap an area and the week opens:
+
+```
+ma–vr   09:00–19:00   €5,37/h
+za, zo  free all day
+```
+
+**The free line is the point.** A timetable that lists only the charging bands
+makes you work out the gaps yourself, and the gaps — Sunday, after seven — are
+what the question was about. Nothing else opens it: the header still says one
+true thing about now.
+
+### Real neighbourhood names, from the city's own data
+
+The map used to name places through Android's geocoder, because it had nothing
+better. It does now: **107 permit zones and 518 neighbourhoods**, bundled, in
+123 KB.
+
+| Where | Before | Now |
+|---|---|---|
+| Waterlooplein | Amsterdam-Centrum / Waterlooplein | Centrum / **Waterloopleinbuurt** |
+| NDSM | Amsterdam-Noord / Ms. van Riemsdijkweg | Noord / **NDSM terrein** |
+
+Offline, no rate limit, no network round trip. The geocoder stays as the
+fallback outside Amsterdam.
+
+Boundaries are stored at full source precision — simplification was measured and
+rejected, so no border moves and no gap opens between neighbourhoods that share
+an edge.
+
+**Three things this gives up**, and they are worth saying rather than hiding: the
+"Amsterdam-" prefix is gone, because the city publishes bare names and adding it
+back would invent "Amsterdam-Weesp"; the specific name now sits on the second
+line, under the larger area; and inside Amsterdam the street name is no longer
+shown. Say if any of those was the part you wanted.
+
+**The claim decision is untouched.** Which zone charges what, and therefore
+whether the permit is taken, still comes from the tariff polygons. This release
+changed *where you are* and *what it is called*, not what it costs — there is a
+test asserting that rather than a comment promising it.
+
+---
+
 ## v0.6.5 — the map stops fighting you, and setup stops asking
 
 ### Your blue and Walid's terracotta are back

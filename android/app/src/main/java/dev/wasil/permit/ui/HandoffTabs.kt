@@ -35,7 +35,7 @@ import dev.wasil.permit.parking.GeoPoint
 import dev.wasil.permit.parking.Roster
 import dev.wasil.permit.parking.Vehicle
 import dev.wasil.permit.parking.android.PlayServicesSignals
-import dev.wasil.permit.parking.android.reverseGeocodePlace
+import dev.wasil.permit.parking.android.placeLabelAt
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -106,7 +106,7 @@ fun HandoffTabs(
     val permitView = permitViewFor(permitAdded = config != null, roster = roster)
     val myVehicle = roster.byId(app.parkStateStore.thisPhoneDrives)
 
-    // The parked spot's name, for the Now screen. Same geocoder and same
+    // The parked spot's name, for the Now screen. Same lookup and same
     // two-level name as the map header, so the two screens cannot describe one
     // place differently. Null while it resolves and null if it fails — the
     // wording below is written to read correctly without it.
@@ -115,7 +115,7 @@ fun HandoffTabs(
     var place by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(parkedPoint) {
         place = parkedPoint?.let { point ->
-            reverseGeocodePlace(context, point)
+            placeLabelAt(context, point)
                 ?.let { listOfNotNull(it.district, it.detail).joinToString(" · ") }
         }
     }

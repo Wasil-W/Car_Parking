@@ -50,8 +50,8 @@ import dev.wasil.permit.parking.route.WalkRoute
 import dev.wasil.permit.parking.route.fetchWalkRoute
 import dev.wasil.permit.parking.route.walkSummary
 import dev.wasil.permit.parking.zones.ZoneResolver
+import dev.wasil.permit.parking.android.placeLabelAt
 import dev.wasil.permit.parking.android.reverseGeocodeAddress
-import dev.wasil.permit.parking.android.reverseGeocodePlace
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -243,9 +243,10 @@ fun MapScreen(
     LaunchedEffect(car) { route = null }
 
     // Codes like "T14B" mean nothing to anyone. The tariff file has no place
-    // names in it at all, so the name is geocoded from a point inside the
-    // highlighted part. Falls back to the code when the lookup fails or there
-    // is no network — a code beats a blank.
+    // names in it at all, so the name comes from a point inside the highlighted
+    // part — now Amsterdam's own buurt layer rather than the geocoder, which is
+    // why it no longer needs a network or a moment to arrive. Falls back to the
+    // code when even that has nothing: a code beats a blank.
     val lookupPoint = namePoint.takeIf { selectedHit != null } ?: car
     LaunchedEffect(highlight, lookupPoint) {
         place = null
@@ -255,7 +256,7 @@ fun MapScreen(
             placeResolved = true
             return@LaunchedEffect
         }
-        place = reverseGeocodePlace(context, at)
+        place = placeLabelAt(context, at)
         placeResolved = true
     }
 
@@ -518,7 +519,7 @@ fun MapScreen(
                     .padding(end = CHROME_SIDE_INSET, bottom = CHROME_BOTTOM_INSET),
             )
 
-            if (car != null) {
+            if (car != null && selectedHit == null) {
                 val here = me
                 WalkPill(
                     label = walkPillText(routing, route?.let(::walkSummary), here != null),
@@ -540,6 +541,23 @@ fun MapScreen(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .padding(bottom = CHROME_BOTTOM_INSET, start = 60.dp, end = 60.dp),
+                )
+            }
+
+            // The whole week for a tapped area, and only for a tapped area.
+            // Wasil: "i dont want to always see it, just when i press it."
+            selectedHit?.let { hit ->
+                TariffWeekPanel(
+                    area = hit.area,
+                    placeName = place?.district,
+                    onDismiss = { selectedHit = null },
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(
+                            bottom = CHROME_BOTTOM_INSET,
+                            start = 16.dp,
+                            end = 16.dp + 56.dp,
+                        ),
                 )
             }
         }

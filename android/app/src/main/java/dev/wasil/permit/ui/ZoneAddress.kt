@@ -1,5 +1,6 @@
 package dev.wasil.permit.ui
 
+import dev.wasil.permit.parking.zones.ZonePlace
 import java.util.Locale
 
 /**
@@ -37,16 +38,34 @@ fun formatAreaName(address: GeocodedAddress): String? =
 
 /**
  * Where you are, at two levels: the district you would name to a friend, and
- * the street underneath it.
+ * the finer place underneath it.
  *
  * Wasil, 2026-08-03: "Amsterdam Noord and then a bit smaller underneath it
- * Molenwijk, so you know where you are". The finer buurt names he saw
- * ("Molenwijk", "NDSM-werf") come from Amsterdam's own zone data, not from a
- * geocoder — this is the closest honest approximation until the zone registry
- * lands, and the street is arguably more use anyway when you are looking for
- * the car.
+ * Molenwijk, so you know where you are". Inside Amsterdam that is now literally
+ * what it says — stadsdeel over buurt, from [formatPlaceLabel] of a
+ * [ZonePlace]. Outside it, the geocoder overload below still approximates it
+ * with a district and a street.
  */
 data class PlaceLabel(val district: String, val detail: String?)
+
+/**
+ * The two-level name from the bundled registry: "Noord" over "Molenwijk".
+ *
+ * This is the pairing Wasil asked for and the geocoder could not give, because
+ * Android's `Geocoder` has no buurt — its `subLocality` is whichever of the
+ * two levels the provider happens to hold, so the header could show a
+ * stadsdeel on one spot and a neighbourhood on the next. Null when the point
+ * is in neither layer, which is the caller's cue to fall back.
+ */
+fun formatPlaceLabel(place: ZonePlace): PlaceLabel? {
+    val district = place.district?.takeIf { it.isNotBlank() }
+    val neighbourhood = place.neighbourhood?.takeIf { it.isNotBlank() }
+    return when {
+        district != null -> PlaceLabel(district, neighbourhood?.takeIf { it != district })
+        neighbourhood != null -> PlaceLabel(neighbourhood, null)
+        else -> null
+    }
+}
 
 fun formatPlaceLabel(address: GeocodedAddress): PlaceLabel? {
     val district = address.subLocality?.takeIf { it.isNotBlank() }
