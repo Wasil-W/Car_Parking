@@ -13,7 +13,6 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
-import dev.wasil.permit.parking.MyCar
 import dev.wasil.permit.ui.theme.HandoffTheme
 import dev.wasil.permit.ui.theme.LocalHandoffColors
 import java.io.File
@@ -51,24 +50,24 @@ class HandoffMarkScreenshotTest {
         return bitmap
     }
 
-    /** The mark as it appears inside a hero card belonging to [card]. */
+    /** The mark as it appears inside a hero card belonging to roster slot [cardSlot]. */
     @Composable
-    private fun MarkOnCard(card: MyCar, holder: MyCar?) {
+    private fun MarkOnCard(cardSlot: Int, holderSlot: Int?) {
         val colors = LocalHandoffColors.current
         Box(
             modifier = Modifier
-                .background(colors.containerFor(card))
+                .background(colors.containerFor(cardSlot))
                 .padding(24.dp),
             contentAlignment = Alignment.Center,
         ) {
-            HandoffMark(markStateFor(holder), size = 72.dp)
+            HandoffMark(markStateFor(holderSlot), size = 72.dp)
         }
     }
 
     @Test
     fun mark_on_wasil_card_dark() {
         val b = capture("mark-wasil-card-dark", dark = true) {
-            MarkOnCard(card = MyCar.WASIL, holder = MyCar.WASIL)
+            MarkOnCard(cardSlot = 0, holderSlot = 0)
         }
         assertTrue("bitmap should have pixels", b.width > 0 && b.height > 0)
     }
@@ -76,21 +75,21 @@ class HandoffMarkScreenshotTest {
     @Test
     fun mark_on_walid_card_dark() {
         capture("mark-walid-card-dark", dark = true) {
-            MarkOnCard(card = MyCar.WALID, holder = MyCar.WALID)
+            MarkOnCard(cardSlot = 1, holderSlot = 1)
         }
     }
 
     @Test
     fun mark_on_wasil_card_light() {
         capture("mark-wasil-card-light", dark = false) {
-            MarkOnCard(card = MyCar.WASIL, holder = MyCar.WASIL)
+            MarkOnCard(cardSlot = 0, holderSlot = 0)
         }
     }
 
     @Test
     fun mark_on_walid_card_light() {
         capture("mark-walid-card-light", dark = false) {
-            MarkOnCard(card = MyCar.WALID, holder = MyCar.WALID)
+            MarkOnCard(cardSlot = 1, holderSlot = 1)
         }
     }
 
@@ -98,7 +97,7 @@ class HandoffMarkScreenshotTest {
     @Test
     fun mark_unheld_dark() {
         capture("mark-unheld-dark", dark = true) {
-            MarkOnCard(card = MyCar.WASIL, holder = null)
+            MarkOnCard(cardSlot = 0, holderSlot = null)
         }
     }
 }

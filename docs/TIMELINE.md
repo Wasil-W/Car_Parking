@@ -89,6 +89,31 @@ Belongs with the roster work (item 4), which is where the account is read.
 Until a permit type is known, the honest default is to assume the **restricted**
 kind, because that is the direction that cannot cost a fine.
 
+**Built, awaiting release** — branch `v066-vehicle-roster`, with item 4.
+
+`PermitKind { VISITOR, RESIDENT, UNKNOWN }` exists, is stored on the permit
+account beside the roster, and `boundByExceptionAreas` answers **true** for
+UNKNOWN — the restricted default, as agreed above.
+
+**The type is not in the response, as far as anyone can tell, and nobody has
+looked.** The endpoint needs a live permit login, which this repo does not
+carry, so no `getClientProduct` body has ever been read — the guess above is
+still a guess. What shipped instead is the instrument:
+`ClientProductLogInterceptor` prints the whole object in a **debug build only**,
+and `adb logcat -s HandoffProduct:V` while pressing "Sign in and find my cars"
+will settle in one minute what this could only reason about. It is debug-only
+because that body carries every plate on the account.
+
+Meanwhile `ClientProductResponse` reads one speculative field, `name`, and that
+guess is free in the only direction that matters: an unknown key parses to null,
+null is UNKNOWN, and UNKNOWN is treated as restricted. The app can be
+uninformed here, never wrong expensively. When the real key is known it is a
+one-line change.
+
+**Nothing reads the kind yet**, and that is stated rather than hidden: there is
+no `parkeerzones_uitzondering` data bundled, so there is nothing for it to gate.
+The field is a foundation with a test, not a feature.
+
 ### 2. The full tariff table, when you tap an area
 **Source:** Wasil, 2026-08-06: *"maybe i am curious about tommorows rate then i
 don't see that."* Correct, and it is a gap this project created rather than one
@@ -169,6 +194,66 @@ not use one.
 (RDW-by-plate remains a fallback for a no-permit user who does want their car
 named. Keep it apart from the other RDW finding: dead end for zone *geometry*,
 right source for vehicle data.)
+
+**Built, awaiting release** — branch `v066-vehicle-roster`, with item 1.
+
+`MyCar` is gone. `Vehicle(id, plate, name)` in a `Roster` that cannot be empty,
+plus `thisPhoneDrives: VehicleId?` on the device. Every two-car behaviour is
+selected on arity: one hand-over button and a travelling dot at `size == 2`,
+neutrals and a wordmark past two, because there is no third safe hue in this
+palette. 474 tests pass.
+
+**Nothing on screen changed, and that was checked rather than asserted.** The
+permit screens were rendered on an emulator from both branches with identical
+inputs and diffed: **eleven of twelve captures are byte-identical**, in both
+themes. The twelfth differs only inside the map card, and master disagrees with
+*itself* there between two runs — osmdroid tiles arrive when they arrive.
+
+**Migration was the real work**, and it is read-through rather than rewrite-on-
+upgrade:
+
+- `my_car=WASIL` reads back as `VehicleId("wasil")`. The lowercase is the whole
+  trick: the shared room has always been keyed on `MyCar.key()` =
+  `name.lowercase()`, so **the wire format does not move** and an existing
+  pairing keeps its Firebase node. The old key is retired on the first write, so
+  two keys can never disagree.
+- `wasil_plate`/`walid_plate` become a roster **in stored order, not sorted
+  order** — sorting would have swapped the two identity colours on any account
+  whose plates sort the other way.
+- A park log written before the roster keeps its badges; `"WASIL"` lowercases
+  into an id on the way in.
+
+Verified on a device, not only in tests: an emulator was seeded with a real
+v0.6.6 `park_state.xml`, the new APK installed **over** it, and History,
+Settings, the car pairing, the home zone, the free zones and the sync URL all
+came through unchanged — the screenshots differ only in the status-bar clock.
+
+**One defect fixed on the way, and it was a live one.** The permit editor asks
+for "your plate" and "the other car's plate", but the store put the first in the
+*Wasil* slot whichever phone was typing. On Walid's phone the two were therefore
+swapped, so a claim would have moved the permit to the wrong car. The roster
+orders cars by plate — the one thing both phones read from the same account and
+so agree on without talking — and records which of them this phone drives.
+
+**Two deliberate departures from the design document**, both worth arguing with:
+
+- **`Vehicle` carries no Bluetooth field.** `USER-MODEL.md` asks for one. The
+  MAC is a fact about *this phone* and the stereo it rides with; neither brother
+  ever learns the other's device, and a roster rebuilt from a shared permit
+  account could silently drop the pairing that makes detection work. It stays on
+  `ParkStateStore`. Moving it is dimension 2(b) — one phone, several cars —
+  which is not being built.
+- **The roster is built from the plates the user *picked*, not from every entry
+  in `vrns`.** `permit.py` records why: *"the third plate belongs to an inactive
+  vehicle and is deliberately not selectable"* on Wasil's own permit. Reading
+  `vrns` straight in would put a car nobody drives on screen and tip the arity
+  past two, dropping both brothers' colours.
+
+**Still hard-coded, and openly so:** the seed roster's two names are "Wasil" and
+"Walid". They are now one constant with a comment rather than an enum spread
+across thirty files, and `USER-MODEL.md` explicitly allows defaulting them to
+the same strings so nothing on screen moves. Renaming needs UI, which needs a
+mockup — and, by the same document, a third car with a name attached first.
 
 ### 5. The onboarding reversal
 **Source:** [`USER-MODEL.md`](USER-MODEL.md), "The onboarding sequence".

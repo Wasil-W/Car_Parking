@@ -2,6 +2,7 @@ package dev.wasil.permit.data.auth
 
 import dev.wasil.permit.data.store.FakeCredentialStore
 import dev.wasil.permit.data.store.PermitConfig
+import dev.wasil.permit.parking.legacyRoster
 import okhttp3.Request
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -15,7 +16,7 @@ class PermitAuthenticatorTest {
     private lateinit var server: MockWebServer
     private lateinit var tokenStore: TokenStore
     private val credentials = FakeCredentialStore(
-        PermitConfig("user", "pass", "RH950F", "XX123Y")
+        PermitConfig("user", "pass", legacyRoster("RH950F", "XX123Y"))
     )
 
     @Before

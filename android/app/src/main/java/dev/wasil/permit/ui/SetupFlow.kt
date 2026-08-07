@@ -20,8 +20,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import dev.wasil.permit.parking.MyCar
 import dev.wasil.permit.parking.ParkStateStore
+import dev.wasil.permit.parking.Roster
+import dev.wasil.permit.parking.VehicleId
 
 /**
  * One question, and it is the only one the app cannot work without.
@@ -34,25 +35,37 @@ import dev.wasil.permit.parking.ParkStateStore
  * matters instead of at the door.
  *
  * Whose phone this is stays here because detection genuinely stops without it:
- * `ParkDetectionUseCase` returns `NotConfigured` when `myCar` is unset, so a
- * park would never be decided or recorded.
+ * `ParkDetectionUseCase` returns `NotConfigured` when `thisPhoneDrives` is
+ * unset, so a park would never be decided or recorded.
+ *
+ * The two options are roster entries now rather than two enum constants, which
+ * is why nothing on this screen moved: the seed roster's names are the same two
+ * strings the enum's `label()` produced.
  */
 @Composable
 fun SetupFlow(
     stateStore: ParkStateStore,
+    /**
+     * The cars to choose between. The seed pair on a fresh install, since
+     * nobody has signed in to a permit account yet — this question comes before
+     * the permit does, and has since v0.6.4.
+     */
+    roster: Roster,
     onDone: () -> Unit,
 ) {
     WhosePhoneStep(
-        current = stateStore.myCar,
-        onPick = { stateStore.myCar = it },
+        roster = roster,
+        current = stateStore.thisPhoneDrives,
+        onPick = { stateStore.thisPhoneDrives = it },
         onContinue = onDone,
     )
 }
 
 @Composable
 private fun WhosePhoneStep(
-    current: MyCar?,
-    onPick: (MyCar) -> Unit,
+    roster: Roster,
+    current: VehicleId?,
+    onPick: (VehicleId) -> Unit,
     onContinue: () -> Unit,
 ) {
     var picked by remember { mutableStateOf(current) }
@@ -69,14 +82,13 @@ private fun WhosePhoneStep(
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        MyCar.entries.forEach { car ->
-            val label = if (car == MyCar.WASIL) "Wasil" else "Walid"
+        roster.vehicles.forEach { car ->
             TextButton(
-                onClick = { picked = car; onPick(car) },
+                onClick = { picked = car.id; onPick(car.id) },
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                RadioButton(selected = picked == car, onClick = null)
-                Text("  $label's phone")
+                RadioButton(selected = picked == car.id, onClick = null)
+                Text("  ${car.name}'s phone")
             }
         }
         Button(

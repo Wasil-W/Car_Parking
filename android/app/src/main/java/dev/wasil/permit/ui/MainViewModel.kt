@@ -3,16 +3,18 @@ package dev.wasil.permit.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.wasil.permit.data.PermitRepository
+import dev.wasil.permit.data.api.PermitKind
 import dev.wasil.permit.data.store.CredentialStore
 import dev.wasil.permit.data.store.PermitConfig
 import dev.wasil.permit.data.store.normalizePlate
+import dev.wasil.permit.data.store.roster
 import dev.wasil.permit.parking.GuardedClaim
 import dev.wasil.permit.parking.GuardedResult
-import dev.wasil.permit.parking.MyCar
 import dev.wasil.permit.parking.ParkOutcome
 import dev.wasil.permit.parking.ParkStateStore
-import dev.wasil.permit.parking.label
-import dev.wasil.permit.parking.other
+import dev.wasil.permit.parking.Roster
+import dev.wasil.permit.parking.Vehicle
+import dev.wasil.permit.parking.rosterFrom
 import dev.wasil.permit.parking.shared.ClaimGuard
 import dev.wasil.permit.parking.shared.SharedStateStore
 import java.text.SimpleDateFormat
@@ -24,16 +26,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/**
- * A plate the permit can sit on. [car] is the identity; [label] is only ever
- * display text. They were previously matched by comparing label strings, which
- * meant a typo silently disabled the main button and — worse — mapped an
- * unrecognised label to Walid, lighting the wrong brother's arc.
- */
-data class PlateOption(val label: String, val vrn: String, val car: MyCar)
-
 data class BlockedInfo(
-    val option: PlateOption,
+    val target: Vehicle,
     val otherLabel: String,
     val parkedAtMs: Long,
     val heartbeatAtMs: Long,
@@ -52,7 +46,17 @@ data class UiState(
     val loading: Boolean = false,
     val switching: String? = null,
     val activeVrn: String? = null,
-    val options: List<PlateOption> = emptyList(),
+    /**
+     * The cars, in slot order.
+     *
+     * This replaced `options: List<PlateOption>`. `PlateOption` existed only to
+     * carry a label, a plate and an enum around together, which is what
+     * [Vehicle] already is — and the label half of it was load-bearing in a way
+     * it should never have been: `switchTo` decided which car to claim for by
+     * comparing the label against the literal string "Wasil", so any other
+     * label claimed for Walid.
+     */
+    val roster: Roster = Roster.SEED,
     val message: String? = null,
     val otherStatus: String? = null,
     val blocked: BlockedInfo? = null,
@@ -74,17 +78,10 @@ class MainViewModel(
         if (config == null) {
             _state.update { it.copy(needsSetup = true) }
         } else {
-            _state.update { it.copy(options = config.toOptions()) }
+            _state.update { it.copy(roster = config.roster) }
             refresh()
         }
     }
-
-    // The one place a MyCar is bound to its plate and its display name, so the
-    // rest of the UI can match on the enum instead of on text.
-    private fun PermitConfig.toOptions() = listOf(
-        PlateOption(MyCar.WASIL.label(), wasilPlate, MyCar.WASIL),
-        PlateOption(MyCar.WALID.label(), walidPlate, MyCar.WALID),
-    )
 
     fun refresh() {
         viewModelScope.launch {
@@ -105,7 +102,7 @@ class MainViewModel(
     private suspend fun loadOtherStatus(): String? {
         val store = sharedStore()
         if (!store.configured) return null
-        val label = stateStore.myCar?.other()?.label() ?: return null
+        val label = credentialStore.roster().other(stateStore.thisPhoneDrives)?.name ?: return null
         return runCatching {
             val other = store.readOther()
             val time = { ms: Long -> SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(ms)) }
@@ -119,15 +116,18 @@ class MainViewModel(
         }.getOrDefault("$label: status unavailable")
     }
 
-    fun switchTo(option: PlateOption, force: Boolean = false) {
+    fun switchTo(target: Vehicle, force: Boolean = false) {
         viewModelScope.launch {
-            _state.update { it.copy(switching = option.vrn, blocked = null) }
-            val target = if (option.label == "Wasil") MyCar.WASIL else MyCar.WALID
+            _state.update { it.copy(switching = target.plate, blocked = null) }
+            // The id goes straight through. It used to be recovered from the
+            // button's own label by string comparison — `if (label == "Wasil")`
+            // — so a label that was not one of those two words claimed for
+            // Walid, on a screen that had just been told which car was meant.
             when (val result = guardedClaim().claim(
-                target = target, force = force, userInitiated = true)) {
+                target = target.id, force = force, userInitiated = true)) {
                 is GuardedResult.Blocked -> _state.update {
                     it.copy(switching = null, blocked = BlockedInfo(
-                        option, result.otherLabel,
+                        target, result.otherLabel,
                         result.other.parkedAtMs, result.other.heartbeatAtMs,
                         known = result.other.parkedOutsideKnown))
                 }
@@ -136,7 +136,7 @@ class MainViewModel(
                         it.copy(
                             switching = null, activeVrn = outcome.vrn,
                             message = listOfNotNull(
-                                "Permit confirmed on ${option.label}'s car (${outcome.vrn})",
+                                "Permit confirmed on ${target.name}'s car (${outcome.vrn})",
                                 result.guardSkippedNote,
                             ).joinToString(" — "),
                         )
@@ -163,20 +163,43 @@ class MainViewModel(
     }
 
     fun confirmBlockedSwitch() {
-        state.value.blocked?.let { switchTo(it.option, force = true) }
+        state.value.blocked?.let { switchTo(it.target, force = true) }
     }
 
     fun dismissBlocked() = _state.update { it.copy(blocked = null) }
 
-    fun saveSetup(username: String, password: String, wasilPlate: String, walidPlate: String) {
+    /**
+     * Stores the permit account, and the cars it covers.
+     *
+     * [myPlate] and [theirPlate] are what the editor asked for — *your* plate
+     * and *the other car's* — and they are no longer stored as "the Wasil slot"
+     * and "the Walid slot". That mapping was a latent defect: the editor
+     * relabelled its two fields in v0.6.5 while the storage kept the old slot
+     * names, so on Walid's phone "your plate" landed in Wasil's slot and a
+     * claim would have moved the permit to the wrong car.
+     *
+     * The roster instead orders the two by plate — the one thing both phones
+     * read from the same account and therefore agree on without talking — and
+     * [ParkStateStore.thisPhoneDrives] records which of them is this one's.
+     */
+    fun saveSetup(username: String, password: String, myPlate: String, theirPlate: String) {
+        val existing = credentialStore.load()
+        val roster = rosterFrom(listOf(myPlate, theirPlate), credentialStore.roster())
         val config = PermitConfig(
             username = username.trim(),
             password = password,
-            wasilPlate = normalizePlate(wasilPlate),
-            walidPlate = normalizePlate(walidPlate),
+            roster = roster,
+            // Carried, never invented. [findPlates] is the only thing that can
+            // raise it, because it is the only thing that has read the account.
+            permitKind = existing?.permitKind ?: PermitKind.UNKNOWN,
         )
         credentialStore.save(config)
-        _state.update { it.copy(needsSetup = false, options = config.toOptions()) }
+        // Which of the two is this phone's, said once, here. Without it a
+        // second phone would keep pointing at whichever slot it picked during
+        // first run, which after a re-sort need not be its own car any more.
+        roster.vehicles.firstOrNull { it.plate == normalizePlate(myPlate) }
+            ?.let { stateStore.thisPhoneDrives = it.id }
+        _state.update { it.copy(needsSetup = false, roster = config.roster) }
         refresh()
     }
 
@@ -201,11 +224,19 @@ class MainViewModel(
             PermitConfig(
                 username = username.trim(),
                 password = password,
-                wasilPlate = existing?.wasilPlate.orEmpty(),
-                walidPlate = existing?.walidPlate.orEmpty(),
+                roster = credentialStore.roster(),
+                permitKind = existing?.permitKind ?: PermitKind.UNKNOWN,
             ),
         )
-        return runCatching { repository.plates() }.getOrNull()?.takeIf { it.isNotEmpty() }
+        val product = runCatching { repository.product() }.getOrNull() ?: return null
+        if (product.plates.isEmpty()) return null
+        // The one moment the app learns what kind of permit this is, recorded
+        // here because it is the one call that has just read the account. It
+        // arrives in the same response as the plates and used to be discarded
+        // with the rest of the object — see ClientProductResponse.name for what
+        // is being read and how unverified that guess still is.
+        credentialStore.load()?.let { credentialStore.save(it.copy(permitKind = product.kind)) }
+        return product.plates
     }
 
     fun consumeMessage() = _state.update { it.copy(message = null) }

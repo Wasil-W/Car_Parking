@@ -8,6 +8,9 @@ import kotlinx.serialization.encodeToString
 class PrefsParkStateStore(private val prefs: SharedPreferences) : ParkStateStore {
 
     companion object {
+        const val KEY_THIS_PHONE_DRIVES = "this_phone_drives"
+        const val KEY_LEGACY_MY_CAR = "my_car"
+
         fun from(context: Context): PrefsParkStateStore =
             PrefsParkStateStore(context.getSharedPreferences("park_state", Context.MODE_PRIVATE))
     }
@@ -20,9 +23,31 @@ class PrefsParkStateStore(private val prefs: SharedPreferences) : ParkStateStore
         get() = prefs.getString("car_name", null)
         set(value) { prefs.edit().putString("car_name", value).apply() }
 
-    override var myCar: MyCar?
-        get() = prefs.getString("my_car", null)?.let { runCatching { MyCar.valueOf(it) }.getOrNull() }
-        set(value) { prefs.edit().putString("my_car", value?.name).apply() }
+    /**
+     * Migrated in place from `my_car`, and the migration is a lowercase.
+     *
+     * An install from before the roster holds `my_car=WASIL`, and that string
+     * was already being lowercased on its way to the shared room — `MyCar.key()`
+     * returned `name.lowercase()`, so the Firebase node has always been
+     * `/rooms/<hash>/wasil`. Vehicle ids are those same lowercase strings (see
+     * [slotIdFor]), so an existing pairing survives without the room being
+     * touched at all: the phone reads `WASIL`, resolves `VehicleId("wasil")`,
+     * and keeps writing exactly where it was writing before.
+     *
+     * The old key is dropped on the first write, so there is never a moment
+     * where two keys could disagree about whose phone this is.
+     */
+    override var thisPhoneDrives: VehicleId?
+        get() = prefs.getString(KEY_THIS_PHONE_DRIVES, null)?.let(::VehicleId)
+            ?: prefs.getString(KEY_LEGACY_MY_CAR, null)
+                ?.takeIf { it.isNotBlank() }
+                ?.let { VehicleId(it.lowercase()) }
+        set(value) {
+            prefs.edit()
+                .putString(KEY_THIS_PHONE_DRIVES, value?.value)
+                .remove(KEY_LEGACY_MY_CAR)
+                .apply()
+        }
 
     override var autoClaim: Boolean
         get() = prefs.getBoolean("auto_claim", true)

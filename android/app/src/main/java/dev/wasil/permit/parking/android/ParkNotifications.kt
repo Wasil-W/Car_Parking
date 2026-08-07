@@ -8,13 +8,14 @@ import android.content.Intent
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import dev.wasil.permit.MainActivity
+import dev.wasil.permit.PermitApp
 import dev.wasil.permit.R
+import dev.wasil.permit.data.store.roster
 import dev.wasil.permit.parking.ParkNotifier
 import dev.wasil.permit.parking.ParkStateStore
 import dev.wasil.permit.parking.PendingDecision
 import dev.wasil.permit.parking.PrefsParkStateStore
-import dev.wasil.permit.parking.myCarForLabel
-import dev.wasil.permit.parking.other
+import dev.wasil.permit.parking.Roster
 import dev.wasil.permit.parking.shared.PhoneState
 import dev.wasil.permit.ui.blockedNotificationText
 import dev.wasil.permit.ui.blockedTitle
@@ -30,6 +31,23 @@ class ParkNotifications(private val context: Context) : ParkNotifier {
     // ParkStateStore through to here — matching how those call sites already
     // rebuild PrefsParkStateStore.from(context) themselves.
     private val store: ParkStateStore by lazy { PrefsParkStateStore.from(context) }
+
+    /**
+     * The cars, for the one thing these notifications need them for: which side
+     * the icon's dot sits on. Read from the application rather than by opening
+     * the encrypted store again, and falling back to the seed so a notification
+     * raised before any permit exists still draws.
+     */
+    private val roster: Roster by lazy {
+        (context.applicationContext as? PermitApp)?.credentialStore?.roster() ?: Roster.SEED
+    }
+
+    /** Slot 0 or 1 for this phone's own car; null when nothing can say. */
+    private fun mySlot(): Int? = roster.identitySlotOf(store.thisPhoneDrives)
+
+    /** Slot for the other car, when there is exactly one other car. */
+    private fun otherSlot(): Int? =
+        roster.other(store.thisPhoneDrives)?.let { roster.identitySlotOf(it.id) }
 
     companion object {
         const val CHANNEL_STATUS = "permit_status"
@@ -96,14 +114,17 @@ class ParkNotifications(private val context: Context) : ParkNotifier {
     private fun time(ms: Long): String =
         SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(ms))
 
-    override fun statusPermitOn(label: String, vrn: String, zoneText: String?) {
+    override fun statusPermitOn(carName: String, identitySlot: Int?, vrn: String, zoneText: String?) {
         val text = buildString {
             append("Claimed at ${now()}")
             zoneText?.let { append(" · $it") }
         }
         notify(STATUS_ID, NotificationCompat.Builder(context, CHANNEL_STATUS)
-            .setSmallIcon(notificationIconFor(myCarForLabel(label)))
-            .setContentTitle("Permit on $label's car ($vrn)")
+            // The slot travels with the name now. It used to be recovered from
+            // the name by string comparison, which lit Walid's icon for any
+            // label the notifier did not recognise.
+            .setSmallIcon(notificationIconFor(identitySlot))
+            .setContentTitle("Permit on $carName's car ($vrn)")
             .setContentText(text)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
@@ -126,7 +147,7 @@ class ParkNotifications(private val context: Context) : ParkNotifier {
         // Only raised when the permit is on my own plate right now (see
         // GiveBackWorker) - the holder is mine, not otherLabel's.
         notify(EVENT_ID, NotificationCompat.Builder(context, CHANNEL_EVENTS)
-            .setSmallIcon(notificationIconFor(store.myCar))
+            .setSmallIcon(notificationIconFor(mySlot()))
             .setContentTitle("Give the permit back to $otherLabel?")
             .setContentText("You parked free; $otherLabel's car is parked outside and the permit is still on yours.")
             .setAutoCancel(true)
@@ -147,7 +168,7 @@ class ParkNotifications(private val context: Context) : ParkNotifier {
         // and so the unknown case gets its own wording rather than borrowing
         // the confident one.
         notify(EVENT_ID, NotificationCompat.Builder(context, CHANNEL_EVENTS)
-            .setSmallIcon(notificationIconFor(store.myCar?.other()))
+            .setSmallIcon(notificationIconFor(otherSlot()))
             .setContentTitle(blockedTitle(otherLabel, known))
             .setContentText(
                 blockedNotificationText(otherLabel, other.parkedAtMs, other.heartbeatAtMs, known),
@@ -158,12 +179,13 @@ class ParkNotifications(private val context: Context) : ParkNotifier {
             .addAction(action(ParkActionReceiver.ACTION_IGNORE, "Ignore")))
     }
 
-    override fun takeover(byLabel: String) {
-        val decision = PendingDecision.Takeover(byLabel, raisedAtMs = System.currentTimeMillis())
-        // byLabel is always the other car - it took the permit from mine.
+    override fun takeover(byName: String, identitySlot: Int?) {
+        val decision = PendingDecision.Takeover(byName, raisedAtMs = System.currentTimeMillis())
+        // byName is whichever car the room says now holds it, and its slot
+        // comes from the same lookup rather than from "not mine".
         notify(EVENT_ID, NotificationCompat.Builder(context, CHANNEL_EVENTS)
-            .setSmallIcon(notificationIconFor(store.myCar?.other()))
-            .setContentTitle("$byLabel took the permit")
+            .setSmallIcon(notificationIconFor(identitySlot))
+            .setContentTitle("$byName took the permit")
             .setContentText("Your car is parked WITHOUT a permit. Move it or reclaim.")
             .setAutoCancel(true)
             .setContentIntent(raise(decision))

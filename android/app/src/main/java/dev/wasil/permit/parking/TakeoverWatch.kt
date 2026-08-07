@@ -47,9 +47,17 @@ fun shouldWatchForTakeover(
  * car. The last guard is [lastAlertedClaimMs] — a claim already reported is not
  * news, and without it every tick of the watch would re-raise the same alert.
  */
-fun takeoverBy(permit: PermitClaim?, me: MyCar?, lastAlertedClaimMs: Long): MyCar? {
+fun takeoverBy(
+    permit: PermitClaim?,
+    me: VehicleId?,
+    lastAlertedClaimMs: Long,
+    roster: Roster,
+): Vehicle? {
     if (permit == null || me == null) return null
-    if (permit.holder == me.key()) return null
+    if (permit.holder == me.value) return null
     if (permit.claimedAtMs <= lastAlertedClaimMs) return null
-    return me.other()
+    // Whoever the room says is holding it, named from the roster rather than
+    // assumed to be "the other one" — with three cars "the other one" has no
+    // referent, and the room already carries the id that does.
+    return roster.byId(VehicleId(permit.holder)) ?: roster.other(me)
 }

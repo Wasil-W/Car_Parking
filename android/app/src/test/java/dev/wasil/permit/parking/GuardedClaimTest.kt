@@ -2,7 +2,6 @@ package dev.wasil.permit.parking
 
 import dev.wasil.permit.data.PermitRepository
 import dev.wasil.permit.data.store.FakeCredentialStore
-import dev.wasil.permit.data.store.PermitConfig
 import dev.wasil.permit.parking.shared.ClaimGuard
 import dev.wasil.permit.parking.shared.PhoneState
 import kotlinx.coroutines.test.runTest
@@ -12,7 +11,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class GuardedClaimTest {
-    private val config = PermitConfig("u", "p", "RH950F", "XX123Y")  // Wasil, Walid
+    private val config = testConfig()  // Wasil RH950F, Walid XX123Y
     private val now = 1_000_000_000_000L
     private val walidParkedFresh = PhoneState(
         parkedOutside = true, parkedAtMs = now - 120_000, heartbeatAtMs = now - 60_000,
@@ -91,7 +90,7 @@ class GuardedClaimTest {
     fun `switching to the other car warns when MY car is parked outside holding`() = runTest {
         val api = SwitchApi(active = "RH950F")   // permit on me (Wasil)
         val state = FakeParkStateStore().apply { parkedOutside = true; parkedAtMs = now - 60_000 }
-        val result = guarded(api, state = state).claim(target = MyCar.WALID)
+        val result = guarded(api, state = state).claim(target = WALID)
         assertTrue(result is GuardedResult.Blocked)
         assertEquals("Wasil", (result as GuardedResult.Blocked).otherLabel)
     }

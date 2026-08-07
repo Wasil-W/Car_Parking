@@ -2,17 +2,10 @@ package dev.wasil.permit.parking
 
 import dev.wasil.permit.data.PermitRepository
 import dev.wasil.permit.data.store.CredentialStore
-import dev.wasil.permit.data.store.PermitConfig
+import dev.wasil.permit.data.store.roster
 import dev.wasil.permit.parking.shared.ClaimGuard
 import dev.wasil.permit.parking.shared.PhoneState
 import dev.wasil.permit.parking.shared.SharedStateStore
-
-fun MyCar.other(): MyCar = if (this == MyCar.WASIL) MyCar.WALID else MyCar.WASIL
-fun MyCar.label(): String = if (this == MyCar.WASIL) "Wasil" else "Walid"
-fun MyCar.key(): String = name.lowercase()
-
-/** Inverse of [MyCar.label] — turns a notifier's "Wasil"/"Walid" string back into a [MyCar]. */
-fun myCarForLabel(label: String): MyCar = if (label == "Wasil") MyCar.WASIL else MyCar.WALID
 
 sealed interface GuardedResult {
     /** Guard passed or was skipped; [outcome] is the raw switch outcome. */
@@ -49,69 +42,73 @@ class GuardedClaim(
      * problem falls back to asking rather than silently assuming.
      */
     suspend fun alreadyMine(): String? {
-        val config = credentialStore.load() ?: return null
-        val mine = stateStore.myCar ?: return null
-        val myPlate = if (mine == MyCar.WASIL) config.wasilPlate else config.walidPlate
+        val mine = myVehicle() ?: return null
+        if (mine.plate.isBlank()) return null
         return runCatching { repository.activePlate() }.getOrNull()
-            ?.takeIf { it == myPlate }
+            ?.takeIf { it == mine.plate }
     }
 
     suspend fun claim(
-        target: MyCar? = null,
+        target: VehicleId? = null,
         force: Boolean = false,
         userInitiated: Boolean = false,
         zoneText: String? = null,
     ): GuardedResult {
-        val config = credentialStore.load() ?: return GuardedResult.Done(ParkOutcome.NotConfigured)
-        val mine = stateStore.myCar ?: return GuardedResult.Done(ParkOutcome.NotConfigured)
-        val targetCar = target ?: mine
-        val nonTarget = targetCar.other()
-        val nonTargetPlate =
-            if (nonTarget == MyCar.WASIL) config.wasilPlate else config.walidPlate
+        val roster = credentialStore.load()?.roster
+            ?: return GuardedResult.Done(ParkOutcome.NotConfigured)
+        val mine = roster.byId(stateStore.thisPhoneDrives)
+            ?: return GuardedResult.Done(ParkOutcome.NotConfigured)
+        val targetCar = roster.byId(target) ?: mine
+        // With more than two cars there is no single "the car that isn't the
+        // target", so there is nothing for the guard to check against and the
+        // claim proceeds as it would with sharing switched off. That is the
+        // same branch a one-car roster already takes, and it is honest: the
+        // guard exists to stop stranding *the other* car, and past two the
+        // question needs a UI this release deliberately does not build.
+        val nonTarget = roster.other(targetCar.id)
 
         var guardNote: String? = null
-        if (!force) {
+        if (!force && nonTarget != null) {
             try {
                 // My own state is local and always fresh; the other's comes from RTDB.
                 val nonTargetState =
-                    if (nonTarget == mine) localPhoneState() else shared.readOther()
+                    if (nonTarget.id == mine.id) localPhoneState() else shared.readOther()
                 val verdict = ClaimGuard.evaluate(
-                    nonTargetState, nonTargetPlate, repository.activePlate(), nowMs(),
+                    nonTargetState, nonTarget.plate, repository.activePlate(), nowMs(),
                 )
                 if (verdict is ClaimGuard.Verdict.Blocked) {
-                    return GuardedResult.Blocked(nonTarget.label(), verdict.other)
+                    return GuardedResult.Blocked(nonTarget.name, verdict.other)
                 }
             } catch (e: Exception) {
                 // Guard infrastructure failed. A background claim must not gamble;
                 // a human pressing the button proceeds with a visible note.
                 if (!userInitiated) return GuardedResult.Done(ParkOutcome.ManualNeeded)
-                guardNote = "couldn't check ${nonTarget.label()}'s status"
+                guardNote = "couldn't check ${nonTarget.name}'s status"
             }
         }
 
-        val outcome = claimPermit.claim(targetCar, zoneText)
+        val outcome = claimPermit.claim(targetCar.id, zoneText)
         if (outcome is ParkOutcome.Claimed) {
-            if (targetCar == mine && stateStore.parked) stateStore.parkedOutside = true
-            runCatching { shared.writePermit(targetCar.key(), outcome.vrn, forced = force) }
+            if (targetCar.id == mine.id && stateStore.parked) stateStore.parkedOutside = true
+            runCatching { shared.writePermit(targetCar.id.value, outcome.vrn, forced = force) }
         }
         return GuardedResult.Done(outcome, guardNote)
     }
 
     /** Hand the permit back when I parked free while the other car needs it. */
     suspend fun giveBack(): GiveBackResult {
-        val config = credentialStore.load() ?: return GiveBackResult.NothingToDo
-        val mine = stateStore.myCar ?: return GiveBackResult.NothingToDo
-        val myPlate = if (mine == MyCar.WASIL) config.wasilPlate else config.walidPlate
-        val other = mine.other()
+        val roster = credentialStore.load()?.roster ?: return GiveBackResult.NothingToDo
+        val mine = roster.byId(stateStore.thisPhoneDrives) ?: return GiveBackResult.NothingToDo
+        val other = roster.other(mine.id) ?: return GiveBackResult.NothingToDo
         return try {
             val otherState = shared.readOther()
             val needsIt = otherState != null && otherState.parkedOutside &&
                 nowMs() - otherState.heartbeatAtMs <= ClaimGuard.STALE_AFTER_MS
             if (!needsIt) return GiveBackResult.NothingToDo
-            if (repository.activePlate() != myPlate) return GiveBackResult.NothingToDo
-            when (val outcome = claimPermit.claim(other)) {
+            if (repository.activePlate() != mine.plate) return GiveBackResult.NothingToDo
+            when (val outcome = claimPermit.claim(other.id)) {
                 is ParkOutcome.Claimed -> {
-                    runCatching { shared.writePermit(other.key(), outcome.vrn, forced = false) }
+                    runCatching { shared.writePermit(other.id.value, outcome.vrn, forced = false) }
                     GiveBackResult.Given(outcome.vrn)
                 }
                 ParkOutcome.SwitchFailed -> GiveBackResult.Failed
@@ -121,6 +118,17 @@ class GuardedClaim(
             GiveBackResult.Failed
         }
     }
+
+    /** This phone's car, or null when there is no permit or no answer to that yet. */
+    fun myVehicle(): Vehicle? =
+        credentialStore.load()?.roster?.byId(stateStore.thisPhoneDrives)
+
+    /**
+     * The cars that exist. The seed when no permit account is stored, because a
+     * phone with no permit still drives a car and still has to be able to name
+     * which one it is.
+     */
+    fun roster(): Roster = credentialStore.roster()
 
     private fun localPhoneState(): PhoneState = PhoneState(
         parkedOutside = stateStore.parkedOutside,
@@ -147,17 +155,14 @@ class GuardedClaim(
     }
 
     private suspend fun readDecisionFacts(): DecisionFacts {
-        val config = credentialStore.load() ?: error("not configured")
-        val mine = stateStore.myCar ?: error("not configured")
-        val other = mine.other()
+        val roster = credentialStore.load()?.roster ?: error("not configured")
+        val mine = roster.byId(stateStore.thisPhoneDrives) ?: error("not configured")
+        val other = roster.other(mine.id) ?: error("no other car")
         return DecisionFacts(
             otherState = shared.readOther(),
-            otherPlate = other.plateIn(config),
-            myPlate = mine.plateIn(config),
+            otherPlate = other.plate,
+            myPlate = mine.plate,
             activeVrn = repository.activePlate(),
         )
     }
-
-    private fun MyCar.plateIn(config: PermitConfig): String =
-        if (this == MyCar.WASIL) config.wasilPlate else config.walidPlate
 }

@@ -14,7 +14,16 @@ interface DetectionSignals {
 }
 
 interface ParkNotifier {
-    fun statusPermitOn(label: String, vrn: String, zoneText: String? = null)
+    /**
+     * [identitySlot] is the roster position the notification icon's dot should
+     * sit at — 0 left, 1 right, null centred. It travels separately from
+     * [carName] because the two used to be the same thing: the notifier was
+     * handed a label and turned it back into a car by comparing it against the
+     * literal strings "Wasil" and "Walid", which mapped anything unrecognised
+     * onto Walid and lit the wrong brother's icon. A name is now text and
+     * nothing else.
+     */
+    fun statusPermitOn(carName: String, identitySlot: Int?, vrn: String, zoneText: String? = null)
     /** Ongoing status when parked without claiming (home / free zone / free street). */
     fun statusParkedNoClaim(reason: String)
     fun askManualDecision()
@@ -28,7 +37,7 @@ interface ParkNotifier {
      * are not the same sentence.
      */
     fun blockedByOther(otherLabel: String, other: PhoneState)
-    fun takeover(byLabel: String)
+    fun takeover(byName: String, identitySlot: Int?)
     fun switchFailed(reason: String?)
     fun mismatchWarning(serverVrn: String?)
     /** One-off dismissible note on the events channel. */
@@ -88,7 +97,7 @@ class ParkDetectionUseCase(
     private val rateNow: (TariffArea) -> String? = { it.tariffText.ifBlank { null } },
 ) {
     suspend fun run(): ParkOutcome {
-        if (stateStore.myCar == null) return ParkOutcome.NotConfigured
+        if (stateStore.thisPhoneDrives == null) return ParkOutcome.NotConfigured
 
         signals.start()
         val disconnectPoint = signals.currentLocation()
@@ -249,14 +258,21 @@ class ParkDetectionUseCase(
      * be read, since an unanswerable question beats a wrong assumption.
      */
     private suspend fun askUnlessAlreadyMine(zoneText: String? = null): ParkOutcome {
-        val mine = guardedClaim.alreadyMine()
-        if (mine != null) {
-            val label = stateStore.myCar?.label() ?: return alsoAsk()
-            notifier.statusPermitOn(label, mine, zoneText)
-            return ParkOutcome.Claimed(mine)
+        val plate = guardedClaim.alreadyMine()
+        if (plate != null) {
+            val car = guardedClaim.myVehicle() ?: return alsoAsk()
+            notifier.statusPermitOn(car.name, identitySlot(car.id), plate, zoneText)
+            return ParkOutcome.Claimed(plate)
         }
         return alsoAsk()
     }
+
+    /**
+     * Which identity colour this car carries, from the roster rather than from
+     * its name. Null when the roster cannot say, which the notification icon
+     * renders as a centred dot rather than as a guess at a brother.
+     */
+    private fun identitySlot(id: VehicleId): Int? = guardedClaim.roster().identitySlotOf(id)
 
     private fun alsoAsk(): ParkOutcome {
         notifier.askManualDecision()
@@ -294,7 +310,7 @@ class ParkDetectionUseCase(
             ParkRecord(
                 startedAtMs = startedAtMs,
                 settlement = settlement,
-                holder = stateStore.myCar.takeIf { settlement == Settlement.PERMIT },
+                holder = stateStore.thisPhoneDrives.takeIf { settlement == Settlement.PERMIT },
                 place = place,
                 rateText = (zone as? ZoneInfo.Paid)?.area?.let(rateNow),
                 // Null, not false, when no zone resolved — the record has to be

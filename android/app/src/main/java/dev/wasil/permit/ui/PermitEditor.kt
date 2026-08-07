@@ -47,8 +47,10 @@ import kotlinx.coroutines.launch
 @Composable
 fun PermitEditor(
     initialUsername: String,
-    initialWasilPlate: String,
-    initialWalidPlate: String,
+    /** This phone's own car's plate — not a fixed slot's. */
+    initialMyPlate: String,
+    initialTheirPlate: String,
+    /** `(username, password, myPlate, theirPlate)`. */
     onSave: (String, String, String, String) -> Unit,
     /**
      * Signs in with these credentials and returns every plate the account
@@ -63,8 +65,8 @@ fun PermitEditor(
 ) {
     var username by rememberSaveable { mutableStateOf(initialUsername) }
     var password by rememberSaveable { mutableStateOf("") }
-    var minePlate by rememberSaveable { mutableStateOf(initialWasilPlate) }
-    var otherPlate by rememberSaveable { mutableStateOf(initialWalidPlate) }
+    var minePlate by rememberSaveable { mutableStateOf(initialMyPlate) }
+    var otherPlate by rememberSaveable { mutableStateOf(initialTheirPlate) }
     var choice by remember { mutableStateOf<PlateChoice?>(null) }
     var finding by remember { mutableStateOf(false) }
     var failed by remember { mutableStateOf(false) }

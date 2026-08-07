@@ -1,6 +1,8 @@
 package dev.wasil.permit.ui
 
-import dev.wasil.permit.parking.MyCar
+import dev.wasil.permit.parking.Roster
+import dev.wasil.permit.parking.legacyRoster
+import dev.wasil.permit.parking.rosterFrom
 import dev.wasil.permit.parking.zones.TariffNow
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -11,44 +13,70 @@ import dev.wasil.permit.parking.zones.ZoneInfo
 import org.junit.Test
 
 class PermitPresentationTest {
-    private val options = listOf(PlateOption("Wasil", "RH950F", MyCar.WASIL), PlateOption("Walid", "XX123Y", MyCar.WALID))
+    private val roster = legacyRoster("RH950F", "XX123Y")
+    private val wasil = roster[0]
+    private val walid = roster[1]
 
-    @Test fun `wasil holding lights the left arc and puts the dot left`() {
-        assertEquals(MarkState(Side.LEFT, Side.LEFT), markStateFor(MyCar.WASIL))
+    @Test fun `slot 0 holding lights the left arc and puts the dot left`() {
+        assertEquals(MarkState(Side.LEFT, Side.LEFT), markStateFor(0))
     }
 
-    @Test fun `walid holding lights the right arc and puts the dot right`() {
-        assertEquals(MarkState(Side.RIGHT, Side.RIGHT), markStateFor(MyCar.WALID))
+    @Test fun `slot 1 holding lights the right arc and puts the dot right`() {
+        assertEquals(MarkState(Side.RIGHT, Side.RIGHT), markStateFor(1))
     }
 
     @Test fun `nobody holding lights neither arc`() {
         assertEquals(MarkState(null, null), markStateFor(null))
     }
 
+    /**
+     * The N ≥ 3 degrade, and the reason it needed no new drawing code: a roster
+     * too large for hue reports no slot, and no slot is the wordmark the mark
+     * already drew for "nobody is holding it".
+     */
+    @Test fun `a slot past the pair draws the wordmark rather than an invented arc`() {
+        assertEquals(MarkState(null, null), markStateFor(2))
+    }
+
     @Test fun `holding it offers to hand it to the other car`() {
-        assertEquals(PrimaryAction("Hand to Walid", MyCar.WALID), primaryActionFor(MyCar.WASIL, MyCar.WASIL))
+        assertEquals(
+            PrimaryAction("Hand to Walid", walid),
+            primaryActionFor(roster, mine = wasil, holder = wasil),
+        )
     }
 
     @Test fun `walids phone holding it offers to hand it to wasil`() {
-        assertEquals(PrimaryAction("Hand to Wasil", MyCar.WASIL), primaryActionFor(MyCar.WALID, MyCar.WALID))
+        assertEquals(
+            PrimaryAction("Hand to Wasil", wasil),
+            primaryActionFor(roster, mine = walid, holder = walid),
+        )
     }
 
     @Test fun `the other car holding it offers to take it back`() {
-        assertEquals(PrimaryAction("Take it back", MyCar.WASIL), primaryActionFor(MyCar.WASIL, MyCar.WALID))
+        assertEquals(
+            PrimaryAction("Take it back", wasil),
+            primaryActionFor(roster, mine = wasil, holder = walid),
+        )
     }
 
     @Test fun `no active plate offers to claim it`() {
-        assertEquals(PrimaryAction("Claim it", MyCar.WASIL), primaryActionFor(MyCar.WASIL, null))
+        assertEquals(
+            PrimaryAction("Claim it", wasil),
+            primaryActionFor(roster, mine = wasil, holder = null),
+        )
     }
 
-    @Test fun `holder resolves from the active plate`() {
-        assertEquals(MyCar.WASIL, holderFor("RH950F", options))
-        assertEquals(MyCar.WALID, holderFor("XX123Y", options))
-    }
-
-    @Test fun `unknown or absent plate has no holder`() {
-        assertNull(holderFor(null, options))
-        assertNull(holderFor("ZZ999Z", options))
+    /**
+     * One button is the *correct* UI for two cars, because a permit with two
+     * possible homes can only move to one place. At any other arity it is not,
+     * so there is no button — a picker is the answer there, and there is no
+     * third car to build one for.
+     */
+    @Test fun `there is no single hand-over button at any arity but two`() {
+        val three = rosterFrom(listOf("AA111A", "BB222B", "CC333C"), Roster.SEED)
+        assertNull(primaryActionFor(three, mine = three[0], holder = three[1]))
+        val one = rosterFrom(listOf("AA111A"), Roster.SEED)
+        assertNull(primaryActionFor(one, mine = one[0], holder = one[0]))
     }
 
     // --- obligation, separate from settlement (v0.6.1, reshaped v0.6.5) ---
@@ -117,26 +145,36 @@ class PermitPresentationTest {
 
     // --- the three truths (v0.6.4) ---
 
-    @Test fun `two phones and a permit is the screen that ships today`() {
-        assertEquals(PermitView.Shared, permitViewFor(permitAdded = true, hasSecondPlate = true))
+    @Test fun `two cars and a permit is the screen that ships today`() {
+        assertEquals(PermitView.Shared, permitViewFor(permitAdded = true, roster = roster))
     }
 
-    @Test fun `a permit with no second phone has nowhere to hand it to`() {
-        assertEquals(PermitView.Sole, permitViewFor(permitAdded = true, hasSecondPlate = false))
+    @Test fun `a permit with one car has nowhere to hand it to`() {
+        val one = rosterFrom(listOf("RH950F"), Roster.SEED)
+        assertEquals(PermitView.Sole, permitViewFor(permitAdded = true, roster = one))
+    }
+
+    /**
+     * A seeded slot with no plate is not a second car. Two blank entries are
+     * what a permit-less install carries, and reading them as a pair would draw
+     * a hand-over button pointing at nothing.
+     */
+    @Test fun `a roster of unplated seats is not a second car`() {
+        assertEquals(PermitView.Sole, permitViewFor(permitAdded = true, roster = Roster.SEED))
     }
 
     @Test fun `no permit is a screen of its own, whether or not sharing is on`() {
-        assertEquals(PermitView.NoPermit, permitViewFor(permitAdded = false, hasSecondPlate = false))
-        assertEquals(PermitView.NoPermit, permitViewFor(permitAdded = false, hasSecondPlate = true))
+        assertEquals(PermitView.NoPermit, permitViewFor(permitAdded = false, roster = Roster.SEED))
+        assertEquals(PermitView.NoPermit, permitViewFor(permitAdded = false, roster = roster))
     }
 
     @Test fun `the sole mark keeps the holder's colour and drops the second arc`() {
-        assertEquals(MarkState(Side.LEFT, Side.LEFT, MarkArcs.SOLE), soleMarkStateFor(MyCar.WASIL))
-        assertEquals(MarkState(Side.RIGHT, Side.RIGHT, MarkArcs.SOLE), soleMarkStateFor(MyCar.WALID))
+        assertEquals(MarkState(Side.LEFT, Side.LEFT, MarkArcs.SOLE), soleMarkStateFor(0))
+        assertEquals(MarkState(Side.RIGHT, Side.RIGHT, MarkArcs.SOLE), soleMarkStateFor(1))
     }
 
     @Test fun `the pair mark is still the default, so nothing else had to change`() {
-        assertEquals(MarkArcs.PAIR, markStateFor(MyCar.WASIL).arcs)
+        assertEquals(MarkArcs.PAIR, markStateFor(0).arcs)
         assertEquals(MarkArcs.PAIR, markStateFor(null).arcs)
     }
 

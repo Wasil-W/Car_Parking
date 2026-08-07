@@ -39,8 +39,16 @@ data class ParkRecord(
     val startedAtMs: Long,
     val endedAtMs: Long? = null,
     val settlement: Settlement = Settlement.UNKNOWN,
-    /** Only ever set when [settlement] is [Settlement.PERMIT] — a record belongs to a car. */
-    val holder: MyCar? = null,
+    /**
+     * Only ever set when [settlement] is [Settlement.PERMIT] — a record belongs
+     * to a car.
+     *
+     * A [VehicleId] since v0.6.6, where it was a `MyCar`. Records written before
+     * then hold `"WASIL"`/`"WALID"`; [VehicleIdSerializer] lowercases on the way
+     * in so an old log still names the right car instead of quietly losing its
+     * badge.
+     */
+    val holder: VehicleId? = null,
     /** "Molenwijk · Computerweg", from the same geocoder the map header uses. Null when it failed. */
     val place: String? = null,
     /** What the spot cost when you parked: "€3,01/h · until 19:00". Null outside a paid area. */
@@ -122,7 +130,7 @@ fun List<ParkRecord>.withOpenParkClosed(endedAtMs: Long): List<ParkRecord> {
  */
 fun List<ParkRecord>.withOpenParkSettled(
     settlement: Settlement,
-    holder: MyCar?,
+    holder: VehicleId?,
 ): List<ParkRecord> {
     val last = lastOrNull() ?: return this
     if (last.endedAtMs != null) return this
@@ -159,6 +167,6 @@ interface ParkLogStore {
     fun all(): List<ParkRecord>
     fun record(record: ParkRecord)
     fun closeOpen(endedAtMs: Long)
-    fun settleOpen(settlement: Settlement, holder: MyCar?)
+    fun settleOpen(settlement: Settlement, holder: VehicleId?)
     fun uncoverOpen()
 }

@@ -2,6 +2,7 @@ package dev.wasil.permit
 
 import android.app.Application
 import android.content.Context
+import android.content.pm.ApplicationInfo
 import dev.wasil.permit.data.PermitRepository
 import dev.wasil.permit.data.api.ApiConstants
 import dev.wasil.permit.data.api.buildPermitApi
@@ -18,8 +19,6 @@ import dev.wasil.permit.parking.PrefsFreeZoneStore
 import dev.wasil.permit.parking.PrefsParkLogStore
 import dev.wasil.permit.parking.PrefsParkStateStore
 import dev.wasil.permit.parking.android.ParkNotifications
-import dev.wasil.permit.parking.key
-import dev.wasil.permit.parking.other
 import dev.wasil.permit.parking.shared.RtdbSharedStateStore
 import dev.wasil.permit.parking.shared.SharedStateStore
 import dev.wasil.permit.parking.shared.UnconfiguredSharedStateStore
@@ -32,7 +31,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 
-/** Composition root - two users, one screen: no DI framework needed. */
+/** Composition root - two cars, one screen: no DI framework needed. */
 class PermitApp : Application() {
     lateinit var credentialStore: CredentialStore
         private set
@@ -45,11 +44,23 @@ class PermitApp : Application() {
     lateinit var parkLogStore: ParkLogStore
         private set
 
+    /**
+     * True in a debug build, read from the package's own flag rather than from
+     * a generated constant. It gates exactly one thing —
+     * [dev.wasil.permit.data.api.ClientProductLogInterceptor] — and that thing
+     * writes every plate on the permit account to logcat, so it must be
+     * impossible to leave switched on in a release by editing a boolean.
+     */
+    private val debuggable: Boolean
+        get() = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+
     override fun onCreate() {
         super.onCreate()
         credentialStore = EncryptedCredentialStore(this)
         val baseUrl = ApiConstants.BASE_URL.toHttpUrl()
-        val client = buildAuthenticatedClient(baseUrl, TokenStore(), credentialStore)
+        val client = buildAuthenticatedClient(
+            baseUrl, TokenStore(), credentialStore, logClientProduct = debuggable,
+        )
         repository = PermitRepository(buildPermitApi(baseUrl, client))
         parkStateStore = PrefsParkStateStore.from(this)
         val prefs = getSharedPreferences("park_state", Context.MODE_PRIVATE)
@@ -87,13 +98,23 @@ class PermitApp : Application() {
     /** Rebuilt per call: settings (URL, my car, credentials) can change at runtime. */
     fun sharedStateStore(): SharedStateStore {
         val url = parkStateStore.syncUrl?.toHttpUrlOrNull() ?: return UnconfiguredSharedStateStore
-        val username = credentialStore.load()?.username ?: return UnconfiguredSharedStateStore
-        val me = parkStateStore.myCar ?: return UnconfiguredSharedStateStore
+        val config = credentialStore.load() ?: return UnconfiguredSharedStateStore
+        val me = config.roster.byId(parkStateStore.thisPhoneDrives)
+            ?: return UnconfiguredSharedStateStore
+        // Sharing is a two-body arrangement: the room has one node for me and
+        // one for the other car. With one car there is nobody to read, and with
+        // three the room would need a shape it does not have — so both fall back
+        // to the unconfigured store, which returns null and swallows writes,
+        // exactly as a blank sync URL already does.
+        val other = config.roster.other(me.id) ?: return UnconfiguredSharedStateStore
         return RtdbSharedStateStore(
             baseUrl = url,
-            room = roomIdFor(username),
-            me = me.key(),
-            other = me.other().key(),
+            room = roomIdFor(config.username),
+            // The same node names as before the roster: ids are the lowercase
+            // strings MyCar.key() produced, so an existing pairing keeps its
+            // node rather than being silently re-homed.
+            me = me.id.value,
+            other = other.id.value,
             client = plainHttp,
         )
     }

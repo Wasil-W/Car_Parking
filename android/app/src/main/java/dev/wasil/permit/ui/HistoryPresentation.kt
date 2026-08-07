@@ -1,9 +1,9 @@
 package dev.wasil.permit.ui
 
-import dev.wasil.permit.parking.MyCar
 import dev.wasil.permit.parking.ParkRecord
+import dev.wasil.permit.parking.Roster
 import dev.wasil.permit.parking.Settlement
-import dev.wasil.permit.parking.label
+import dev.wasil.permit.parking.VehicleId
 
 /**
  * What a badge is *about*, so the screen can colour it without matching on
@@ -13,8 +13,20 @@ import dev.wasil.permit.parking.label
  * "fine".
  */
 enum class BadgeKind {
-    PERMIT_WASIL,
-    PERMIT_WALID,
+    /** Roster slot 0's hue. */
+    PERMIT_SLOT_0,
+
+    /** Roster slot 1's hue. */
+    PERMIT_SLOT_1,
+
+    /**
+     * A permit park drawn without an identity hue.
+     *
+     * Reached by a roster of three or more, where no hue identifies anything —
+     * the badge still says which car by name, in neutrals, which is exactly the
+     * fallback `USER-MODEL.md` prescribes past two.
+     */
+    PERMIT_NEUTRAL,
     /** Home, a marked free zone, or a street that charges nothing. */
     FREE,
     /** Charging, and nothing covered it. */
@@ -39,22 +51,45 @@ data class HistoryRow(
     val whenText: String,
 )
 
-/** The badge: how the obligation was met, never where you were. */
-fun badgeTextFor(settlement: Settlement, holder: MyCar?): String = when (settlement) {
-    Settlement.PERMIT -> holder?.let { "Permit · ${it.label()}" } ?: "Permit"
-    Settlement.HOME -> "Home"
-    Settlement.FREE_ZONE -> "Free zone"
-    Settlement.FREE_STREET -> "Free street"
-    Settlement.UNSETTLED -> "Unsettled"
-    Settlement.UNKNOWN -> "Not known"
-}
+/**
+ * The badge: how the obligation was met, never where you were.
+ *
+ * [roster] names the holder. A record whose car has since left the roster —
+ * a plate removed from the permit, an id from an install long since
+ * reconfigured — falls back to "Permit" rather than to a stale name, because
+ * the settlement is still a fact and the name no longer is.
+ */
+fun badgeTextFor(settlement: Settlement, holder: VehicleId?, roster: Roster): String =
+    when (settlement) {
+        Settlement.PERMIT -> roster.byId(holder)?.let { "Permit · ${it.name}" } ?: "Permit"
+        Settlement.HOME -> "Home"
+        Settlement.FREE_ZONE -> "Free zone"
+        Settlement.FREE_STREET -> "Free street"
+        Settlement.UNSETTLED -> "Unsettled"
+        Settlement.UNKNOWN -> "Not known"
+    }
 
-fun badgeKindFor(settlement: Settlement, holder: MyCar?): BadgeKind = when (settlement) {
-    Settlement.PERMIT -> if (holder == MyCar.WALID) BadgeKind.PERMIT_WALID else BadgeKind.PERMIT_WASIL
-    Settlement.HOME, Settlement.FREE_ZONE, Settlement.FREE_STREET -> BadgeKind.FREE
-    Settlement.UNSETTLED -> BadgeKind.OWED
-    Settlement.UNKNOWN -> BadgeKind.UNKNOWN
-}
+fun badgeKindFor(settlement: Settlement, holder: VehicleId?, roster: Roster): BadgeKind =
+    when (settlement) {
+        // A permit park always draws as a permit park. An unknown or unhued
+        // holder loses the colour, never the badge — either of the other two
+        // kinds would misreport what settled the spot.
+        Settlement.PERMIT -> when (roster.identitySlotOf(holder)) {
+            0 -> BadgeKind.PERMIT_SLOT_0
+            1 -> BadgeKind.PERMIT_SLOT_1
+            // Past two cars there is no hue to give it. Otherwise: two cars and
+            // an unreadable holder, which takes slot 0's hue — arbitrary but
+            // deliberate, and exactly what it did before the roster.
+            else -> if (roster.size > Roster.PAIR) {
+                BadgeKind.PERMIT_NEUTRAL
+            } else {
+                BadgeKind.PERMIT_SLOT_0
+            }
+        }
+        Settlement.HOME, Settlement.FREE_ZONE, Settlement.FREE_STREET -> BadgeKind.FREE
+        Settlement.UNSETTLED -> BadgeKind.OWED
+        Settlement.UNKNOWN -> BadgeKind.UNKNOWN
+    }
 
 /**
  * The cost slot — and the one place this deliberately stops short of the
@@ -108,9 +143,10 @@ fun historyRowFor(
     dayDate: String,
     startClock: String,
     endClock: String?,
+    roster: Roster = Roster.SEED,
 ): HistoryRow = HistoryRow(
-    badge = badgeTextFor(record.settlement, record.holder),
-    kind = badgeKindFor(record.settlement, record.holder),
+    badge = badgeTextFor(record.settlement, record.holder, roster),
+    kind = badgeKindFor(record.settlement, record.holder, roster),
     cost = costTextFor(record.settlement, record.rateText),
     costIsQuiet = costIsQuiet(record.settlement),
     place = placeTextFor(record.place),

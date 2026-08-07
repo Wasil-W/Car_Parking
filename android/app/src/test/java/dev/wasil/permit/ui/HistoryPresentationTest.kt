@@ -1,6 +1,9 @@
 package dev.wasil.permit.ui
 
-import dev.wasil.permit.parking.MyCar
+import dev.wasil.permit.parking.Roster
+import dev.wasil.permit.parking.legacyRoster
+import dev.wasil.permit.parking.rosterFrom
+import dev.wasil.permit.parking.slotIdFor
 import dev.wasil.permit.parking.ParkRecord
 import dev.wasil.permit.parking.Settlement
 import dev.wasil.permit.parking.zones.TariffNow
@@ -11,25 +14,29 @@ import org.junit.Test
 
 class HistoryPresentationTest {
 
+    private val roster = legacyRoster("RH950F", "XX123Y")
+    private val wasil = slotIdFor(0)
+    private val walid = slotIdFor(1)
+
     // --- the badge: settlement, never zone ---
 
     @Test fun `a permit park names the car that held it`() {
-        assertEquals("Permit · Wasil", badgeTextFor(Settlement.PERMIT, MyCar.WASIL))
-        assertEquals("Permit · Walid", badgeTextFor(Settlement.PERMIT, MyCar.WALID))
+        assertEquals("Permit · Wasil", badgeTextFor(Settlement.PERMIT, wasil, roster))
+        assertEquals("Permit · Walid", badgeTextFor(Settlement.PERMIT, walid, roster))
     }
 
     @Test fun `a permit park with no known holder still says permit`() {
-        assertEquals("Permit", badgeTextFor(Settlement.PERMIT, null))
+        assertEquals("Permit", badgeTextFor(Settlement.PERMIT, null, roster))
     }
 
     @Test fun `the three free kinds are named apart, because they are different places`() {
-        assertEquals("Home", badgeTextFor(Settlement.HOME, null))
-        assertEquals("Free zone", badgeTextFor(Settlement.FREE_ZONE, null))
-        assertEquals("Free street", badgeTextFor(Settlement.FREE_STREET, null))
+        assertEquals("Home", badgeTextFor(Settlement.HOME, null, roster))
+        assertEquals("Free zone", badgeTextFor(Settlement.FREE_ZONE, null, roster))
+        assertEquals("Free street", badgeTextFor(Settlement.FREE_STREET, null, roster))
     }
 
     @Test fun `a charging spot nothing covered is unsettled`() {
-        assertEquals("Unsettled", badgeTextFor(Settlement.UNSETTLED, null))
+        assertEquals("Unsettled", badgeTextFor(Settlement.UNSETTLED, null, roster))
     }
 
     /**
@@ -37,26 +44,47 @@ class HistoryPresentationTest {
      * render as "you owed nothing" — that is the direction that costs a fine.
      */
     @Test fun `no zone resolved says so, rather than borrowing a free label`() {
-        assertEquals("Not known", badgeTextFor(Settlement.UNKNOWN, null))
+        assertEquals("Not known", badgeTextFor(Settlement.UNKNOWN, null, roster))
     }
 
     // --- badge colour category ---
 
     @Test fun `identity colour reaches only the permit badges`() {
-        assertEquals(BadgeKind.PERMIT_WASIL, badgeKindFor(Settlement.PERMIT, MyCar.WASIL))
-        assertEquals(BadgeKind.PERMIT_WALID, badgeKindFor(Settlement.PERMIT, MyCar.WALID))
+        assertEquals(BadgeKind.PERMIT_SLOT_0, badgeKindFor(Settlement.PERMIT, wasil, roster))
+        assertEquals(BadgeKind.PERMIT_SLOT_1, badgeKindFor(Settlement.PERMIT, walid, roster))
         // A state, not a person: no brother's hue may land on these.
-        assertEquals(BadgeKind.FREE, badgeKindFor(Settlement.HOME, null))
-        assertEquals(BadgeKind.FREE, badgeKindFor(Settlement.FREE_ZONE, null))
-        assertEquals(BadgeKind.FREE, badgeKindFor(Settlement.FREE_STREET, null))
-        assertEquals(BadgeKind.OWED, badgeKindFor(Settlement.UNSETTLED, null))
-        assertEquals(BadgeKind.UNKNOWN, badgeKindFor(Settlement.UNKNOWN, null))
+        assertEquals(BadgeKind.FREE, badgeKindFor(Settlement.HOME, null, roster))
+        assertEquals(BadgeKind.FREE, badgeKindFor(Settlement.FREE_ZONE, null, roster))
+        assertEquals(BadgeKind.FREE, badgeKindFor(Settlement.FREE_STREET, null, roster))
+        assertEquals(BadgeKind.OWED, badgeKindFor(Settlement.UNSETTLED, null, roster))
+        assertEquals(BadgeKind.UNKNOWN, badgeKindFor(Settlement.UNKNOWN, null, roster))
     }
 
-    @Test fun `a permit with no holder falls to Wasil's slot rather than nothing`() {
+    @Test fun `a permit with no holder falls to slot 0 rather than to nothing`() {
         // Arbitrary but deliberate: the badge must still draw. It cannot be
         // OWED or FREE, either of which would misreport what settled the spot.
-        assertEquals(BadgeKind.PERMIT_WASIL, badgeKindFor(Settlement.PERMIT, null))
+        assertEquals(BadgeKind.PERMIT_SLOT_0, badgeKindFor(Settlement.PERMIT, null, roster))
+    }
+
+    /**
+     * Past two cars no hue identifies anything, so the badge keeps its word and
+     * loses its colour — identity moves to the name, drawn in neutrals, which
+     * is the fallback `USER-MODEL.md` prescribes.
+     */
+    @Test fun `a third car's permit park is named but not coloured`() {
+        val three = rosterFrom(listOf("AA111A", "BB222B", "CC333C"), Roster.SEED)
+        val third = three[2].id
+        assertEquals(BadgeKind.PERMIT_NEUTRAL, badgeKindFor(Settlement.PERMIT, third, three))
+        assertEquals("Permit · CC333C", badgeTextFor(Settlement.PERMIT, third, three))
+    }
+
+    /**
+     * A record whose car has since left the roster — a plate taken off the
+     * permit — still says a permit covered it, because that is still true. Only
+     * the name stops being true, so only the name goes.
+     */
+    @Test fun `a holder no longer in the roster loses its name, not its badge`() {
+        assertEquals("Permit", badgeTextFor(Settlement.PERMIT, slotIdFor(4), roster))
     }
 
     // --- the cost slot ---
@@ -148,7 +176,7 @@ class HistoryPresentationTest {
                 startedAtMs = 1_000,
                 endedAtMs = 2_000,
                 settlement = Settlement.PERMIT,
-                holder = MyCar.WASIL,
+                holder = wasil,
                 place = "Molenwijk · Computerweg",
                 rateText = "€1,72/h · until 19:00",
                 paid = true,
@@ -156,11 +184,12 @@ class HistoryPresentationTest {
             dayDate = "Mon 3 Aug",
             startClock = "09:12",
             endClock = "17:48",
+            roster = roster,
         )
         assertEquals(
             HistoryRow(
                 badge = "Permit · Wasil",
-                kind = BadgeKind.PERMIT_WASIL,
+                kind = BadgeKind.PERMIT_SLOT_0,
                 cost = "covered",
                 costIsQuiet = true,
                 place = "Molenwijk · Computerweg",
