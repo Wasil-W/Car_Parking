@@ -455,27 +455,52 @@ connected to any of them.
 
 ---
 
-## Next up — mockups first, agreed 2026-08-08
+## v0.7.0 — the design release
 
-Both releases carry UI work, so both open with a published mockup. **v0.6.9 also
-takes bug fixes; v0.7.0 is the big one and takes none.**
+Decided 2026-08-08: **v0.6.9 took the fixes small enough to make without
+drawing first; everything left is design and goes here.** v0.7.0 carries no bug
+fixes of its own — if one arrives it gets its own patch, so this release is not
+held hostage to it.
 
-From him, still to design rather than patch:
+**Mockup first, per `CLAUDE.md`.** And a new option worth using: *AI-powered
+artifacts* and *inline visualisations* are enabled on this account, so a mockup
+can be **clickable** rather than a picture of a screen. Wasil, listing what he
+had been thinking about: *"interactive ui mockups (maybe external app)."* A
+prototype you can tap through answers "is this crowded" far better than two
+static frames side by side — which is the exact question three of the items
+below turn on.
+
+### Carried from v0.6.9's feedback
 
 - **The timetable is still crowded.** He floated a row per day — ma/di/wo/do/vr/
-  za/zo — and doubted it himself: *"maybe that is too excessive. But this seems
-  to be too crowded what we now have."* Both shapes are worth drawing before
-  either is built.
-- **Zone editing takes too much of the screen.** The dotted outlines are right —
+  za/zo — and doubted it in the same breath: *"maybe that is too excessive. But
+  this seems to be too crowded what we now have."* Both shapes get drawn; the
+  doubt is the useful part, because it means neither is obviously right.
+- **Zone editing takes too much of the screen.** The outlines are right —
   *"the dotted lines are amazing"* — the editor card around them is not.
-- **A thinner dotted line for tariff sections** while the layer is on, so the
-  different sections are visible without competing with zones. His idea.
-- **Accessibility of the zone outlines** — more noticeable, without shouting.
+- **A thinner dotted line for tariff sections** while that layer is on, so the
+  sections read without competing with zone outlines. His idea.
+- **Zone outlines more noticeable**, without shouting.
 - **A smoother, more elegant expand animation** for the timetable.
-- **Force a refresh whenever the app opens?** His question. Worth weighing
-  against the v0.6.8 rule that a failed refresh must keep the last known state:
-  refreshing more often is only an improvement if failing is already safe, which
-  it now is.
+
+### Also his, from 2026-08-08
+
+- **Force a refresh whenever the app opens.** Recommended yes, and v0.6.8 is
+  what makes it safe: refreshing more often is only an improvement once
+  *failing* is harmless, and a failed refresh now keeps the last known plates
+  and says so rather than blanking. Worth confirming before building.
+- **Optimal performance.** No specific complaint attached yet. Worth a real
+  measurement before any change — the app now bundles 740 KB of geometry and
+  parses it at start, which is the obvious suspect and may well be innocent.
+- **Automated messages.** Unclear scope. Could mean scheduled notifications
+  (*"you have been parked 3 hours"*), or something about how the two phones
+  talk. Ask before designing.
+
+### Not the app
+
+**Remote control** and **New Chat** are about how Wasil and the assistant work
+together, not about Handoff. He is opening a separate conversation for remote
+control. Recorded here only so they are not mistaken for product scope.
 
 ## Open questions needing Wasil
 
