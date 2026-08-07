@@ -27,12 +27,18 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
-import dev.wasil.permit.parking.MyCar
+import dev.wasil.permit.data.api.PermitKind
+import dev.wasil.permit.parking.WALID
+import dev.wasil.permit.parking.WASIL
+import dev.wasil.permit.parking.legacyRoster
+import dev.wasil.permit.parking.testConfig
 import org.junit.Test
 
 private class ScriptedApi : PermitApi {
     var active: String? = "RH950F"
     var failNextGet = false
+    /** What the product endpoint calls this permit, or null when it says nothing. */
+    var productName: String? = null
     override suspend fun login(body: LoginRequest) = LoginResponse("tok")
     override suspend fun getClientProduct(productId: Long): ClientProductResponse {
         if (failNextGet) { failNextGet = false; throw IOException("offline") }
@@ -40,7 +46,8 @@ private class ScriptedApi : PermitApi {
             listOf(
                 VrnEntry("RH950F", active == "RH950F"),
                 VrnEntry("XX123Y", active == "XX123Y"),
-            )
+            ),
+            name = productName,
         )
     }
     override suspend fun activate(body: ActivateRequest): ActivateResponse {
@@ -52,7 +59,7 @@ private class ScriptedApi : PermitApi {
 class MainViewModelTest {
     private val dispatcher = StandardTestDispatcher()
     private lateinit var api: ScriptedApi
-    private val config = PermitConfig("u", "p", "RH950F", "XX123Y")
+    private val config = testConfig()
     private val now = 1_000_000_000_000L
 
     @Before fun setUp() { Dispatchers.setMain(dispatcher); api = ScriptedApi() }
@@ -84,15 +91,15 @@ class MainViewModelTest {
         dispatcher.scheduler.advanceUntilIdle()
         val s = vm.state.value
         assertEquals("RH950F", s.activeVrn)
-        assertEquals(listOf("Wasil", "Walid"), s.options.map { it.label })
-        assertEquals(listOf("RH950F", "XX123Y"), s.options.map { it.vrn })
+        assertEquals(listOf("Wasil", "Walid"), s.roster.vehicles.map { it.name })
+        assertEquals(listOf("RH950F", "XX123Y"), s.roster.vehicles.map { it.plate })
     }
 
     @Test
     fun `switchTo updates active plate after confirmed switch`() = runTest(dispatcher) {
         val vm = vm()
         dispatcher.scheduler.advanceUntilIdle()
-        vm.switchTo(PlateOption("Walid", "XX123Y", MyCar.WALID))
+        vm.switchTo(config.roster.require(WALID))
         dispatcher.scheduler.advanceUntilIdle()
         val s = vm.state.value
         assertEquals("XX123Y", s.activeVrn)
@@ -120,7 +127,7 @@ class MainViewModelTest {
             )
             val vm = vm(shared = shared)
             dispatcher.scheduler.advanceUntilIdle()
-            vm.switchTo(PlateOption("Wasil", "RH950F", MyCar.WASIL))
+            vm.switchTo(config.roster.require(WASIL))
             dispatcher.scheduler.advanceUntilIdle()
 
             val blocked = vm.state.value.blocked
@@ -139,8 +146,64 @@ class MainViewModelTest {
         val vm = vm(store)
         vm.saveSetup("u", "p", "rh-950-f", "xx 123 y")
         dispatcher.scheduler.advanceUntilIdle()
-        assertEquals("RH950F", store.config!!.wasilPlate)
-        assertEquals("XX123Y", store.config!!.walidPlate)
+        assertEquals(listOf("RH950F", "XX123Y"), store.config!!.roster.vehicles.map { it.plate })
         assertTrue(!vm.state.value.needsSetup)
+    }
+
+    /**
+     * The defect the roster removes rather than the one it adds.
+     *
+     * The editor asks for "your plate" and "the other car's plate"; the store
+     * used to put the first in the *Wasil* slot whichever phone was typing. On
+     * Walid's phone the two were therefore swapped, so `MyCar.WALID` pointed at
+     * Wasil's plate and a claim moved the permit to the wrong car. Storing by
+     * plate and recording which one this phone drives makes the slot
+     * unguessable-at rather than merely correct today.
+     */
+    @Test
+    fun `whose phone this is follows the plate, not a fixed slot`() = runTest(dispatcher) {
+        val store = FakeCredentialStore(null)
+        val parkState = FakeParkStateStore()
+        val vm = vm(store, parkState)
+        // Walid's phone: "my plate" is XX123Y, which sorts into slot 1.
+        vm.saveSetup("u", "p", "xx 123 y", "rh-950-f")
+        dispatcher.scheduler.advanceUntilIdle()
+        assertEquals(listOf("RH950F", "XX123Y"), store.config!!.roster.vehicles.map { it.plate })
+        assertEquals(WALID, parkState.thisPhoneDrives)
+        assertEquals("XX123Y", store.config!!.roster.require(WALID).plate)
+    }
+
+    // --- the permit's own type, read from the same response as the plates ---
+
+    @Test
+    fun `an account that names a visitor permit is recorded as one`() = runTest(dispatcher) {
+        val store = FakeCredentialStore(null)
+        api.productName = "Bezoekersvergunning Centrum"
+        vm(store).findPlates("u", "p")
+        assertEquals(PermitKind.VISITOR, store.config!!.permitKind)
+    }
+
+    /**
+     * The direction that cannot cost a fine. A response that says nothing about
+     * the permit's type leaves it UNKNOWN, and UNKNOWN is treated as the
+     * restricted kind — the one the 66 exception areas bind.
+     */
+    @Test
+    fun `an account that says nothing about its type stays unknown`() = runTest(dispatcher) {
+        val store = FakeCredentialStore(null)
+        api.productName = null
+        vm(store).findPlates("u", "p")
+        assertEquals(PermitKind.UNKNOWN, store.config!!.permitKind)
+    }
+
+    @Test
+    fun `saving the permit afterwards keeps what the account said`() = runTest(dispatcher) {
+        val store = FakeCredentialStore(null)
+        api.productName = "Bezoekersvergunning Centrum"
+        val vm = vm(store)
+        vm.findPlates("u", "p")
+        vm.saveSetup("u", "p", "RH950F", "XX123Y")
+        dispatcher.scheduler.advanceUntilIdle()
+        assertEquals(PermitKind.VISITOR, store.config!!.permitKind)
     }
 }

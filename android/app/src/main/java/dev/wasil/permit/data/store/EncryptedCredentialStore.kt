@@ -22,19 +22,7 @@ class EncryptedCredentialStore(context: Context) : CredentialStore {
 
     override fun load(): PermitConfig? = loadFrom(prefs)
 
-    override fun save(config: PermitConfig) {
-        prefs.edit()
-            .putString(KEY_USERNAME, config.username)
-            .putString(KEY_PASSWORD, config.password)
-            .putString(KEY_ROSTER, PermitJson.encodeToString(config.roster.vehicles))
-            .putString(KEY_PERMIT_KIND, config.permitKind.name)
-            // The pair this replaced. Removed rather than left lying around, so
-            // there can never be two answers to "which plate is Walid's" — the
-            // migration below reads them only while the roster key is absent.
-            .remove(KEY_LEGACY_WASIL_PLATE)
-            .remove(KEY_LEGACY_WALID_PLATE)
-            .apply()
-    }
+    override fun save(config: PermitConfig) = saveTo(prefs, config)
 
     override fun clear() {
         prefs.edit().clear().apply()
@@ -47,6 +35,21 @@ class EncryptedCredentialStore(context: Context) : CredentialStore {
         private const val KEY_PERMIT_KIND = "permit_kind"
         private const val KEY_LEGACY_WASIL_PLATE = "wasil_plate"
         private const val KEY_LEGACY_WALID_PLATE = "walid_plate"
+
+        fun saveTo(prefs: SharedPreferences, config: PermitConfig) {
+            prefs.edit()
+                .putString(KEY_USERNAME, config.username)
+                .putString(KEY_PASSWORD, config.password)
+                .putString(KEY_ROSTER, PermitJson.encodeToString(config.roster.vehicles))
+                .putString(KEY_PERMIT_KIND, config.permitKind.name)
+                // The pair this replaced. Removed rather than left lying
+                // around, so there can never be two answers to "which plate is
+                // Walid's" — the migration below reads them only while the
+                // roster key is absent.
+                .remove(KEY_LEGACY_WASIL_PLATE)
+                .remove(KEY_LEGACY_WALID_PLATE)
+                .apply()
+        }
 
         /**
          * Reading a stored config, including one written before the roster

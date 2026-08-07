@@ -145,26 +145,36 @@ class PermitPresentationTest {
 
     // --- the three truths (v0.6.4) ---
 
-    @Test fun `two phones and a permit is the screen that ships today`() {
-        assertEquals(PermitView.Shared, permitViewFor(permitAdded = true, hasSecondPlate = true))
+    @Test fun `two cars and a permit is the screen that ships today`() {
+        assertEquals(PermitView.Shared, permitViewFor(permitAdded = true, roster = roster))
     }
 
-    @Test fun `a permit with no second phone has nowhere to hand it to`() {
-        assertEquals(PermitView.Sole, permitViewFor(permitAdded = true, hasSecondPlate = false))
+    @Test fun `a permit with one car has nowhere to hand it to`() {
+        val one = rosterFrom(listOf("RH950F"), Roster.SEED)
+        assertEquals(PermitView.Sole, permitViewFor(permitAdded = true, roster = one))
+    }
+
+    /**
+     * A seeded slot with no plate is not a second car. Two blank entries are
+     * what a permit-less install carries, and reading them as a pair would draw
+     * a hand-over button pointing at nothing.
+     */
+    @Test fun `a roster of unplated seats is not a second car`() {
+        assertEquals(PermitView.Sole, permitViewFor(permitAdded = true, roster = Roster.SEED))
     }
 
     @Test fun `no permit is a screen of its own, whether or not sharing is on`() {
-        assertEquals(PermitView.NoPermit, permitViewFor(permitAdded = false, hasSecondPlate = false))
-        assertEquals(PermitView.NoPermit, permitViewFor(permitAdded = false, hasSecondPlate = true))
+        assertEquals(PermitView.NoPermit, permitViewFor(permitAdded = false, roster = Roster.SEED))
+        assertEquals(PermitView.NoPermit, permitViewFor(permitAdded = false, roster = roster))
     }
 
     @Test fun `the sole mark keeps the holder's colour and drops the second arc`() {
-        assertEquals(MarkState(Side.LEFT, Side.LEFT, MarkArcs.SOLE), soleMarkStateFor(MyCar.WASIL))
-        assertEquals(MarkState(Side.RIGHT, Side.RIGHT, MarkArcs.SOLE), soleMarkStateFor(MyCar.WALID))
+        assertEquals(MarkState(Side.LEFT, Side.LEFT, MarkArcs.SOLE), soleMarkStateFor(0))
+        assertEquals(MarkState(Side.RIGHT, Side.RIGHT, MarkArcs.SOLE), soleMarkStateFor(1))
     }
 
     @Test fun `the pair mark is still the default, so nothing else had to change`() {
-        assertEquals(MarkArcs.PAIR, markStateFor(MyCar.WASIL).arcs)
+        assertEquals(MarkArcs.PAIR, markStateFor(0).arcs)
         assertEquals(MarkArcs.PAIR, markStateFor(null).arcs)
     }
 

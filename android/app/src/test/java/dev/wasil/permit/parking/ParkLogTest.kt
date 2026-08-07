@@ -11,7 +11,7 @@ class ParkLogTest {
     private fun park(
         startedAtMs: Long,
         settlement: Settlement = Settlement.UNSETTLED,
-        holder: MyCar? = null,
+        holder: VehicleId? = null,
         paid: Boolean? = true,
         endedAtMs: Long? = null,
     ) = ParkRecord(
@@ -28,7 +28,7 @@ class ParkLogTest {
 
     @Test fun `a log survives being written and read back`() {
         val records = listOf(
-            park(1_000, Settlement.PERMIT, MyCar.WASIL, endedAtMs = 2_000),
+            park(1_000, Settlement.PERMIT, WASIL, endedAtMs = 2_000),
             park(3_000, Settlement.HOME, paid = false),
         )
         assertEquals(records, decodeParkLog(encodeParkLog(records)))
@@ -44,6 +44,29 @@ class ParkLogTest {
         assertNull(round.rateText)
         assertNull(round.paid)
         assertEquals(Settlement.UNKNOWN, round.settlement)
+    }
+
+    /**
+     * The park-log half of the migration. Records written before the roster
+     * stored a `MyCar`, which serialised as `"WASIL"` / `"WALID"`; ids are the
+     * lowercase form of exactly those strings. Without the lowercase on the way
+     * in, months of history would keep its rows and lose every "Permit · Wasil"
+     * badge to an id that matches no car — quietly wrong, which is the one
+     * thing a log must not be.
+     */
+    @Test fun `a log written before the roster still names the right car`() {
+        val v065 = """
+            [{"startedAtMs":1000,"endedAtMs":2000,"settlement":"PERMIT","holder":"WASIL",
+              "place":"Molenwijk · Computerweg","paid":true},
+             {"startedAtMs":3000,"settlement":"PERMIT","holder":"WALID","paid":true}]
+        """.trimIndent()
+        val decoded = decodeParkLog(v065)
+        assertEquals(listOf(WASIL, WALID), decoded.map { it.holder })
+    }
+
+    @Test fun `an id already in the new shape round-trips unchanged`() {
+        val record = park(1_000, Settlement.PERMIT, WASIL)
+        assertEquals(WASIL, decodeParkLog(encodeParkLog(listOf(record))).single().holder)
     }
 
     @Test fun `a store that has never held a log reads as empty`() {
@@ -121,26 +144,26 @@ class ParkLogTest {
 
     @Test fun `a claim made after detection re-badges the open park`() {
         val log = listOf(park(1_000, Settlement.UNSETTLED))
-            .withOpenParkSettled(Settlement.PERMIT, MyCar.WALID)
+            .withOpenParkSettled(Settlement.PERMIT, WALID)
         assertEquals(Settlement.PERMIT, log.single().settlement)
-        assertEquals(MyCar.WALID, log.single().holder)
+        assertEquals(WALID, log.single().holder)
     }
 
     @Test fun `a finished park is never re-badged — a claim now belongs to the next one`() {
         val log = listOf(park(1_000, Settlement.UNSETTLED, endedAtMs = 2_000))
-            .withOpenParkSettled(Settlement.PERMIT, MyCar.WASIL)
+            .withOpenParkSettled(Settlement.PERMIT, WASIL)
         assertEquals(Settlement.UNSETTLED, log.single().settlement)
     }
 
     @Test fun `handing the permit away leaves a known-paid spot unsettled`() {
-        val log = listOf(park(1_000, Settlement.PERMIT, MyCar.WASIL, paid = true))
+        val log = listOf(park(1_000, Settlement.PERMIT, WASIL, paid = true))
             .withOpenParkUncovered()
         assertEquals(Settlement.UNSETTLED, log.single().settlement)
         assertNull(log.single().holder)
     }
 
     @Test fun `handing it away where no zone resolved says so, rather than claiming a debt`() {
-        val log = listOf(park(1_000, Settlement.PERMIT, MyCar.WASIL, paid = null))
+        val log = listOf(park(1_000, Settlement.PERMIT, WASIL, paid = null))
             .withOpenParkUncovered()
         assertEquals(Settlement.UNKNOWN, log.single().settlement)
     }
@@ -152,7 +175,7 @@ class ParkLogTest {
 
     @Test fun `an empty log survives every operation`() {
         val empty = emptyList<ParkRecord>()
-        assertTrue(empty.withOpenParkSettled(Settlement.PERMIT, MyCar.WASIL).isEmpty())
+        assertTrue(empty.withOpenParkSettled(Settlement.PERMIT, WASIL).isEmpty())
         assertTrue(empty.withOpenParkUncovered().isEmpty())
         assertTrue(empty.withOpenParkClosed(1).isEmpty())
     }

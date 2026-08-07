@@ -21,7 +21,7 @@ private class FakeParkLogStore : ParkLogStore {
     override fun all(): List<ParkRecord> = records
     override fun record(record: ParkRecord) { records = records.withPark(record) }
     override fun closeOpen(endedAtMs: Long) { records = records.withOpenParkClosed(endedAtMs) }
-    override fun settleOpen(settlement: Settlement, holder: MyCar?) {
+    override fun settleOpen(settlement: Settlement, holder: VehicleId?) {
         records = records.withOpenParkSettled(settlement, holder)
     }
     override fun uncoverOpen() { records = records.withOpenParkUncovered() }
@@ -55,7 +55,7 @@ private class RecordingScheduler : ParkScheduler {
 }
 
 class ParkDetectionUseCaseTest {
-    private val config = PermitConfig("u", "p", "RH950F", "XX123Y")
+    private val config = testConfig()
     private val stillAt6s = ActivitySample(ActivityType.STILL, 85, 6_000)
     private val driving = ActivitySample(ActivityType.IN_VEHICLE, 85, 6_000)
     private val now = 1_000_000_000_000L
@@ -447,7 +447,7 @@ class ParkDetectionUseCaseTest {
     fun `walid phone claims walid plate`() = runTest {
         val signals = ScriptedSignals(script = mapOf(1 to stillAt6s),
             locations = mutableListOf(paidPoint))
-        val state = FakeParkStateStore().apply { myCar = MyCar.WALID }
+        val state = FakeParkStateStore().apply { thisPhoneDrives = WALID }
         val api = SwitchApi(active = "RH950F")
         val outcome = useCase(signals, state, api).run()
         assertEquals(ParkOutcome.Claimed("XX123Y"), outcome)
@@ -495,7 +495,7 @@ class ParkDetectionUseCaseTest {
     @Test
     fun `unconfigured phone does nothing`() = runTest {
         val signals = ScriptedSignals(script = mapOf(1 to stillAt6s))
-        val state = FakeParkStateStore().apply { myCar = null }
+        val state = FakeParkStateStore().apply { thisPhoneDrives = null }
         val outcome = useCase(signals, state).run()
         assertEquals(ParkOutcome.NotConfigured, outcome)
     }
@@ -512,7 +512,7 @@ class ParkDetectionUseCaseTest {
         val record = log.records.single()
         assertEquals(now, record.startedAtMs)
         assertEquals(Settlement.PERMIT, record.settlement)
-        assertEquals(MyCar.WASIL, record.holder)
+        assertEquals(WASIL, record.holder)
         assertEquals("Molenwijk · Computerweg", record.place)
         assertEquals("€8,05/h · all day", record.rateText)
         assertEquals(true, record.paid)
@@ -600,7 +600,7 @@ class ParkDetectionUseCaseTest {
         ClaimPermit(repo, FakeCredentialStore(config), state, notifier, log).claim()
 
         assertEquals(Settlement.PERMIT, log.records.single().settlement)
-        assertEquals(MyCar.WASIL, log.records.single().holder)
+        assertEquals(WASIL, log.records.single().holder)
     }
 
     @Test
@@ -614,7 +614,7 @@ class ParkDetectionUseCaseTest {
         assertEquals(Settlement.PERMIT, log.records.single().settlement)
 
         ClaimPermit(PermitRepository(api), FakeCredentialStore(config), state,
-            RecordingParkNotifier(), log).claim(target = MyCar.WALID)
+            RecordingParkNotifier(), log).claim(target = WALID)
 
         assertEquals(Settlement.UNSETTLED, log.records.single().settlement)
         assertNull(log.records.single().holder)
