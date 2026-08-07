@@ -10,6 +10,34 @@ change as a minor.
 
 ---
 
+## v0.6.9 — which price is the one you are paying
+
+Four small things from reading the timetable on a real screen.
+
+**The line in force is the only one at full strength.** *"I see 3 prices i dont
+know which one is the correct one."* Fair — a timetable that will not say which
+row is *now* makes you redo the lookup the header already did. Everything else
+is dimmed rather than the live row being decorated, so the answer is found by
+looking. Weight and colour together, so it survives sunlight and never depends
+on colour alone.
+
+**The neighbourhood is back before you expand.** It had become expanded-only:
+*"i dont see the small area anymore (for example Molenwijk) before i enlargen
+the table."* It is the line that says *where*, so hiding it until asked was
+backwards.
+
+**A pressed control now inverts.** The active state was two neighbouring steps
+of one warm neutral — a real difference in the palette and almost none on a
+screen over map tiles. It flips to full contrast instead, which cannot be
+missed, needs no new colour, and stays out of identity colour, which may never
+mean "selected".
+
+**"Car parked 6 Aug 17:06." became "Parked 6 Aug 17:06".** Eight characters were
+pushing the time onto a third line and cutting the date in half. The word "car"
+was being carried by the pin beside it anyway.
+
+---
+
 ## v0.6.8 — a wrong password looked like success
 
 ### Install this one

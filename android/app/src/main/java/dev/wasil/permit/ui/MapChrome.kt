@@ -39,6 +39,7 @@ import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import dev.wasil.permit.R
 import dev.wasil.permit.ui.theme.HandoffShapes
@@ -146,19 +147,28 @@ private fun MapControlButton(
         // The "on" state is a step up the neutral ramp, not a fill. One filled
         // control per screen and it is the walk pill — the thing that starts
         // something, rather than the things that change the view.
+        // Active inverts rather than shading. surfaceContainerHighest against
+        // surfaceContainer is two neighbouring steps of one warm neutral ramp —
+        // a real difference in the palette and almost none on a screen over map
+        // tiles. Wasil: "these icons need some change in color when pressed on
+        // because the difference is very little and is hardly visible."
+        // Inverting is the one change that cannot be missed, needs no new
+        // token, and stays out of identity colour, which may never mean
+        // "selected".
         color = if (active) {
-            MaterialTheme.colorScheme.surfaceContainerHighest
+            MaterialTheme.colorScheme.onSurface
         } else {
             MaterialTheme.colorScheme.surfaceContainer
         },
         contentColor = when {
             !enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+            active -> MaterialTheme.colorScheme.surface
             else -> MaterialTheme.colorScheme.onSurface
         },
         border = BorderStroke(
             1.dp,
             if (active) {
-                MaterialTheme.colorScheme.onSurfaceVariant
+                MaterialTheme.colorScheme.onSurface
             } else {
                 MaterialTheme.colorScheme.outline
             },
@@ -491,11 +501,13 @@ fun TariffChip(
                     if (heading != null) {
                         Text(heading, style = MaterialTheme.typography.titleMedium)
                     }
-                    // The neighbourhood, where the code used to be. Only when
-                    // open, and only when it adds something the heading did not
-                    // already say — an area whose buurt name *is* its district
-                    // name would otherwise print it twice.
-                    if (expanded && placeDetail != null && placeDetail != heading) {
+                    // The neighbourhood, where the code used to be. Shown in
+                    // both states: it was expanded-only and Wasil lost it —
+                    // "i dont see the small area anymore (for example
+                    // Molenwijk) before i enlargen the table". It is the line
+                    // that says *where*, so hiding it until asked was backwards.
+                    // Still suppressed when it only repeats the heading.
+                    if (placeDetail != null && placeDetail != heading) {
                         Text(
                             placeDetail,
                             style = MaterialTheme.typography.bodySmall,
@@ -528,7 +540,23 @@ fun TariffChip(
                         modifier = Modifier.padding(top = 4.dp),
                     )
                 }
+                // Exactly one line is in force, and it is the one the reader
+                // came for. Everything else is dimmed rather than the active
+                // line being decorated, so the answer is found by looking
+                // rather than by comparing three prices against a clock —
+                // Wasil: "i see 3 prices i dont know which one is the correct
+                // one." Weight and colour together, so it survives a screen in
+                // sunlight and does not depend on colour alone.
+                val now = remember(rows, dayIndex, minuteOfDay) {
+                    activeRow(rows, dayIndex, minuteOfDay)
+                }
                 rows.forEach { row ->
+                    val live = row === now
+                    val ink = when {
+                        live -> MaterialTheme.colorScheme.onSurface
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f)
+                    }
+                    val weight = if (live) FontWeight.Medium else FontWeight.Normal
                     Row(
                         Modifier.fillMaxWidth().padding(top = 5.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -536,19 +564,23 @@ fun TariffChip(
                         Text(
                             row.days,
                             style = MaterialTheme.typography.bodyMedium,
+                            color = ink,
+                            fontWeight = weight,
                             modifier = Modifier.width(78.dp),
                         )
                         Text(
                             row.hours ?: "free all day",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = if (row.free) {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            } else {
-                                MaterialTheme.colorScheme.onSurface
-                            },
+                            color = ink,
+                            fontWeight = weight,
                             modifier = Modifier.weight(1f),
                         )
-                        Text(row.rate.orEmpty(), style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            row.rate.orEmpty(),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = ink,
+                            fontWeight = weight,
+                        )
                     }
                 }
             }

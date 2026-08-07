@@ -26,9 +26,35 @@ data class ScheduleRow(
     val hours: String?,
     /** "€5,37/h", or null on a free line. */
     val rate: String?,
+    /** The days behind [days], kept so "is this the line that applies now" is answerable. */
+    val dayIndices: Set<Int> = emptySet(),
+    /** Minutes from midnight behind [hours]; both zero on a free line. */
+    val startMin: Int = 0,
+    val endMin: Int = 0,
 ) {
     val free: Boolean get() = hours == null
+
+    /**
+     * Whether this is the line in force at this moment.
+     *
+     * Wasil, looking at an area with three lines: *"i see 3 prices i dont know
+     * which one is the correct one."* A timetable that does not say which row
+     * is now makes the reader do the lookup the app already did for the header.
+     */
+    fun appliesAt(dayOfWeek: Int, minuteOfDay: Int): Boolean =
+        dayOfWeek in dayIndices && !free && minuteOfDay >= startMin && minuteOfDay < endMin
 }
+
+/**
+ * The row in force now, or the free row when nothing is charging today.
+ *
+ * Returns null only when the day is not mentioned at all, which cannot happen
+ * for a real area — [weekSchedule] always emits a free line covering the days
+ * no band does.
+ */
+fun activeRow(rows: List<ScheduleRow>, dayOfWeek: Int, minuteOfDay: Int): ScheduleRow? =
+    rows.firstOrNull { it.appliesAt(dayOfWeek, minuteOfDay) }
+        ?: rows.firstOrNull { it.free && dayOfWeek in it.dayIndices }
 
 private val DAY_NAMES = listOf("ma", "di", "wo", "do", "vr", "za", "zo")
 
@@ -85,6 +111,9 @@ fun weekSchedule(area: TariffArea): List<ScheduleRow> {
                 days = dayLabel(days),
                 hours = "${hhmm(start)}–${if (end >= 1440) "24:00" else hhmm(end)}",
                 rate = rate,
+                dayIndices = days,
+                startMin = start,
+                endMin = end,
                 // Sorted below by the earliest day, then the earliest hour, so
                 // the week reads Monday-first rather than in JSON order.
             ) to Pair(days.minOrNull() ?: 7, start)
@@ -95,5 +124,10 @@ fun weekSchedule(area: TariffArea): List<ScheduleRow> {
     val charged = area.windows.flatMap { it.days }.toSet()
     val freeDays = (0..6).toSet() - charged
     if (freeDays.isEmpty()) return merged
-    return merged + ScheduleRow(days = dayLabel(freeDays), hours = null, rate = null)
+    return merged + ScheduleRow(
+        days = dayLabel(freeDays),
+        hours = null,
+        rate = null,
+        dayIndices = freeDays,
+    )
 }

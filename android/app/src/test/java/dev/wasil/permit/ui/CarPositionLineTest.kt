@@ -10,7 +10,7 @@ class CarPositionLineTest {
 
     @Test
     fun `a pin and a time says when the car was parked`() {
-        assertEquals("Car parked 5 Aug 14:20.", carPositionLine(car, true, "5 Aug 14:20"))
+        assertEquals("Parked 5 Aug 14:20", carPositionLine(car, true, "5 Aug 14:20"))
     }
 
     @Test

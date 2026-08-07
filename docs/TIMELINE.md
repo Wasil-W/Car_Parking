@@ -45,6 +45,7 @@ other document under `docs/` is a deep-dive that this one points at.
 | `v0.6.1` | The obligation/settlement split made visible: "This spot" above the permit card |
 | `v0.6.2` | Live location while Bluetooth-connected, sealed at disconnect; coordinates removed from the wire; rate comparison built |
 | `v0.6.3` | Zone code and rate removed from the wire, comparison machinery deleted. `PhoneState` is three fields, all of them read. No UI change |
+| `v0.6.9` | The timetable row in force is the only one at full strength; the neighbourhood shows before expanding; pressed controls invert instead of shading; the parked line stops wrapping |
 | `v0.6.8` | **A wrong permit password looked like success** — the request went out on the previous session's token. Also: a park recorded at a traffic light, a failed refresh that erased the permit holder, the timetable made reachable and merged into the header chip, and free zones became real Amsterdam neighbourhoods with the city's own boundaries |
 | `v0.6.7` | **The plates were stored swapped on the second phone** — a claim could move the permit to the wrong car. `MyCar` replaced by a vehicle roster, nothing on screen changed, setup survives the upgrade. Permit-kind foundation, unread |
 | `v0.6.6` | The full tariff week on tap, free days included; real zone and neighbourhood names bundled from the city's own data (107 zones, 518 buurten, 123 KB) replacing the geocoder inside Amsterdam |
@@ -453,6 +454,28 @@ connected to any of them.
 | **Deciding the permit by tariff** | Decided 2026-08-05. "The expensive spot keeps the permit" only pays off once the cheaper car can **pay instead**; today it gets a fine either way, so deciding by rate would change which brother is fined and nothing else. It was built and tested in v0.6.2 and **deleted again in v0.6.3** on Wasil's call — no unused machinery. It gets built against a working payment path, or not at all. Recoverable from git if that day comes, but likely to need different requirements by then anyway. |
 
 ---
+
+## Next up — mockups first, agreed 2026-08-08
+
+Both releases carry UI work, so both open with a published mockup. **v0.6.9 also
+takes bug fixes; v0.7.0 is the big one and takes none.**
+
+From him, still to design rather than patch:
+
+- **The timetable is still crowded.** He floated a row per day — ma/di/wo/do/vr/
+  za/zo — and doubted it himself: *"maybe that is too excessive. But this seems
+  to be too crowded what we now have."* Both shapes are worth drawing before
+  either is built.
+- **Zone editing takes too much of the screen.** The dotted outlines are right —
+  *"the dotted lines are amazing"* — the editor card around them is not.
+- **A thinner dotted line for tariff sections** while the layer is on, so the
+  different sections are visible without competing with zones. His idea.
+- **Accessibility of the zone outlines** — more noticeable, without shouting.
+- **A smoother, more elegant expand animation** for the timetable.
+- **Force a refresh whenever the app opens?** His question. Worth weighing
+  against the v0.6.8 rule that a failed refresh must keep the last known state:
+  refreshing more often is only an improvement if failing is already safe, which
+  it now is.
 
 ## Open questions needing Wasil
 

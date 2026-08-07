@@ -107,7 +107,11 @@ internal fun carPositionLine(
     // pin would point at the spot you just left. The position is still held —
     // it simply is not the answer to "where is the car" right now.
     driving -> "You're in the car."
-    car != null && parkedAtText != null -> "Car parked $parkedAtText."
+    // "Car parked" and a full stop cost eight characters that pushed the time
+    // onto a third line and cut the date in half — Wasil: "why the time gets
+    // shoved, poor data you could have kept it." The word "car" is carried by
+    // the pin it sits next to.
+    car != null && parkedAtText != null -> "Parked $parkedAtText"
     car != null -> "Last known car position."
     parked -> "Parked — but the location is unknown."
     else -> "No parked location recorded yet."
