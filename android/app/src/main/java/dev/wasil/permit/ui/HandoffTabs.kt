@@ -81,7 +81,7 @@ fun HandoffTabs(
     onRefresh: () -> Unit,
     onMessageShown: () -> Unit,
     onSavePermit: (String, String, String, String) -> Unit,
-    onFindPlates: suspend (String, String) -> List<String>?,
+    onFindPlates: suspend (String, String) -> SignIn,
     onConfirmBlocked: () -> Unit,
     onDismissBlocked: () -> Unit,
 ) {
@@ -91,7 +91,22 @@ fun HandoffTabs(
     // make him go hunting for the car.
     val context = LocalContext.current
     var me by remember { mutableStateOf<GeoPoint?>(null) }
-    LaunchedEffect(Unit) { me = PlayServicesSignals(context).currentLocation() }
+    // Re-read whenever a tab is opened, not once at app start.
+    //
+    // `LaunchedEffect(Unit)` ran exactly once, in the first composition — which
+    // is the worst possible moment to ask. `currentLocation()` wants a fresh
+    // high-accuracy fix and falls back to a cached one under two minutes old;
+    // indoors at launch it very often has neither, and nothing ever asked again.
+    // The whole app then behaved as though the phone had no position for the
+    // rest of the session. The visible symptom was the walk pill, which reads
+    // `me` to decide whether it can draw a route: it silently became a hand-off
+    // to Google Maps. Wasil, 2026-08-08: *"why does it now say walk with google
+    // maps even though it always was within the app."*
+    //
+    // Keyed on `tab` so opening the map is itself the retry — one fix per tab
+    // change, which is also fresher than a fix from app start for a route whose
+    // whole purpose is to start from where you are standing now.
+    LaunchedEffect(tab) { PlayServicesSignals(context).currentLocation()?.let { me = it } }
     val snackbar = remember { SnackbarHostState() }
     val colors = LocalHandoffColors.current
 
@@ -207,6 +222,11 @@ fun HandoffTabs(
                     // overlay then simply has nothing to draw, mirroring how
                     // ZoneResolver falls back to "assume paid".
                     tariffAreas = app.tariffAreas.orEmpty(),
+                    // Amsterdam's 518 neighbourhoods, which are what a free zone
+                    // is made of since v0.6.8. Null outside a working bundle,
+                    // and the map then offers a circle exactly as it does in
+                    // Utrecht — see MapScreen's placing flow.
+                    zoneRegistry = app.zoneRegistry,
                     zoneResolver = { app.zoneResolver() },
                     routeClient = app.routeClient,
                     // Owned here rather than in MapScreen so that a position

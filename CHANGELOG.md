@@ -10,6 +10,133 @@ change as a minor.
 
 ---
 
+## v0.6.8 — a wrong password looked like success
+
+### Install this one
+
+**Typing the wrong permit username and password still showed your cars.**
+
+Reported from real use: *"i entered incorrect credentials and it still showed my
+cars."* The sign-in token lives in memory with nothing tying it to the account it
+was issued for, so "Sign in and find my cars" went out on the **previous**
+session, the site answered about the **previous** account, and what you had just
+typed was never sent anywhere. Nothing could reject it because nothing received
+it.
+
+The button now signs in. The old session is thrown away first, so the request has
+to authenticate with what is on screen — and a refusal is reported as a refusal
+rather than as "couldn't reach the site", which is the sentence that sent you
+looking for a network fault that was not there.
+
+**A rejected sign-in also puts your working credentials back.** The old code kept
+whatever was typed, on the reasoning that storing a wrong pair was harmless. It
+was only harmless while nothing could tell it was wrong: re-typing your password
+with a slip left the app signing in with it on every background claim from then
+on.
+
+### A park was recorded at a traffic light
+
+Stopped at a light, engine running, and the app put the car there.
+
+A Bluetooth blip drops the link and starts detection; the link comes straight
+back. The app already knew what that meant — it resets the parked state and
+cancels the pending claim — but the **detection loop that was already running**
+was never told, and kept going. A car stopped at a red light reports as *still*
+at high confidence within seconds, because "in vehicle" describes motion and a
+stationary car has none. Five seconds later the loop called it a park.
+
+Detection now checks whether the car's stereo has answered again, every pass and
+once more before it acts. The five-second threshold is untouched: no wait short
+enough to keep detection responsive is longer than a red light, so the reconnect
+is the answer rather than a bigger number.
+
+### The permit screen stopped forgetting
+
+The permit site had a moment, the app fell back to its blank defaults, and showed
+"No plate active" — while the site was fine in a browser.
+
+A failed read says nothing about where the permit is. The card now keeps the last
+holder the site actually reported, and says plainly underneath when it was read:
+*"Couldn't reach the permit site — showing what it said at 14:32."* With nothing
+ever read it says that instead, rather than dressing an empty card as a finding.
+
+### The whole week, in the thing that was already showing you the rate
+
+Tapping a tariff area used to open a second card, so the rate appeared twice on
+one screen in two shapes. Now the header chip expands in place, downward, with
+the week folded behind a chevron.
+
+**And tapping an area now works at all.** The tap was matched against the areas
+being *drawn*, which are none unless the tariff layer is switched on — and it is
+off by default. Tapping the very area the header was naming did nothing, silently,
+which is why the timetable shipped in v0.6.6 and was never found.
+
+The expanded view shows the **neighbourhood name** where it used to repeat the
+tariff code, resolved for whichever area you tapped. The parked line in the
+corner stays visible while it is open; it used to disappear exactly when you
+opened the thing beside it.
+
+### "Walk to car" draws the route again
+
+It had started offering Google Maps instead. Nothing was removed — the app reads
+your position once at launch, that read fails indoors, and nothing ever asked
+again, so the pill relabelled itself on a stale answer and stayed that way for
+the session. Your position is now re-read whenever you open a tab, and the pill
+asks when you press it rather than predicting in advance.
+
+### Free zones are neighbourhoods now
+
+Home zones and free zones felt identical — same circle, same radius slider — and
+sizing an area by dragging over a map was never precise. So a free zone is now a
+**real Amsterdam neighbourhood** with the city's own published boundary: tap the
+map, the app names the area, confirm.
+
+The confirmation says how big it is — *"0.17 km² · the whole neighbourhood"* —
+because marking one free tells the app never to claim the permit anywhere inside
+it, and buurten run from a few streets to most of a district. That failure is
+silent, so the number goes in front of the choice.
+
+**The home zone stays a circle**, 30–200 m, and that difference is now the point
+rather than an accident: a home is a point you own, a free zone is an area you
+know about.
+
+**Two things to know.** Free zones saved before this version are not carried over
+— they were circles, and circles are no longer what a free zone is. And a free
+zone can only be placed where the city publishes a neighbourhood; outside that
+the app says so rather than offering a button that stores nothing. Handoff has
+always been Amsterdam-only — Amsterdam tariffs, Amsterdam areas, an Amsterdam
+visitor permit — and free zones were the one thing that happened to work anywhere
+because a circle does not need to know what city it is in.
+
+### Zones you can find again
+
+Every zone you have is now one list, from the map's overflow menu. Tapping a row
+moves the map to it and opens it — the list is a way back to the map, not a
+second place to manage things. Before it, a zone placed at your mother's street
+six weeks ago was, in practice, gone.
+
+### Smaller things
+
+- **The plate picker stopped talking about people.** "Mine" and "Other car"
+  become "This phone" and "Hand to". Neither names a brother, and neither changes
+  meaning depending on which handset you are holding.
+- **The Bluetooth list is filtered to what could be a car**, so your earbuds stop
+  sitting next to your stereo. Everything else is one tap away and counted —
+  a filter that hides the right device is worse than a long list.
+- **Zone radius can be typed**, or stepped 5 m at a time, instead of only dragged.
+- Switching the tariff layer off no longer throws away the area you had selected.
+
+### Research: parking garages
+
+Garage locations and live free spaces are open data; garage **rates** are the
+awkward part, and not because they are missing. Garages price by *how long you
+stay*, on-street by *what time it is* — genuinely different shapes, and this app's
+whole tariff engine is the second one. Written up in
+[`docs/v0.6-zone-registry.md`](docs/v0.6-zone-registry.md). Nothing is built, and
+the recommendation is to leave it until there is a paying screen for it to be on.
+
+---
+
 ## v0.6.7 — the plates could be stored the wrong way round
 
 ### Install this one

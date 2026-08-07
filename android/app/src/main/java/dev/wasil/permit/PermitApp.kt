@@ -45,6 +45,18 @@ class PermitApp : Application() {
         private set
 
     /**
+     * The permit session, held in memory for its one-hour life.
+     *
+     * A property rather than a value created inline inside [buildAuthenticatedClient],
+     * because one screen legitimately needs to end it: "Sign in and find my cars"
+     * has to prove the credentials that were just typed, and it cannot do that
+     * while a token from the previous sign-in is still attached to every request.
+     * See [TokenStore.clear].
+     */
+    lateinit var tokenStore: TokenStore
+        private set
+
+    /**
      * True in a debug build, read from the package's own flag rather than from
      * a generated constant. It gates exactly one thing —
      * [dev.wasil.permit.data.api.ClientProductLogInterceptor] — and that thing
@@ -58,8 +70,9 @@ class PermitApp : Application() {
         super.onCreate()
         credentialStore = EncryptedCredentialStore(this)
         val baseUrl = ApiConstants.BASE_URL.toHttpUrl()
+        tokenStore = TokenStore()
         val client = buildAuthenticatedClient(
-            baseUrl, TokenStore(), credentialStore, logClientProduct = debuggable,
+            baseUrl, tokenStore, credentialStore, logClientProduct = debuggable,
         )
         repository = PermitRepository(buildPermitApi(baseUrl, client))
         parkStateStore = PrefsParkStateStore.from(this)
@@ -128,5 +141,11 @@ class PermitApp : Application() {
     }
 
     fun zoneResolver(): ZoneResolver =
-        ZoneResolver(parkStateStore.homeZone, freeZoneStore.all(), tariffAreas)
+        ZoneResolver(
+            parkStateStore.homeZone, freeZoneStore.all(), tariffAreas,
+            // What gives an area-backed free zone its edges. The registry is the
+            // same bundle the map header names places from, so a zone called
+            // "Molenwijk" is the Molenwijk the header shows.
+            areaShape = { name -> zoneRegistry?.shapeOf(name) },
+        )
 }

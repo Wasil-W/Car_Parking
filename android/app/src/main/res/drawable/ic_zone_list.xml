@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The colour is a placeholder: every use goes through Compose's Icon(), whose
+  tint replaces it, so these stay legible in both themes. Same reason the other
+  ic_map_* drawables carry a literal white.
+-->
+<!-- The zones you already have. A list rather than a map pin, because this is
+     the one item in the menu that opens something instead of starting a
+     placement. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path android:fillColor="@android:color/white"
+        android:pathData="M4,6h2v2h-2zM8,6h12v2h-12zM4,11h2v2h-2zM8,11h12v2h-12zM4,16h2v2h-2zM8,16h12v2h-12z"/>
+</vector>

@@ -14,8 +14,26 @@ import org.junit.Test
 
 class MapZonesTest {
     private val home = FreeZone(52.3702, 4.8952, radiusM = 60.0, label = "Home")
-    private val zoneA = FreeZone(52.3800, 4.9000, radiusM = 50.0)
-    private val zoneB = FreeZone(52.3900, 4.9100, radiusM = 50.0)
+    // Free zones are neighbourhoods since v0.6.8. Each fixture gets a square
+    // boundary standing in for the buurt polygon the app would look up.
+    private val zoneA = FreeZone(52.3800, 4.9000, radiusM = 50.0, buurt = "A")
+    private val zoneB = FreeZone(52.3900, 4.9100, radiusM = 50.0, buurt = "B")
+    private val shapes: (String) -> List<ZonePolygon>? = { name ->
+        when (name) {
+            "A" -> squareAround(52.3800, 4.9000)
+            "B" -> squareAround(52.3900, 4.9100)
+            "big" -> squareAround(52.0, 4.0, halfLat = 0.0020)
+            "small" -> squareAround(52.0009, 4.0, halfLat = 0.0004)
+            else -> null
+        }
+    }
+
+    /** A square of [halfLat] degrees either side, widened for longitude at 52 N. */
+    private fun squareAround(lat: Double, lng: Double, halfLat: Double = 0.00045) =
+        listOf(ZonePolygon(outer = listOf(
+            LatLng(lat - halfLat, lng - halfLat * 1.63), LatLng(lat - halfLat, lng + halfLat * 1.63),
+            LatLng(lat + halfLat, lng + halfLat * 1.63), LatLng(lat + halfLat, lng - halfLat * 1.63),
+        )))
 
     @Test
     fun `tap inside the home zone hits Home`() {
@@ -26,13 +44,13 @@ class MapZonesTest {
     fun `tap inside a free zone hits its index`() {
         assertEquals(
             ZoneRef.Free(1),
-            zoneHitAt(GeoPoint(52.3900, 4.9100, 0f), home, listOf(zoneA, zoneB)),
+            zoneHitAt(GeoPoint(52.3900, 4.9100, 0f), home, listOf(zoneA, zoneB), shapes),
         )
     }
 
     @Test
     fun `tap outside every zone hits nothing`() {
-        assertNull(zoneHitAt(GeoPoint(10.0, 10.0, 0f), home, listOf(zoneA, zoneB)))
+        assertNull(zoneHitAt(GeoPoint(10.0, 10.0, 0f), home, listOf(zoneA, zoneB), shapes))
     }
 
     @Test
@@ -42,10 +60,11 @@ class MapZonesTest {
 
     @Test
     fun `overlapping zones — the nearest centre wins`() {
-        val big = FreeZone(52.0, 4.0, radiusM = 200.0)
-        val small = FreeZone(52.0009, 4.0, radiusM = 30.0) // ~100 m north of big, inside both
+        val big = FreeZone(52.0, 4.0, radiusM = 200.0, buurt = "big")
+        // ~100 m north of big, inside both.
+        val small = FreeZone(52.0009, 4.0, radiusM = 30.0, buurt = "small")
         val tap = GeoPoint(52.0009, 4.0, 0f) // dead centre of the small zone
-        assertEquals(ZoneRef.Free(1), zoneHitAt(tap, null, listOf(big, small)))
+        assertEquals(ZoneRef.Free(1), zoneHitAt(tap, null, listOf(big, small), shapes))
     }
 
     @Test
@@ -53,6 +72,91 @@ class MapZonesTest {
         assertEquals(30.0, clampZoneRadius(10.0), 0.0)
         assertEquals(200.0, clampZoneRadius(500.0), 0.0)
         assertEquals(75.0, clampZoneRadius(75.0), 0.0)
+    }
+
+    // --- sizing a zone by number rather than by drag (v0.6.8) ---
+
+    @Test
+    fun `stepping moves five metres at a time`() {
+        assertEquals(65.0, stepZoneRadius(60.0, 1), 0.0)
+        assertEquals(55.0, stepZoneRadius(60.0, -1), 0.0)
+    }
+
+    @Test
+    fun `a dragged value is snapped onto the step grid before it is stepped`() {
+        // Dragging leaves 63.4 m; one press of + should read 65, not 68.4.
+        assertEquals(65.0, stepZoneRadius(63.4, 1), 0.0)
+        assertEquals(60.0, stepZoneRadius(63.4, -1), 0.0)
+    }
+
+    @Test
+    fun `stepping past either end stops rather than storing an unshowable number`() {
+        assertEquals(200.0, stepZoneRadius(198.0, 1), 0.0)
+        assertEquals(30.0, stepZoneRadius(31.0, -1), 0.0)
+    }
+
+    @Test
+    fun `a typed radius is read as metres`() {
+        assertEquals(80.0, parseZoneRadius("80")!!, 0.0)
+        assertEquals(80.0, parseZoneRadius(" 80 m ")!!, 0.0)
+        assertEquals(80.5, parseZoneRadius("80,5")!!, 0.0)
+    }
+
+    @Test
+    fun `a half-typed radius is not a number yet`() {
+        assertNull(parseZoneRadius(""))
+        assertNull(parseZoneRadius("m"))
+        assertNull(parseZoneRadius("-"))
+        assertNull(parseZoneRadius("0"))
+    }
+
+    @Test
+    fun `typing does not clamp, because clamping mid-keystroke rewrites what you typed`() {
+        // "3" on the way to "30" must stay 3 here. clampZoneRadius is applied
+        // once, on confirm — not on every character.
+        assertEquals(3.0, parseZoneRadius("3")!!, 0.0)
+        assertEquals(900.0, parseZoneRadius("900")!!, 0.0)
+    }
+
+    @Test
+    fun `the field shows whole metres, with no unit and no locale surprises`() {
+        assertEquals("60", radiusFieldText(60.0))
+        assertEquals("63", radiusFieldText(63.4))
+        assertEquals("64", radiusFieldText(63.5))
+    }
+
+    // --- the list of zones you have (v0.6.8) ---
+
+    @Test
+    fun `home comes first and the free zones keep their store order`() {
+        // The index inside ZoneRef.Free addresses the store directly, so a list
+        // that sorted itself would rename or delete the wrong zone.
+        val entries = zoneEntries(home, listOf(zoneB, zoneA))
+        assertEquals(listOf(ZoneRef.Home, ZoneRef.Free(0), ZoneRef.Free(1)), entries.map { it.ref })
+        assertEquals(zoneB, entries[1].zone)
+    }
+
+    @Test
+    fun `with no home zone the list is the free zones alone`() {
+        assertEquals(listOf(ZoneRef.Free(0)), zoneEntries(null, listOf(zoneA)).map { it.ref })
+        assertTrue(zoneEntries(null, emptyList()).isEmpty())
+    }
+
+    @Test
+    fun `a nameless zone is listed by its coordinates rather than as a blank row`() {
+        assertEquals("52.38000, 4.90000", zoneEntries(null, listOf(zoneA)).single().label)
+    }
+
+    @Test
+    fun `a zone's radius travels with its row`() {
+        assertEquals(50.0, zoneEntries(null, listOf(zoneA)).single().radiusM, 0.0)
+    }
+
+    @Test
+    fun `the menu counts the zones, and says the bare noun when there are none`() {
+        assertEquals("Your zones", zoneListMenuLabel(0))
+        assertEquals("Your zones · 1", zoneListMenuLabel(1))
+        assertEquals("Your zones · 12", zoneListMenuLabel(12))
     }
 
     // --- mapHitAt: the one precedence rule for a tap on bare map (v0.5) ---
@@ -84,7 +188,7 @@ class MapZonesTest {
     @Test
     fun `a tap on a tariff area with no zone under it hits the tariff area`() {
         val tap = GeoPoint(52.3650, 4.8850, 0f)
-        val hit = mapHitAt(tap, home, listOf(zoneA, zoneB), listOf(paidArea))
+        val hit = mapHitAt(tap, home, listOf(zoneA, zoneB), listOf(paidArea), shapes)
         assertEquals(paidArea, (hit as MapHit.Tariff).hit.area)
     }
 
@@ -108,23 +212,29 @@ class MapZonesTest {
     }
 
     @Test
-    fun `an empty tariff list is how the overlay is switched off`() {
+    fun `an empty tariff list is how a build with no bundled areas behaves`() {
+        // It used to be how the *overlay being off* behaved too — MapScreen
+        // passed the drawn areas here, which are empty whenever the layer is
+        // hidden, so tapping your own area did nothing and the week that
+        // v0.6.6 shipped was unreachable. The list passed in is now every area
+        // regardless of what is drawn; an empty one now means only that the
+        // bundled asset is missing or corrupt.
         val tap = GeoPoint(52.3650, 4.8850, 0f) // inside paidArea, outside every zone
         assertNull(mapHitAt(tap, home, emptyList(), emptyList()))
     }
 
     @Test
     fun `a tap outside everything hits nothing`() {
-        assertNull(mapHitAt(GeoPoint(10.0, 10.0, 0f), home, listOf(zoneA), listOf(paidArea)))
+        assertNull(mapHitAt(GeoPoint(10.0, 10.0, 0f), home, listOf(zoneA), listOf(paidArea), shapes))
     }
 
     @Test
     fun `zone precedence still uses the nearest centre inside mapHitAt`() {
-        val big = FreeZone(52.0, 4.0, radiusM = 200.0)
-        val small = FreeZone(52.0009, 4.0, radiusM = 30.0)
+        val big = FreeZone(52.0, 4.0, radiusM = 200.0, buurt = "big")
+        val small = FreeZone(52.0009, 4.0, radiusM = 30.0, buurt = "small")
         assertEquals(
             MapHit.Zone(ZoneRef.Free(1)),
-            mapHitAt(GeoPoint(52.0009, 4.0, 0f), null, listOf(big, small), emptyList()),
+            mapHitAt(GeoPoint(52.0009, 4.0, 0f), null, listOf(big, small), emptyList(), shapes),
         )
     }
 

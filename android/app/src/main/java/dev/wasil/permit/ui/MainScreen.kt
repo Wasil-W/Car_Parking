@@ -267,6 +267,20 @@ fun MainScreen(
                     }
                 }
 
+                // Said once, under the card, in both the Sole and Shared cases:
+                // everything above this line is remembered rather than read.
+                // Without it the card would quietly keep showing a holder from
+                // an hour ago as though it were current — which is the failure
+                // mode this project spends most of its rules avoiding, only
+                // pointed at the user instead of at the other phone.
+                if (!state.loading) {
+                    permitFreshnessNote(
+                        readFailed = state.permitReadFailed,
+                        holder = state.activeVrn,
+                        readAtMs = state.activeVrnReadAtMs,
+                    )?.let { QuietRow(it) }
+                }
+
                 if (sole) {
                     // No hand-over button, because there is nowhere to hand it
                     // to. A disabled one would be worse than none: it implies a

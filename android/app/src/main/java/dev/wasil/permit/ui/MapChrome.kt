@@ -1,5 +1,6 @@
 package dev.wasil.permit.ui
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,6 +16,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
@@ -22,9 +24,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.IconButton
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import dev.wasil.permit.parking.zones.TariffArea
+import dev.wasil.permit.parking.zones.tariffNow
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -79,6 +82,14 @@ fun tariffToggleLabel(showing: Boolean): String =
     if (showing) "Hide tariff areas" else "Show tariff areas"
 
 /**
+ * What tapping the header chip will do. Same "announce the outcome" voice as
+ * [tariffToggleLabel] and the focus button: the chevron pictures it, this is
+ * what a screen reader says and what a long press shows.
+ */
+fun weekToggleLabel(expanded: Boolean): String =
+    if (expanded) "Hide the whole week" else "Show the whole week"
+
+/**
  * "Set" for the first home zone, "Move" once there is one. The old button said
  * both with a null check inline; here the wording is the whole item, so it is
  * worth being able to hold still.
@@ -87,16 +98,25 @@ fun homeZoneMenuLabel(homeZoneSet: Boolean): String =
     if (homeZoneSet) "Move home zone" else "Set home zone"
 
 /**
- * The one label on the walk pill, in the four states it has.
+ * The one label on the walk pill, in the three states it has.
  *
- * The no-position case is the one that matters: without a fix of our own there
- * is no line to draw, so the pill stays the old hand-off to a maps app rather
- * than becoming a button that appears to work and does nothing.
+ * **It used to have four**, and the fourth was a guess dressed as a fact. When
+ * the last known position was null the pill relabelled itself "Open walk in
+ * Maps" — announcing a hand-off to another app on the strength of a fix that had
+ * failed, possibly hours earlier, and possibly for a reason that no longer
+ * applied. Wasil, 2026-08-08: *"why does it now say walk with google maps even
+ * though it always was within the app."* Nothing had been removed; the app had
+ * simply stopped being able to see itself, and said so in the wrong tense.
+ *
+ * The app cannot know whether it has a position until it asks, so the label no
+ * longer pretends to. The pill says what it is for, the tap asks, and a read
+ * that genuinely fails then hands off to a maps app *and says why* — see
+ * `MapScreen`. Announcing the fallback before attempting the thing is the same
+ * mistake as publishing a guess, pointed at a button.
  */
-fun walkPillText(routing: Boolean, routeSummary: String?, haveMyPosition: Boolean): String = when {
+fun walkPillText(routing: Boolean, routeSummary: String?): String = when {
     routing -> "Finding the way…"
     routeSummary != null -> "Hide route · $routeSummary"
-    !haveMyPosition -> "Open walk in Maps"
     else -> "Walk to car"
 }
 
@@ -178,12 +198,15 @@ fun MapControlStack(
     tariffShowing: Boolean,
     tariffEnabled: Boolean,
     locating: Boolean,
+    /** How many zones exist — home plus free. Zero hides the list item. */
+    zoneCount: Int,
     /** What the next tap of the focus button will centre on. */
     nextFocus: MapFocus,
     onFocus: () -> Unit,
     onToggleTariff: () -> Unit,
     onSetHomeZone: () -> Unit,
     onAddFreeZone: () -> Unit,
+    onOpenZoneList: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
@@ -241,6 +264,30 @@ fun MapControlStack(
                         onAddFreeZone()
                     },
                 )
+                // Only once there is something to list. An item that opens an
+                // empty room is worse than no item: it makes the menu longer
+                // for everyone and answers nobody.
+                //
+                // Below a separator because the two items above start something
+                // new and this one goes to what already exists — the same
+                // distinction the stack itself makes between a circle you tap
+                // in the street and configuration you touch twice a year.
+                if (zoneCount > 0) {
+                    HorizontalDivider(
+                        Modifier.padding(vertical = 4.dp),
+                        color = MaterialTheme.colorScheme.outline,
+                    )
+                    DropdownMenuItem(
+                        text = { Text(zoneListMenuLabel(zoneCount)) },
+                        leadingIcon = {
+                            Icon(painterResource(R.drawable.ic_zone_list), contentDescription = null)
+                        },
+                        onClick = {
+                            menuOpen = false
+                            onOpenZoneList()
+                        },
+                    )
+                }
             }
         }
     }
@@ -280,15 +327,33 @@ fun WalkPill(
 /**
  * The header, over the tiles instead of above them.
  *
- * [chip] is passed through untouched — the zone chip works, it is new, and it
- * is not what made the screen crowded. Both halves get their own translucent
- * backing, because both would otherwise be bare text on streets.
+ * Two halves: what screen this is and what the pin means, then the tariff chip.
+ * Both get their own translucent backing, because both would otherwise be bare
+ * text on streets.
+ *
+ * [chipExpanded] widens the chip's share of the row, and does nothing else.
+ *
+ * It used to hide the left half outright, arguing that a week of days, hours and
+ * rates needs more than half the width and that the title is the least
+ * surprising thing on screen — it says "Map", on the map tab. The first half of
+ * that is true; the second was wrong, because the *line underneath* the title is
+ * "Car parked 7 aug 23:10", which is how you know the pin is real and when it
+ * was set. It vanished exactly when you opened the thing beside it. Wasil,
+ * 2026-08-08: *"i like the timetable you did now, so it expands but then you go
+ * and remove the parked thing (upper left corner)."*
+ *
+ * Both halves stay. The chip takes two thirds of the row instead of all of it,
+ * and the timetable grows **downward from the chip** rather than appearing at
+ * the opposite end of the screen from its own heading — see [TariffChip]. The
+ * room below the header is free: the control stack and the walk pill are both
+ * anchored to the bottom.
  */
 @Composable
 fun MapHeaderOverlay(
     title: String,
     subtitle: String,
     modifier: Modifier = Modifier,
+    chipExpanded: Boolean = false,
     chip: @Composable (() -> Unit)? = null,
 ) {
     Row(
@@ -316,10 +381,176 @@ fun MapHeaderOverlay(
         }
         if (chip != null) {
             Box(
-                Modifier.weight(1f, fill = false).padding(start = 10.dp),
+                if (chipExpanded) {
+                    // Two thirds, not all of it. Enough for the table's three
+                    // columns while the parked line keeps its own corner.
+                    Modifier.weight(2f).padding(start = 10.dp)
+                } else {
+                    Modifier.weight(1f, fill = false).padding(start = 10.dp)
+                },
                 contentAlignment = Alignment.TopEnd,
             ) {
                 chip()
+            }
+        }
+    }
+}
+
+/**
+ * What the highlighted area is called, what it costs right now, and — when you
+ * tap it — the whole week.
+ *
+ * **Why this is one control and not two.** v0.6.6 put the week in its own
+ * floating card below, so the rate appeared twice on the same screen in two
+ * shapes. Wasil, 2026-08-07: *"now when you do that you will see the rate 2
+ * times, my initial idea was that the small thing expands instead of another
+ * one."* He is right, and the merged version is smaller in every state: one
+ * heading, one rate, and the timetable folded behind a chevron.
+ *
+ * **Where it says the code, and where it says the name.** Nowhere and
+ * everywhere, respectively. Wasil, 2026-08-08, holding a screenshot whose header
+ * read *"Noord / Molenwijk"* over a panel reading *"Noord / T13B"*: *"i need the
+ * names back underneath Noord. and also remove the area codes again and replace
+ * them with what is written underneath Noord (for every section their own thing
+ * ofcourse)."*
+ *
+ * That is a rule, not a tweak, and it is the same one that removed the zone code
+ * from the wire in v0.6.3 and put buurt names on the map header in v0.6.6: **a
+ * person reads the name of a place and never the code.** So the expanded view's
+ * second line is [placeDetail] — the neighbourhood of the area you actually
+ * tapped, resolved per selection, which is what "for every section their own
+ * thing" asks for. `T13B` survives in exactly one place: as a heading of last
+ * resort when no name resolved at all, because a code still beats a blank.
+ *
+ * The detail line is expanded-only. Collapsed, the chip carried it and he asked
+ * for it gone — *"in the small timetable i see the streetname of where i press
+ * (unnecessary for now)"* — and the two asks agree rather than conflict: a
+ * collapsed chip is glanced at, an open panel is read.
+ *
+ * The chevron is not decoration. The week has been in the app for a version and
+ * unreachable in practice (see `MapScreen`'s tap handler), so the control that
+ * opens it has to say out loud that it opens something.
+ */
+@Composable
+fun TariffChip(
+    area: TariffArea,
+    /** The place name, or null while the lookup is still in flight. */
+    placeName: String?,
+    /**
+     * The neighbourhood inside [placeName] — "Molenwijk" under "Noord" — for the
+     * area that is actually selected. Shown only while expanded, and it is what
+     * replaced the tariff code there.
+     */
+    placeDetail: String?,
+    /** False while resolving, so the heading can stay blank rather than flicker a code. */
+    placeResolved: Boolean,
+    dayIndex: Int,
+    minuteOfDay: Int,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val rows = remember(area) { weekSchedule(area) }
+    Surface(
+        onClick = onToggle,
+        // The grow is animated so the chip reads as the same object getting
+        // bigger. Snapping between two sizes in the same place is what made the
+        // old pair look like two cards in the first place.
+        modifier = modifier.animateContentSize(),
+        shape = HandoffShapes.Control,
+        // Translucent as a chip, opaque as a panel — and that is a change of
+        // job, not an inconsistency. One line of rate over streets is what
+        // OVER_TILES_ALPHA was measured for, and seeing the map continue behind
+        // a small chip is worth having. A table of days, times and prices is
+        // read rather than glanced at, and at 0.92 the streets underneath run
+        // straight through the digits: seen on the emulator in dark mode, where
+        // Centraal Station was legible through the Sunday row. Nothing on this
+        // screen has ever been made harder to read on purpose.
+        color = if (expanded) {
+            MaterialTheme.colorScheme.surfaceVariant
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = OVER_TILES_ALPHA)
+        },
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        // The panel needs an edge that the tiles cannot supply, now that it is
+        // no longer translucent enough for the map to draw one for it.
+        border = if (expanded) {
+            BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+        } else {
+            null
+        },
+        shadowElevation = if (expanded) 3.dp else 0.dp,
+    ) {
+        Column(Modifier.padding(horizontal = 10.dp, vertical = 7.dp)) {
+            Row(verticalAlignment = Alignment.Top) {
+                Column(Modifier.weight(1f, fill = expanded)) {
+                    // While the lookup is in flight this stays blank rather than
+                    // showing the code and swapping it a moment later. The code
+                    // appears only once we know no name is coming.
+                    val heading = placeName ?: area.code.takeIf { placeResolved }
+                    if (heading != null) {
+                        Text(heading, style = MaterialTheme.typography.titleMedium)
+                    }
+                    // The neighbourhood, where the code used to be. Only when
+                    // open, and only when it adds something the heading did not
+                    // already say — an area whose buurt name *is* its district
+                    // name would otherwise print it twice.
+                    if (expanded && placeDetail != null && placeDetail != heading) {
+                        Text(
+                            placeDetail,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Text(
+                        tariffNowText(tariffNow(area.windows, dayIndex, minuteOfDay), minuteOfDay),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Icon(
+                    if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                    contentDescription = weekToggleLabel(expanded),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 6.dp, top = 1.dp).size(18.dp),
+                )
+            }
+            if (expanded) {
+                HorizontalDivider(
+                    Modifier.padding(top = 8.dp, bottom = 2.dp),
+                    color = MaterialTheme.colorScheme.outline,
+                )
+                if (rows.isEmpty()) {
+                    Text(
+                        "No hours published for this area.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
+                rows.forEach { row ->
+                    Row(
+                        Modifier.fillMaxWidth().padding(top = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            row.days,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.width(78.dp),
+                        )
+                        Text(
+                            row.hours ?: "free all day",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (row.free) {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            },
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text(row.rate.orEmpty(), style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
             }
         }
     }
@@ -389,92 +620,3 @@ internal fun focusLabel(next: MapFocus): String = when (next) {
     MapFocus.CAR -> "Centre on the car"
 }
 
-/**
- * The full week for one tariff area, opened by tapping it and closed by the X.
- *
- * The header answers "now" in one line; this answers "and tomorrow". Both exist
- * because v0.6.0 collapsed the timetable into the live line and deleted the
- * timetable rather than moving it, which left "what does this cost on Sunday"
- * with no answer anywhere in the app.
- *
- * It takes the walk pill's place rather than stacking above it. Two floating
- * cards over a map is the crowding this release spent its time removing, and
- * the pill is one tap away again the moment this closes.
- */
-@Composable
-fun TariffWeekPanel(
-    area: TariffArea,
-    placeName: String?,
-    onDismiss: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val rows = remember(area) { weekSchedule(area) }
-    Surface(
-        modifier = modifier,
-        shape = HandoffShapes.Card,
-        color = MaterialTheme.colorScheme.surfaceContainer,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-        shadowElevation = 3.dp,
-    ) {
-        Column(Modifier.padding(start = 14.dp, end = 6.dp, top = 10.dp, bottom = 12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    // The name if we have one, the code if we do not — a person
-                    // reads "Nieuwmarkt", never "T13B".
-                    Text(
-                        placeName ?: area.code,
-                        style = MaterialTheme.typography.titleMedium,
-                    )
-                    if (placeName != null) {
-                        Text(
-                            area.code,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-                IconButton(onClick = onDismiss) {
-                    Icon(
-                        Icons.Filled.Close,
-                        contentDescription = "Close",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-            if (rows.isEmpty()) {
-                Text(
-                    "No hours published for this area.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp, end = 8.dp),
-                )
-            }
-            rows.forEach { row ->
-                Row(
-                    Modifier.fillMaxWidth().padding(top = 6.dp, end = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        row.days,
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.width(78.dp),
-                    )
-                    Text(
-                        row.hours ?: "free all day",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = if (row.free) {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        } else {
-                            MaterialTheme.colorScheme.onSurface
-                        },
-                        modifier = Modifier.weight(1f),
-                    )
-                    Text(
-                        row.rate.orEmpty(),
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                }
-            }
-        }
-    }
-}

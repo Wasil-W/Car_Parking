@@ -5,6 +5,9 @@ import dev.wasil.permit.parking.Vehicle
 import dev.wasil.permit.parking.zones.TariffNow
 import dev.wasil.permit.parking.zones.ZoneInfo
 import dev.wasil.permit.parking.zones.tariffNow
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * Roster slot 0 is always the left arc, slot 1 the right — identical on both
@@ -336,6 +339,35 @@ fun spotHeadlineFor(demand: SpotDemand, place: String?): SpotHeadline {
  * nobody asked; what matters is that the spot is covered.
  */
 fun soleCardTitle(covered: Boolean): String = if (covered) "Covered" else "No plate active"
+
+// --- what the screen is allowed to say when the site could not be re-read ---
+
+/**
+ * The line that admits the permit card is remembered rather than read, or null
+ * when there is nothing to admit.
+ *
+ * Reported 2026-08-08: the permit site had a hiccup, the app dropped to its
+ * blank defaults and showed nothing — while the site was fine in a browser. Two
+ * failures in one, and only one of them was the network. Losing a connection is
+ * not a reason to forget what you were told; but continuing to show it without
+ * saying so would be worse, because "Wasil's car" on a screen means *now*.
+ *
+ * So the card keeps the last holder and this line says how old it is. That is
+ * the same rule the app already applies to the other phone's status — "parked
+ * (stale — last seen 14:02)" — and to a failed GPS read, pointed at the permit.
+ *
+ * Three states, and the third is the one that is easiest to get wrong: with
+ * nothing ever read there is no fallback, and the honest sentence says so rather
+ * than dressing an empty card as a finding.
+ */
+fun permitFreshnessNote(readFailed: Boolean, holder: String?, readAtMs: Long): String? = when {
+    !readFailed -> null
+    holder != null && readAtMs > 0L ->
+        "Couldn't reach the permit site — showing what it said at ${hm(readAtMs)}."
+    else -> "Couldn't reach the permit site, and nothing is stored to fall back on."
+}
+
+private fun hm(ms: Long): String = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(ms))
 
 fun soleCardSubtitle(vrn: String): String = "$vrn · permit active"
 

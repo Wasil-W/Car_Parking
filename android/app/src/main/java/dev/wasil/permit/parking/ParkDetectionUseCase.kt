@@ -108,6 +108,12 @@ class ParkDetectionUseCase(
             while (decision == null && elapsed < ParkDecisionEngine.TIMEOUT_MS) {
                 decision = ParkDecisionEngine.decide(
                     signals.activitySamples(), disconnectPoint, latestPoint, elapsed,
+                    // Re-read every pass rather than captured once. The whole
+                    // point is that it can change *underneath* a run in
+                    // progress: CarBluetoothReceiver writes it the moment the
+                    // stereo comes back, and until v0.6.8 this loop was the one
+                    // part of the app that never looked.
+                    carLinkBackUp = stateStore.carLinkConnected,
                 )
                 if (decision == null) {
                     delay(pollIntervalMs)
@@ -118,6 +124,12 @@ class ParkDetectionUseCase(
         } finally {
             signals.stop()
         }
+
+        // Checked once more after the loop, and it is not belt-and-braces. The
+        // link can come back between the last poll and this line, and a decision
+        // reached a moment before that is a decision about a car that is now
+        // being driven. Nothing below this point re-reads it.
+        if (stateStore.carLinkConnected) return ParkOutcome.FalseAlarm
 
         val fix = parkedFix(latestPoint)
 
@@ -140,10 +152,20 @@ class ParkDetectionUseCase(
      * Home is exactly where a fix fails most, which is why the question kept
      * arriving where it was least wanted.
      *
-     * [sealAtDisconnect] is what makes the fallback safe rather than merely
+     * [sealAtDisconnect] is what makes **the fallback** safe rather than merely
      * useful: it returns null while the link is still up, so a sampler that
-     * fires late — or a Bluetooth blip that reconnects mid-detection — yields
-     * nothing here instead of feeding a driving position into the claim path.
+     * fires late yields nothing here instead of feeding a driving position into
+     * the claim path.
+     *
+     * **It only ever guarded the fallback, and the comment here used to claim
+     * more.** It said a blip that reconnects mid-detection was covered too, and
+     * that was false in the one case it mattered: the seal is reached only when
+     * [latestPoint] is null, and at a traffic light in the open the GPS answers
+     * perfectly well. A live fix took the first branch and was never checked
+     * against the link at all — which is how a park got recorded at a red light.
+     * The link is now read by [run], before anything reaches here, and a run
+     * that finds it back up ends as a false alarm rather than arriving with a
+     * position it should not be holding.
      */
     private fun parkedFix(latestPoint: GeoPoint?): ParkedFix? =
         latestPoint?.let { ParkedFix.atDisconnect(it) }
