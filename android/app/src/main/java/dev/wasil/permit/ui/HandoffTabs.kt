@@ -81,7 +81,7 @@ fun HandoffTabs(
     onRefresh: () -> Unit,
     onMessageShown: () -> Unit,
     onSavePermit: (String, String, String, String) -> Unit,
-    onFindPlates: suspend (String, String) -> List<String>?,
+    onFindPlates: suspend (String, String) -> SignIn,
     onConfirmBlocked: () -> Unit,
     onDismissBlocked: () -> Unit,
 ) {

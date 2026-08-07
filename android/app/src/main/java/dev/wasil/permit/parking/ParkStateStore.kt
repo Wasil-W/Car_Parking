@@ -77,6 +77,30 @@ interface ParkStateStore {
      */
     var liveLocation: LiveLocation?
 
+    /**
+     * The plate the permit site last said was holding the session, and when we
+     * read it.
+     *
+     * **Presentation only, and that boundary is the whole design.** Nothing on
+     * the claim path reads either of these: a switch re-reads the live holder
+     * before and after it acts (see [dev.wasil.permit.data.PermitRepository.
+     * switchTo]), because a remembered holder is exactly the kind of fact that
+     * must never be allowed to decide anything.
+     *
+     * They exist because a screen that has been told something and then loses
+     * the connection has two honest options — say what it last knew and label
+     * it, or say nothing — and it was doing neither. Reported 2026-08-08: the
+     * permit site had a hiccup, the app fell back to its blank defaults and
+     * showed "No plate active" while the site was fine in a browser. That is the
+     * mirror of this project's standing rule: never publish a guess as a fact,
+     * and never discard a fact because you could not re-check it.
+     *
+     * Zero means never read, which reads on screen as "we have nothing to fall
+     * back on" rather than as a timestamp at the epoch.
+     */
+    var lastKnownHolderVrn: String?
+    var lastKnownHolderAtMs: Long
+
     var homeZone: FreeZone?
     var syncUrl: String?
     /** claimedAtMs of the last permit takeover we already alerted about. */

@@ -259,6 +259,13 @@ class ParkDetectionUseCaseTest {
         // A Bluetooth blip that reconnects while detection is still running.
         // The position is fresh and would resolve to a paid zone, and it must
         // still be refused: the car is being driven, not parked.
+        //
+        // The outcome changed in v0.6.8, and the change is the point. This used
+        // to end as ManualNeeded — the seal refused the trail, so the run
+        // arrived at the claim path with no position and asked the user. But
+        // there was never a question to ask: the car's stereo is answering, so
+        // nothing has been parked. Asking was the polite version of the same
+        // mistake that recorded a park at a traffic light.
         val signals = ScriptedSignals(script = mapOf(1 to stillAt6s),
             locations = mutableListOf(null))
         val state = FakeParkStateStore().apply {
@@ -269,10 +276,75 @@ class ParkDetectionUseCaseTest {
         val notifier = RecordingParkNotifier()
         val outcome = useCase(signals, state, api, notifier = notifier).run()
 
-        assertEquals(ParkOutcome.ManualNeeded, outcome)
+        assertEquals(ParkOutcome.FalseAlarm, outcome)
         assertEquals("the permit must not move on a driving position", "XX123Y", api.active)
         assertFalse(state.parkedOutside)
-        assertTrue(notifier.calls.contains("manual"))
+        assertFalse("there is nothing to ask about", notifier.calls.contains("manual"))
+    }
+
+    /**
+     * The traffic light, reproduced.
+     *
+     * Reported 2026-08-08: *"stopped at a light, engine running, and the app
+     * placed the car there."* Every earlier test of a reconnect handed the
+     * detection loop a `null` location, so it fell through to the trail and the
+     * seal caught it. On a real road the GPS answers perfectly well — and a live
+     * fix took the *other* branch of `parkedFix`, which never looked at the link
+     * at all. A red light produces STILL at high confidence within five seconds,
+     * because IN_VEHICLE describes motion and a stopped car has none.
+     *
+     * So this is the same situation with the one detail that made it real: a
+     * position. Nothing may be written.
+     */
+    @Test
+    fun `a fresh fix while the link is back up is a traffic light, not a park`() = runTest {
+        val signals = ScriptedSignals(script = mapOf(1 to stillAt6s),
+            locations = mutableListOf(paidPoint))
+        val state = FakeParkStateStore().apply { carLinkConnected = true }
+        val api = SwitchApi()
+        val notifier = RecordingParkNotifier()
+        val log = FakeParkLogStore()
+        val scheduler = RecordingScheduler()
+
+        val outcome = useCase(signals, state, api, notifier = notifier,
+            scheduler = scheduler, parkLog = log).run()
+
+        assertEquals(ParkOutcome.FalseAlarm, outcome)
+        assertFalse("the car was not parked", state.parked)
+        assertNull("no pin may be dropped at a red light", state.lastParkLocation)
+        assertEquals("the permit must not move", "XX123Y", api.active)
+        assertFalse(state.parkedOutside)
+        assertTrue("no park may be recorded in History", log.records.isEmpty())
+        assertTrue("the other phone must not be told anything", scheduler.calls.isEmpty())
+        assertTrue("and nobody may be asked about it", notifier.calls.isEmpty())
+    }
+
+    /**
+     * The same blip, but the link comes back *after* the decision was reached
+     * rather than before. The loop cannot catch this one — it has already
+     * exited — which is why `run` checks a second time before acting.
+     */
+    @Test
+    fun `a link that returns after the decision still stops the park`() = runTest {
+        val state = FakeParkStateStore()
+        // Reconnects on the poll after the decision, the way a real receiver
+        // would: the loop's own check has already passed by then.
+        val signals = object : DetectionSignals {
+            var polls = 0
+            override suspend fun start() = Unit
+            override suspend fun stop() { state.carLinkConnected = true }
+            override fun activitySamples(): List<ActivitySample> {
+                polls++
+                return if (polls > 1) listOf(stillAt6s) else emptyList()
+            }
+            override suspend fun currentLocation(): GeoPoint? = paidPoint
+        }
+        val api = SwitchApi()
+        val outcome = useCase(signals, state, api).run()
+
+        assertEquals(ParkOutcome.FalseAlarm, outcome)
+        assertFalse(state.parked)
+        assertEquals("XX123Y", api.active)
     }
 
     @Test

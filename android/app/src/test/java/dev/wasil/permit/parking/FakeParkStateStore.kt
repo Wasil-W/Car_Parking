@@ -14,6 +14,8 @@ class FakeParkStateStore : ParkStateStore {
     override var lastZoneCode: String? = null
     override var carLinkConnected: Boolean = false
     override var liveLocation: LiveLocation? = null
+    override var lastKnownHolderVrn: String? = null
+    override var lastKnownHolderAtMs: Long = 0
     override var homeZone: FreeZone? = null
     override var syncUrl: String? = null
     override var lastAlertedClaimMs: Long = 0

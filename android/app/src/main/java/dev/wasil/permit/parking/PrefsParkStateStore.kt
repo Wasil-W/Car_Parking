@@ -118,6 +118,14 @@ class PrefsParkStateStore(private val prefs: SharedPreferences) : ParkStateStore
         get() = LiveLocation.decode(prefs.getString("live_location", null))
         set(value) { prefs.edit().putString("live_location", value?.encode()).apply() }
 
+    override var lastKnownHolderVrn: String?
+        get() = prefs.getString("last_known_holder_vrn", null)
+        set(value) { prefs.edit().putString("last_known_holder_vrn", value).apply() }
+
+    override var lastKnownHolderAtMs: Long
+        get() = prefs.getLong("last_known_holder_at_ms", 0L)
+        set(value) { prefs.edit().putLong("last_known_holder_at_ms", value).apply() }
+
     override var homeZone: FreeZone?
         get() = prefs.getString("home_zone", null)?.let {
             runCatching { PermitJson.decodeFromString<FreeZone>(it) }.getOrNull()

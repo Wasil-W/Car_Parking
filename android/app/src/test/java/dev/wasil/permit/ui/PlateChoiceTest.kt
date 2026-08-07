@@ -2,6 +2,7 @@ package dev.wasil.permit.ui
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PlateChoiceTest {
@@ -60,5 +61,46 @@ class PlateChoiceTest {
             "RH950F" to "R279XH",
             platePairFor(listOf(" rh950f ", "R279XH"), mine = "rh950f", theirs = null),
         )
+    }
+
+    // --- telling a wrong password from a site that is down (v0.6.8) ---
+
+    /**
+     * The requirement in one assertion. Wasil, 2026-08-08: *"i entered incorrect
+     * credentials and it still showed my cars."* Whatever else the screen does,
+     * a person has to be able to tell whether what they typed works — so the
+     * refusal must not be phrased as a network problem, and the network problem
+     * must not be phrased as a refusal.
+     */
+    @Test
+    fun `a refusal blames the credentials and an outage does not`() {
+        val refused = signInProblemText(SignIn.Rejected)!!
+        assertTrue(refused.contains("refused"))
+        assertTrue("a refusal must not send anyone hunting for a network fault",
+            !refused.contains("reach"))
+
+        val down = signInProblemText(SignIn.Unreachable)!!
+        assertTrue(down.contains("Couldn't reach"))
+        assertTrue("an outage must not accuse the password",
+            down.contains("not been checked"))
+    }
+
+    @Test
+    fun `a refusal says the stored permit was left alone`() {
+        // The screen has to say it because the view model does it: a rejected
+        // pair is rolled back rather than left saved. Someone who mistypes their
+        // password on a working install needs to know they have not broken it.
+        assertTrue(signInProblemText(SignIn.Rejected)!!.contains("Nothing has been changed"))
+    }
+
+    @Test
+    fun `signing in with no cars on the account is not reported as a failed sign-in`() {
+        val text = signInProblemText(SignIn.NoCars)!!
+        assertTrue(text.startsWith("Signed in"))
+    }
+
+    @Test
+    fun `a list of cars has nothing to apologise for`() {
+        assertNull(signInProblemText(SignIn.Cars(listOf("RH950F"))))
     }
 }

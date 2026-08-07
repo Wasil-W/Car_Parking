@@ -52,10 +52,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import dev.wasil.permit.data.store.CredentialStore
+import dev.wasil.permit.parking.CarDevices
 import dev.wasil.permit.parking.FreeZoneStore
 import dev.wasil.permit.parking.ParkStateStore
 import dev.wasil.permit.parking.Roster
 import dev.wasil.permit.parking.android.SharedSync
+import dev.wasil.permit.parking.otherDevicesLabel
 import dev.wasil.permit.parking.shared.SharedStateStore
 import dev.wasil.permit.ui.theme.LocalHandoffColors
 import kotlinx.coroutines.launch
@@ -130,8 +132,8 @@ fun SettingsScreen(
     credentialStore: CredentialStore,
     sharedStore: () -> SharedStateStore,
     onSavePermit: (String, String, String, String) -> Unit,
-    /** Signs in and returns the plates the account covers, or null if it could not ask. */
-    onFindPlates: suspend (String, String) -> List<String>?,
+    /** Signs in and says what came back — the cars, or which way it did not work. */
+    onFindPlates: suspend (String, String) -> SignIn,
     onOpenMap: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -158,6 +160,11 @@ fun SettingsScreen(
     var syncStatus by remember { mutableStateOf<String?>(null) }
     var editing by remember { mutableStateOf(false) }
     var pickingCar by remember { mutableStateOf(false) }
+    // Sticky for the length of the visit rather than reset each time the picker
+    // opens: somebody who had to reach for the full list once is telling us the
+    // filter is wrong about their car, and making them ask again is a small
+    // insult repeated.
+    var showAllDevices by remember { mutableStateOf(false) }
 
     // Reading `refresh` here makes permission/battery grants recompose this.
     // Computed up front (not just inside the System section further down) so
@@ -437,10 +444,28 @@ fun SettingsScreen(
                         ?.adapter?.bondedDevices?.toList().orEmpty()
                 }.getOrDefault(emptyList())
             }
+            // Split rather than filtered: the ones that could be a car are shown,
+            // the rest are one tap away. Wasil's earbuds sat next to his car in
+            // this list; hiding them outright would have been the other mistake,
+            // because a filter that hides the *right* device leaves someone with
+            // no way to pair at all and nothing on screen explaining why.
+            val (likely, rest) = remember(bonded) {
+                bonded.partition {
+                    CarDevices.couldBeACar(
+                        runCatching { it.bluetoothClass?.deviceClass }.getOrNull()
+                            ?: CarDevices.UNKNOWN_DEVICE_CLASS,
+                    )
+                }
+            }
+            val shown = if (showAllDevices) likely + rest else likely
             if (bonded.isEmpty()) {
                 RowHint("No paired Bluetooth devices found.")
+            } else if (shown.isEmpty()) {
+                // Everything paired was a headset, a watch or a laptop. Say so
+                // rather than showing an empty list under a heading.
+                RowHint("None of your paired devices looks like a car stereo.")
             }
-            bonded.forEach { device ->
+            shown.forEach { device ->
                 val name = runCatching { device.name }.getOrNull() ?: "Unknown"
                 SettingRow(
                     label = name,
@@ -455,6 +480,15 @@ fun SettingsScreen(
                         { Icon(Icons.Filled.Check, contentDescription = null, tint = colors.fine) }
                     } else null,
                 )
+            }
+            // The escape hatch, and it is not optional. Class of Device is
+            // self-declared, and an aftermarket head unit is free to call itself
+            // anything; when it does, this row is the whole difference between a
+            // tidy list and a broken app.
+            if (!showAllDevices) {
+                otherDevicesLabel(rest.size)?.let { label ->
+                    SettingRow(label = label, onClick = { showAllDevices = true })
+                }
             }
         }
 

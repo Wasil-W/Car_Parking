@@ -53,15 +53,21 @@ fun PermitEditor(
     /** `(username, password, myPlate, theirPlate)`. */
     onSave: (String, String, String, String) -> Unit,
     /**
-     * Signs in with these credentials and returns every plate the account
-     * covers, or null if it could not ask.
+     * Signs in with these credentials and says what came back — the cars, or
+     * which of the three ways it did not work.
      *
      * Saving the credentials first is unavoidable — `PermitAuthenticator` reads
      * them from the store to obtain a token — so this both saves and fetches.
      * That is why the button says "Sign in and find my cars" rather than
      * "Fetch": signing in is what happens, and the copy should not hide it.
+     *
+     * It returns a [SignIn] rather than a nullable list because until v0.6.8 the
+     * screen could not tell a wrong password from a site that was down, and said
+     * the second for both. It could not have told the difference anyway: the
+     * request went out on the previous session's token, so a wrong password
+     * produced somebody's real cars. Both halves are fixed in `MainViewModel`.
      */
-    onFindPlates: suspend (String, String) -> List<String>?,
+    onFindPlates: suspend (String, String) -> SignIn,
 ) {
     var username by rememberSaveable { mutableStateOf(initialUsername) }
     var password by rememberSaveable { mutableStateOf("") }
@@ -69,7 +75,7 @@ fun PermitEditor(
     var otherPlate by rememberSaveable { mutableStateOf(initialTheirPlate) }
     var choice by remember { mutableStateOf<PlateChoice?>(null) }
     var finding by remember { mutableStateOf(false) }
-    var failed by remember { mutableStateOf(false) }
+    var problem by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
     Column(
@@ -93,20 +99,24 @@ fun PermitEditor(
                     onClick = {
                         scope.launch {
                             finding = true
-                            failed = false
-                            val found = onFindPlates(username, password)
+                            problem = null
+                            val result = onFindPlates(username, password)
                             finding = false
-                            if (found == null) failed = true else choice = plateChoiceFor(found)
+                            problem = signInProblemText(result)
+                            // Only a real list opens the picker. "No cars" keeps
+                            // the button on screen with its explanation, because
+                            // the sign-in worked and re-trying it is pointless —
+                            // the plates below are the way forward.
+                            if (result is SignIn.Cars) choice = plateChoiceFor(result.plates)
                         }
                     },
                     enabled = !finding && username.isNotBlank() && password.isNotBlank(),
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text(if (finding) "Signing in…" else "Sign in and find my cars") }
 
-                if (failed) {
+                problem?.let { text ->
                     Text(
-                        "Couldn't reach the permit site. Check the username and password, " +
-                            "or enter the plates yourself.",
+                        text,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error,
                     )
@@ -141,7 +151,15 @@ fun PermitEditor(
             }
 
             is PlateChoice.Pick -> {
-                Text("Which of these is your car?", style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    "Which car does this phone drive?",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    "The second one is the car this phone can hand the permit to.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 current.plates.forEach { plate ->
                     PlateRow(
                         plate = plate,
@@ -187,9 +205,11 @@ private fun ManualPlates(
     theirs: String,
     onTheirs: (String) -> Unit,
 ) {
-    OutlinedTextField(mine, onMine, label = { Text("Your plate") },
+    // Same two roles as the chips above, in field form — see [PlateRow] for why
+    // neither of them names a person.
+    OutlinedTextField(mine, onMine, label = { Text("Plate of the car this phone drives") },
         singleLine = true, modifier = Modifier.fillMaxWidth())
-    OutlinedTextField(theirs, onTheirs, label = { Text("The other car's plate") },
+    OutlinedTextField(theirs, onTheirs, label = { Text("Plate of the car to hand the permit to") },
         singleLine = true, modifier = Modifier.fillMaxWidth())
 }
 
@@ -199,7 +219,32 @@ private fun ManualPlates(
  * Both choices sit on every row rather than a single "this is mine" toggle,
  * because with three or more plates the second car has to be stated: the app
  * stores two, and must not guess which of the rest was meant.
+ *
+ * **The labels.** They were "Mine" and "Other car" until v0.6.8, and Wasil was
+ * right that both are poor. "Mine" asks a question about a *person* — and the
+ * app is not asking one. Whose car it is has never been what this field decides;
+ * it decides which car **this phone travels in**, which is why the answer is
+ * stored device-locally in
+ * [dev.wasil.permit.parking.ParkStateStore.thisPhoneDrives] and never shared.
+ * And "Other car" is defined by exclusion, which means it changes meaning
+ * depending on which handset you are holding — the exact framing Wasil wants to
+ * leave: *"i want to eventually switch away from my brother and i."*
+ *
+ * [PLATE_ROLE_THIS_PHONE] and [PLATE_ROLE_HAND_TO] name what each car does
+ * instead. "This phone" is a fact about the device in your hand, true on both
+ * handsets, with no person in it; "Hand to" is the one thing the second car is
+ * for — it is the destination of the button on the main screen, in the same
+ * words that button already uses. Neither implies ownership, and neither has to
+ * change when a third car or a non-brother arrives.
+ *
+ * Rejected on the way, since the reasoning is the deliverable: "Wasil"/"Walid"
+ * (the framing being retired), "Car 1"/"Car 2" (numbers nobody assigned, and the
+ * app orders by plate so they would disagree with the roster), and "Driver"/
+ * "Passenger" (invents a fact about who is sitting where).
  */
+internal const val PLATE_ROLE_THIS_PHONE = "This phone"
+internal const val PLATE_ROLE_HAND_TO = "Hand to"
+
 @Composable
 private fun PlateRow(
     plate: String,
@@ -214,7 +259,7 @@ private fun PlateRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(plate, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-        FilterChip(selected = mine, onClick = onMine, label = { Text("Mine") })
-        FilterChip(selected = theirs, onClick = onTheirs, label = { Text("Other car") })
+        FilterChip(selected = mine, onClick = onMine, label = { Text(PLATE_ROLE_THIS_PHONE) })
+        FilterChip(selected = theirs, onClick = onTheirs, label = { Text(PLATE_ROLE_HAND_TO) })
     }
 }

@@ -260,4 +260,37 @@ class PermitPresentationTest {
             soleStatusLine(parked = false, place = "Molenwijk", sinceClock = "09:12"),
         )
     }
+
+    // --- the site had a hiccup and the app showed nothing (v0.6.8) ---
+
+    @Test
+    fun `a read that worked has nothing to admit`() {
+        assertNull(permitFreshnessNote(readFailed = false, holder = "RH950F", readAtMs = 1L))
+    }
+
+    /**
+     * Reported 2026-08-08. The card keeps the holder it was last told about —
+     * losing a connection is not a reason to forget — but "Wasil's car" on a
+     * screen means *now*, so the age has to be said out loud beside it.
+     */
+    @Test
+    fun `a failed read keeps the holder and says when it was read`() {
+        val note = permitFreshnessNote(readFailed = true, holder = "RH950F", readAtMs = 1L)!!
+        assertTrue(note.contains("Couldn't reach the permit site"))
+        assertTrue("the age is the whole point of the line", note.contains("said at"))
+    }
+
+    /**
+     * The case that is easiest to get wrong: nothing has ever been read, so
+     * there is no fallback. The line must not imply one, and must not dress an
+     * empty card as a finding.
+     */
+    @Test
+    fun `with nothing ever read the line says there is nothing to fall back on`() {
+        val note = permitFreshnessNote(readFailed = true, holder = null, readAtMs = 0L)!!
+        assertTrue(note.contains("nothing is stored to fall back on"))
+        assertTrue("there is no time to quote", !note.contains("said at"))
+        // A holder with no timestamp is the same gap, and takes the same line.
+        assertEquals(note, permitFreshnessNote(readFailed = true, holder = "RH950F", readAtMs = 0L))
+    }
 }

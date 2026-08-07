@@ -14,6 +14,55 @@ package dev.wasil.permit.ui
  * with a plate the user has since removed.
  */
 
+/**
+ * What "Sign in and find my cars" came back with.
+ *
+ * Four outcomes rather than "a list or null", and the split is the whole fix for
+ * the defect that prompted it. Wasil, 2026-08-08: *"i entered incorrect
+ * credentials and it still showed my cars."* Two things were wrong. The request
+ * went out on a token from an earlier sign-in, so wrong credentials never
+ * reached the site — that is [dev.wasil.permit.data.auth.TokenStore.clear]'s
+ * half. And the return type could not have reported it if they had: `null` meant
+ * *rejected*, *unreachable* and *no cars on the account* all at once, so the
+ * screen said "Couldn't reach the permit site" for a wrong password.
+ *
+ * A person needs to be able to tell whether what they typed works. That is the
+ * requirement, and one nullable list cannot meet it.
+ */
+sealed interface SignIn {
+    /** Signed in, and the account lists these. */
+    data class Cars(val plates: List<String>) : SignIn
+
+    /** Signed in — the credentials are right — but the account covers no cars. */
+    data object NoCars : SignIn
+
+    /** The site refused the username and password. */
+    data object Rejected : SignIn
+
+    /** We never got an answer: no network, or the site is down. */
+    data object Unreachable : SignIn
+}
+
+/**
+ * What to put on screen under a sign-in that did not produce a list of cars, or
+ * null when it did.
+ *
+ * Separate from the composable so the wording of the one message that matters —
+ * "these credentials are wrong" — is pinned by a test rather than by whoever
+ * next edits the layout.
+ */
+fun signInProblemText(result: SignIn): String? = when (result) {
+    is SignIn.Cars -> null
+    SignIn.NoCars ->
+        "Signed in, but that account lists no cars. Enter the plates yourself."
+    SignIn.Rejected ->
+        "That username and password were refused. Nothing has been changed — " +
+            "check them and try again, or enter the plates yourself."
+    SignIn.Unreachable ->
+        "Couldn't reach the permit site, so the username and password have not " +
+            "been checked. Try again, or enter the plates yourself."
+}
+
 /** What the editor should show once the account has answered. */
 sealed interface PlateChoice {
     /** Nothing usable came back — fall through to typing them in. */

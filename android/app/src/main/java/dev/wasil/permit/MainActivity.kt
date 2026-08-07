@@ -48,6 +48,9 @@ class MainActivity : ComponentActivity() {
                     app.repository, app.credentialStore, app.parkStateStore,
                     guardedClaim = { app.guardedClaim() },
                     sharedStore = { app.sharedStateStore() },
+                    // What makes "Sign in and find my cars" a sign-in rather
+                    // than a request on whatever session happens to be open.
+                    forgetSession = { app.tokenStore.clear() },
                 ) as T
             }
         }
