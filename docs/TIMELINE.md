@@ -45,6 +45,7 @@ other document under `docs/` is a deep-dive that this one points at.
 | `v0.6.1` | The obligation/settlement split made visible: "This spot" above the permit card |
 | `v0.6.2` | Live location while Bluetooth-connected, sealed at disconnect; coordinates removed from the wire; rate comparison built |
 | `v0.6.3` | Zone code and rate removed from the wire, comparison machinery deleted. `PhoneState` is three fields, all of them read. No UI change |
+| `v0.6.7` | **The plates were stored swapped on the second phone** — a claim could move the permit to the wrong car. `MyCar` replaced by a vehicle roster, nothing on screen changed, setup survives the upgrade. Permit-kind foundation, unread |
 | `v0.6.6` | The full tariff week on tap, free days included; real zone and neighbourhood names bundled from the city's own data (107 zones, 518 buurten, 123 KB) replacing the geocoder inside Amsterdam |
 | `v0.6.5` | Two-colour identity restored (it keyed on sync, not on plates); one cycling focus button; the layers toggle stops moving the camera; setup reads plates from the permit account; takeover alerts reach you mid-drive; a no-position park stops publishing a guess; screen and claim decision agree |
 | `v0.6.4` | **The background-location permission was never requested** — the cause of three long-standing symptoms. Map controls float; locate-me exists; the parked pin survives the drive; the app stops calling a one-car, no-permit install broken; a History tab; "Remove permit" |
@@ -334,6 +335,13 @@ window (item 3) is the screen they belong on.
 ---
 
 ## Open questions needing Wasil
+
+0. **What does `getClientProduct` actually return?** Still unknown — it needs a
+   live permit login, and no real response has ever been captured. The claim in
+   this file that a permit type is "very probably in the same JSON" is a guess
+   and is still a guess. v0.6.7 ships the instrument rather than an inference:
+   on a debug build, `adb logcat -s HandoffProduct:V`, then Settings → the
+   permit row → "Sign in and find my cars". One minute settles it.
 
 *(`zoneCode` was the other one. Answered 2026-08-05: dropped. Wasil's reasoning
 is worth keeping — for anything a person reads, the **name** of a place matters

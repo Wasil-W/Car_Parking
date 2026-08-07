@@ -10,6 +10,54 @@ change as a minor.
 
 ---
 
+## v0.6.7 — the plates could be stored the wrong way round
+
+### Install this one
+
+**On Walid's phone, the two plates were swapped.**
+
+v0.6.5 relabelled the permit form to "your plate" and "the other car's plate",
+which was the right wording. The storage behind it kept its old slot names, and
+put whatever was typed first into **Wasil's** slot — whichever phone was typing.
+
+So on the second phone the cars were the wrong way round, and a claim would have
+moved the permit to the wrong car. That is a fine, on a real install, introduced
+by a change meant to make setup easier. It was found while refactoring past it,
+not by a test and not by anyone using the app.
+
+It is fixed structurally rather than patched: cars are now ordered by plate —
+the one thing both phones read from the same account and agree on without
+talking to each other — and each phone records only which of them it drives.
+
+### The two brothers are no longer an enum
+
+`MyCar.WASIL` was a car with a name on it, not a person. It has become a vehicle
+roster plus a note of which car this phone drives, and every two-car behaviour
+now happens because there **are** two cars rather than because the code assumed
+it.
+
+**Nothing on screen changes** — 11 of 12 rendered screens are byte-identical
+across both themes, and the twelfth differs only in map-tile timing, which the
+old build also disagrees with itself about.
+
+**Your setup survives the upgrade.** Verified twice: against the real storage
+code starting in the old shape, and by installing over a genuine v0.6.6 install
+on an emulator. History keeps its badges, the car pairing, home zone, free zones
+and the link to the other phone all stay, and the shared node keeps its key so
+the two phones stay paired.
+
+### Groundwork for permits that are not like yours
+
+Amsterdam publishes 66 areas where a permit does not apply during the day.
+Yours is unaffected — they bind regular resident permits — but the app had no
+way to tell one kind from another, and assumed every permit works everywhere.
+
+There is now a permit kind, defaulting to **the restricted sort** when unknown,
+because that is the direction that cannot cost a fine. **Nothing reads it yet**
+and no exception areas are bundled: this is a foundation, not a feature.
+
+---
+
 ## v0.6.6 — tomorrow's rate, and the map knows where it is
 
 ### The whole week, when you tap an area
