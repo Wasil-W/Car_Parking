@@ -107,6 +107,13 @@ fun MapCanvas(
     frameRequest: Int = 0,
     /** Bumped to centre on the parked car. */
     carRequest: Int = 0,
+    /**
+     * Bumped to centre on [spot] — a zone picked from the list, which is on
+     * screen only by coincidence. Same counter reasoning as the rest: picking
+     * the same row twice has to move the map back both times.
+     */
+    spotRequest: Int = 0,
+    spot: GeoPoint? = null,
     onMapTap: ((GeoPoint) -> Unit)? = null,
 ) {
     val context = LocalContext.current
@@ -122,6 +129,7 @@ fun MapCanvas(
     val lastLocateRequest = remember { mutableStateOf(locateRequest) }
     val lastFrameRequest = remember { mutableStateOf(frameRequest) }
     val lastCarRequest = remember { mutableStateOf(carRequest) }
+    val lastSpotRequest = remember { mutableStateOf(spotRequest) }
     val lastFraming = remember { mutableStateOf<Pair<List<GeoPoint>, Boolean>?>(null) }
     AndroidView(
         modifier = modifier.fillMaxSize(),
@@ -146,10 +154,12 @@ fun MapCanvas(
             val locatePending = locateRequest != lastLocateRequest.value
             val framePending = frameRequest != lastFrameRequest.value
             val carPending = carRequest != lastCarRequest.value
+            val spotPending = spotRequest != lastSpotRequest.value
             lastOverviewRequest.value = overviewRequest
             lastLocateRequest.value = locateRequest
             lastFrameRequest.value = frameRequest
             lastCarRequest.value = carRequest
+            lastSpotRequest.value = spotRequest
 
             // lastFraming tracks only the framing WE last set, never the map's
             // live (possibly user-panned) position — otherwise re-framing on
@@ -170,6 +180,8 @@ fun MapCanvas(
                     carPending = carPending,
                     haveCar = car != null,
                     autoFramePending = autoFramePending,
+                    spotPending = spotPending,
+                    haveSpot = spot != null,
                 )
             ) {
                 // Keeps the centre deliberately: switching the tariff layer on
@@ -180,6 +192,10 @@ fun MapCanvas(
                     map.controller.setZoom(zoom)
                 }
                 MapCameraCommand.CAR -> car?.let {
+                    map.controller.setCenter(OsmGeoPoint(it.lat, it.lng))
+                    map.controller.setZoom(zoom)
+                }
+                MapCameraCommand.SPOT -> spot?.let {
                     map.controller.setCenter(OsmGeoPoint(it.lat, it.lng))
                     map.controller.setZoom(zoom)
                 }

@@ -16,9 +16,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -45,7 +42,6 @@ import dev.wasil.permit.parking.distanceMeters
 import dev.wasil.permit.parking.android.ParkActionReceiver
 import dev.wasil.permit.parking.android.SharedSync
 import dev.wasil.permit.parking.zones.TariffArea
-import dev.wasil.permit.parking.zones.tariffNow
 import dev.wasil.permit.parking.route.WalkRoute
 import dev.wasil.permit.parking.route.fetchWalkRoute
 import dev.wasil.permit.parking.route.walkSummary
@@ -58,9 +54,6 @@ import java.util.Locale
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
-
-/** Which kind of zone the map is currently placing a candidate point for. */
-private enum class ZoneKind { HOME, FREE }
 
 /** Mockup geometry: the control stack sits 10dp in from the right edge. */
 private val CHROME_SIDE_INSET = 10.dp
@@ -166,8 +159,16 @@ fun MapScreen(
     // Tapping an existing zone opens the rename/remove dialog below.
     var zoneDialogTarget by remember { mutableStateOf<ZoneRef?>(null) }
 
+    // Every zone you have, opened from the overflow menu. The list is the way
+    // back to a zone you cannot see; before it, finding one meant remembering
+    // where you put it and panning there.
+    var zoneListOpen by remember { mutableStateOf(false) }
+
     var showTariff by remember { mutableStateOf(false) }
     var selectedHit by remember { mutableStateOf<TariffHit?>(null) }
+    // The header chip, showing the whole week instead of just now. One control
+    // where v0.6.6 had two — see TariffChip for why.
+    var weekExpanded by remember { mutableStateOf(false) }
     // The point inside the highlighted part to ask the geocoder about: the tap
     // itself, or the car. A ring's centroid can fall outside a concave shape,
     // and these shapes are very concave.
@@ -208,6 +209,11 @@ fun MapScreen(
     var locateRequest by remember { mutableIntStateOf(0) }
     var frameRequest by remember { mutableIntStateOf(0) }
     var carRequest by remember { mutableIntStateOf(0) }
+    // "Show me that one", from a row in the zone list. Separate from the focus
+    // cycle because it names a place rather than a category, and because the
+    // whole reason for tapping the row is that the zone is off screen.
+    var spotRequest by remember { mutableIntStateOf(0) }
+    var spotTarget by remember { mutableStateOf<GeoPoint?>(null) }
     // Where the *next* tap of the focus button goes. Starts at BOTH because
     // that is what the screen already does on open, so the first tap moves you
     // on rather than repeating what you are looking at.
@@ -260,11 +266,22 @@ fun MapScreen(
         placeResolved = true
     }
 
+    // Folded shut when there is no area left to have a week. Retargeting from
+    // one area to another keeps it open, deliberately — comparing two spots is
+    // exactly the reason to have it open — but a chip that vanishes and returns
+    // should return the size it started.
+    LaunchedEffect(highlightArea == null) {
+        if (highlightArea == null) weekExpanded = false
+    }
+
     // While a zone is being placed or the pin moved, every tap is a placement
     // and the bottom of the screen belongs to that flow. The floating controls
     // stand down rather than compete with it — which is what the old layout did
     // too, by swapping the button card for the hint card in the same slot.
     val placing = addingKind != null || candidatePoint != null || movingPin || pending != null
+
+    /** Drops a candidate at an exactly known point, skipping the map tap. */
+    val placeAt: (GeoPoint) -> Unit = { point -> candidatePoint = point }
 
     Box(Modifier.fillMaxSize()) {
         MapCanvas(
@@ -281,6 +298,8 @@ fun MapScreen(
             locateRequest = locateRequest,
             frameRequest = frameRequest,
             carRequest = carRequest,
+            spotRequest = spotRequest,
+            spot = spotTarget,
             onCarTap = {
                 if (car != null && stateStore.parked) {
                     movingPin = true
@@ -309,7 +328,16 @@ fun MapScreen(
                             }
                         }
                     }
-                    else -> when (val hit = mapHitAt(point, homeZone, freeZones, visibleTariffAreas)) {
+                    // `tariffAreas`, not `visibleTariffAreas`. This one word is
+                    // why "still no way to see the full timetable": the tap was
+                    // matched against the *drawn* areas, which are an empty list
+                    // whenever the overlay is off — and the overlay is off by
+                    // default. Tapping the area the header was already naming
+                    // did nothing at all, silently, so the week shipped in
+                    // v0.6.6 and was unreachable without first finding the
+                    // layers button. Selecting an area is about what is under
+                    // your finger, never about which layer happens to be drawn.
+                    else -> when (val hit = mapHitAt(point, homeZone, freeZones, tariffAreas)) {
                         is MapHit.Zone -> zoneDialogTarget = hit.ref
                         is MapHit.Tariff -> {
                             selectedHit = hit.hit
@@ -335,16 +363,22 @@ fun MapScreen(
             title = "Map",
             subtitle = carPositionLine(car, stateStore.parked, parkedAt, driving),
             modifier = Modifier.align(Alignment.TopStart),
-            // Unchanged from v0.6.3 apart from its backing. The chip works, it
-            // is recent, and it was never what made this screen crowded.
+            chipExpanded = weekExpanded && highlightArea != null,
+            // The chip is now both halves of what v0.6.6 shipped as two cards:
+            // the live rate, and the whole week behind a chevron. The street
+            // name that used to sit between them is gone — "in the small
+            // timetable i see the streetname of where i press (unnecessary for
+            // now)".
             chip = highlightArea?.let { area ->
                 @Composable {
                     TariffChip(
                         area = area,
-                        place = place,
+                        placeName = place?.district,
                         placeResolved = placeResolved,
                         dayIndex = dayIndex,
                         minuteOfDay = minuteOfDay,
+                        expanded = weekExpanded,
+                        onToggle = { weekExpanded = !weekExpanded },
                     )
                 }
             },
@@ -403,6 +437,11 @@ fun MapScreen(
                         kind = addingKind ?: ZoneKind.FREE,
                         radiusM = candidateRadius,
                         onRadiusChange = { candidateRadius = it },
+                        // Both null-checked: an offer that cannot work is worse
+                        // than no offer, and "we do not know where you are" is
+                        // a state this app is careful never to paper over.
+                        onUseMyPosition = me?.let { { placeAt(it) } },
+                        onUseCarSpot = storedCar?.let { { placeAt(it) } },
                         onCancel = {
                             addingKind = null
                             candidatePoint = null
@@ -452,12 +491,10 @@ fun MapScreen(
                             candidatePoint = null
                         },
                     )
-                    addingKind != null -> ZoneHintCard(
-                        text = if (addingKind == ZoneKind.HOME) {
-                            "Tap the map to place home"
-                        } else {
-                            "Tap the map to place the zone"
-                        },
+                    addingKind != null -> ZonePlaceHintCard(
+                        kind = addingKind!!,
+                        onUseMyPosition = me?.let { { placeAt(it) } },
+                        onUseCarSpot = storedCar?.let { { placeAt(it) } },
                         onCancel = { addingKind = null },
                     )
                 }
@@ -468,6 +505,7 @@ fun MapScreen(
                 tariffShowing = showTariff,
                 tariffEnabled = tariffAreas.isNotEmpty(),
                 locating = locating,
+                zoneCount = zoneEntries(homeZone, freeZones).size,
                 nextFocus = shownFocus,
                 onFocus = {
                     // Guarded rather than queued: two position reads in flight
@@ -508,18 +546,24 @@ fun MapScreen(
                 // zoom-out was added in v0.5.1 when the map was small and the
                 // overlay was invisible at parking zoom; the map is bigger now
                 // and gets navigated, so the reset costs more than it gave.
-                onToggleTariff = {
-                    showTariff = !showTariff
-                    if (!showTariff) selectedHit = null
-                },
+                //
+                // The selection no longer follows the overlay either. It used
+                // to be cleared here, back when a tap could only select a
+                // *drawn* area — with tapping fixed, switching the layer off
+                // and having the header snap back to the car's area would throw
+                // away a choice the user made without the overlay's help.
+                onToggleTariff = { showTariff = !showTariff },
                 onSetHomeZone = { addingKind = ZoneKind.HOME },
                 onAddFreeZone = { addingKind = ZoneKind.FREE },
+                onOpenZoneList = { zoneListOpen = true },
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(end = CHROME_SIDE_INSET, bottom = CHROME_BOTTOM_INSET),
             )
 
-            if (car != null && selectedHit == null) {
+            // No longer hidden while an area is selected: the week has moved
+            // into the header, so nothing is standing in the pill's place.
+            if (car != null) {
                 val here = me
                 WalkPill(
                     label = walkPillText(routing, route?.let(::walkSummary), here != null),
@@ -544,22 +588,6 @@ fun MapScreen(
                 )
             }
 
-            // The whole week for a tapped area, and only for a tapped area.
-            // Wasil: "i dont want to always see it, just when i press it."
-            selectedHit?.let { hit ->
-                TariffWeekPanel(
-                    area = hit.area,
-                    placeName = place?.district,
-                    onDismiss = { selectedHit = null },
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(
-                            bottom = CHROME_BOTTOM_INSET,
-                            start = 16.dp,
-                            end = 16.dp + 56.dp,
-                        ),
-                )
-            }
         }
 
         notice?.let {
@@ -585,15 +613,19 @@ fun MapScreen(
                 target = target,
                 zone = currentZone,
                 onDismiss = { zoneDialogTarget = null },
-                onSave = { newLabel ->
+                // Both fields land in one write. Resizing is new in v0.6.8 —
+                // before it, a zone that turned out to be too small had to be
+                // deleted and placed again, which is why the free-zone store
+                // grew replaceAt.
+                onSave = { newLabel, newRadius ->
+                    val updated = currentZone.copy(label = newLabel, radiusM = newRadius)
                     when (target) {
                         ZoneRef.Home -> {
-                            val updated = currentZone.copy(label = newLabel)
                             stateStore.homeZone = updated
                             homeZone = updated
                         }
                         is ZoneRef.Free -> {
-                            freeZoneStore.updateLabel(target.index, newLabel)
+                            freeZoneStore.replaceAt(target.index, updated)
                             freeZones = freeZoneStore.all()
                         }
                     }
@@ -614,6 +646,27 @@ fun MapScreen(
                 },
             )
         }
+    }
+
+    // Every zone you have, and the way back to one you cannot see. Tapping a
+    // row does both halves of "find it": it moves the map there *and* opens the
+    // editor, because a list that only scrolled would be a second place to
+    // manage zones rather than a way back to the first.
+    if (zoneListOpen) {
+        ZoneListSheet(
+            entries = zoneEntries(homeZone, freeZones),
+            onPick = { entry ->
+                spotTarget = GeoPoint(entry.zone.lat, entry.zone.lng, 0f)
+                spotRequest++
+                zoneListOpen = false
+                zoneDialogTarget = entry.ref
+            },
+            onAddFreeZone = {
+                zoneListOpen = false
+                addingKind = ZoneKind.FREE
+            },
+            onDismiss = { zoneListOpen = false },
+        )
     }
 
     // Never automatic. Detection auto-switches because the app is the only
@@ -657,58 +710,6 @@ fun MapScreen(
 }
 
 /**
- * What the highlighted area is called and what it costs right now.
- *
- * Lifted out of the header row unchanged when the header became an overlay —
- * same content, same alignment, same blank-while-resolving rule. The only
- * difference is the container, which is now translucent so the map underneath
- * is still a map rather than a strip of colour behind a card.
- */
-@Composable
-private fun TariffChip(
-    area: TariffArea,
-    place: PlaceLabel?,
-    placeResolved: Boolean,
-    dayIndex: Int,
-    minuteOfDay: Int,
-) {
-    Card(
-        shape = HandoffShapes.Control,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = OVER_TILES_ALPHA),
-            contentColor = MaterialTheme.colorScheme.onSurface,
-        ),
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
-            horizontalAlignment = Alignment.End,
-        ) {
-            // While the lookup is in flight this stays blank rather than
-            // showing the code and swapping it a moment later. The code appears
-            // only once we know no name is coming.
-            val heading = place?.district ?: area.code.takeIf { placeResolved }
-            if (heading != null) {
-                Text(heading, style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.End)
-            }
-            place?.detail?.let { street ->
-                Text(
-                    street,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.End,
-                )
-            }
-            Text(
-                tariffNowText(tariffNow(area.windows, dayIndex, minuteOfDay), minuteOfDay),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.End,
-            )
-        }
-    }
-}
-
-/**
  * Confirms a pin correction, and says plainly when it would change the answer
  * to "is this paid parking?" — because that answer is what decides whether the
  * permit should be here at all.
@@ -743,120 +744,6 @@ private fun MovePinCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                TextButton(onClick = onCancel) { Text("Cancel") }
-                TextButton(onClick = onConfirm) { Text("Confirm") }
-            }
-        }
-    }
-}
-
-/**
- * Rename or remove a tapped zone. A hand-typed name (e.g. "Mum's street")
- * beats any geocoded address, so this is offered right where the zone lives
- * on the map rather than buried in Settings. Saving a blank name falls back
- * to the zone's coordinates rather than leaving it empty.
- */
-@Composable
-private fun ZoneEditDialog(
-    target: ZoneRef,
-    zone: FreeZone,
-    onDismiss: () -> Unit,
-    onSave: (String) -> Unit,
-    onRemove: () -> Unit,
-) {
-    var name by remember(target) { mutableStateOf(zone.label) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(if (target == ZoneRef.Home) "Home zone" else "Free zone") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("Name") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Text(
-                    when (target) {
-                        ZoneRef.Home ->
-                            "Removing clears your home zone — parking there will start claiming the permit again."
-                        is ZoneRef.Free -> "Removing means this spot is no longer recognised as free."
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = {
-                onSave(name.trim().ifBlank { formatCoordinates(zone.lat, zone.lng) })
-            }) { Text("Save") }
-        },
-        dismissButton = {
-            Row {
-                TextButton(onClick = onRemove) { Text("Remove") }
-                TextButton(onClick = onDismiss) { Text("Cancel") }
-            }
-        },
-    )
-}
-
-@Composable
-private fun ZoneHintCard(text: String, onCancel: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-    ) {
-        Row(
-            Modifier.fillMaxWidth().padding(14.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(text, style = MaterialTheme.typography.bodyMedium)
-            TextButton(onClick = onCancel) { Text("Cancel") }
-        }
-    }
-}
-
-@Composable
-private fun ZoneCandidateCard(
-    kind: ZoneKind,
-    radiusM: Float,
-    onRadiusChange: (Float) -> Unit,
-    onCancel: () -> Unit,
-    onConfirm: () -> Unit,
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-    ) {
-        Column(Modifier.fillMaxWidth().padding(14.dp)) {
-            Text(
-                if (kind == ZoneKind.HOME) "Home zone" else "Free zone",
-                style = MaterialTheme.typography.bodyLarge,
-            )
-            Text(
-                "%.0f m radius".format(radiusM),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            // Explicit colours: the stock inactive track resolves to a neutral
-            // that is invisible against this card's own neutral surface, so the
-            // slider rendered as a thumb floating next to a stray dot with no
-            // track between them.
-            Slider(
-                value = radiusM,
-                onValueChange = onRadiusChange,
-                valueRange = ZONE_RADIUS_MIN_M.toFloat()..ZONE_RADIUS_MAX_M.toFloat(),
-                colors = SliderDefaults.colors(
-                    thumbColor = MaterialTheme.colorScheme.onSurface,
-                    activeTrackColor = MaterialTheme.colorScheme.onSurface,
-                    inactiveTrackColor = MaterialTheme.colorScheme.onSurfaceVariant
-                        .copy(alpha = 0.4f),
-                ),
-            )
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 TextButton(onClick = onCancel) { Text("Cancel") }
                 TextButton(onClick = onConfirm) { Text("Confirm") }

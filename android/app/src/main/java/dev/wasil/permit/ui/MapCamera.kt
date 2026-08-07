@@ -8,7 +8,7 @@ package dev.wasil.permit.ui
  * car and you into one view. [NONE] leaves whatever the user panned to alone,
  * which is the answer far more often than the other three.
  */
-enum class MapCameraCommand { NONE, OVERVIEW, LOCATE, FRAME, CAR }
+enum class MapCameraCommand { NONE, OVERVIEW, LOCATE, FRAME, CAR, SPOT }
 
 /**
  * Which camera move wins when more than one is pending in the same pass.
@@ -25,12 +25,15 @@ enum class MapCameraCommand { NONE, OVERVIEW, LOCATE, FRAME, CAR }
  *
  *  1. [OVERVIEW] — the tariff overlay is useless at parking zoom, so switching
  *     it on is a request about the camera as much as about the layer.
- *  2. [LOCATE] — an explicit tap, and only when there is a position to centre
+ *  2. [SPOT] — "show me this zone", from a row in the zone list. Ranked first
+ *     among the taps because it is the only one naming a place the user cannot
+ *     see: the whole reason for tapping it is that the zone is off screen.
+ *  3. [LOCATE] — an explicit tap, and only when there is a position to centre
  *     on. Without one the honest answer is to do nothing and say so; moving the
  *     map to a stale or invented point would be publishing a guess.
- *  3. [CAR] — the third stop of the focus cycle, and only when a car pin
+ *  4. [CAR] — the third stop of the focus cycle, and only when a car pin
  *     exists. Ranked above framing for the same reason as LOCATE: it is a tap.
- *  4. [FRAME] — the explicit tap, then the automatic first fit, which are the
+ *  5. [FRAME] — the explicit tap, then the automatic first fit, which are the
  *     same move for different reasons.
  *
  * Pure and outside the composable so the precedence can be held still by a
@@ -44,8 +47,11 @@ fun mapCameraCommand(
     carPending: Boolean,
     haveCar: Boolean,
     autoFramePending: Boolean,
+    spotPending: Boolean = false,
+    haveSpot: Boolean = false,
 ): MapCameraCommand = when {
     overviewPending -> MapCameraCommand.OVERVIEW
+    spotPending && haveSpot -> MapCameraCommand.SPOT
     locatePending && haveMyPosition -> MapCameraCommand.LOCATE
     carPending && haveCar -> MapCameraCommand.CAR
     framePending || autoFramePending -> MapCameraCommand.FRAME

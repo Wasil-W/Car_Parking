@@ -13,7 +13,9 @@ class MapCameraTest {
         car: Boolean = false,
         haveCar: Boolean = true,
         auto: Boolean = false,
-    ) = mapCameraCommand(overview, locate, haveMe, frame, car, haveCar, auto)
+        spot: Boolean = false,
+        haveSpot: Boolean = true,
+    ) = mapCameraCommand(overview, locate, haveMe, frame, car, haveCar, auto, spot, haveSpot)
 
     @Test
     fun `nothing pending leaves the camera where the user panned it`() {
@@ -62,6 +64,22 @@ class MapCameraTest {
     @Test
     fun `a failed locate still lets the automatic framing through`() {
         assertEquals(MapCameraCommand.FRAME, command(locate = true, haveMe = false, auto = true))
+    }
+
+    @Test
+    fun `picking a zone from the list beats every other tap`() {
+        // It is the only move that names a place the user cannot see. The whole
+        // reason for tapping that row is that the zone is off screen, so a
+        // focus-cycle tap arriving in the same pass must not win instead.
+        assertEquals(
+            MapCameraCommand.SPOT,
+            command(spot = true, locate = true, car = true, frame = true, auto = true),
+        )
+    }
+
+    @Test
+    fun `a zone with nowhere to go does not move the map`() {
+        assertEquals(MapCameraCommand.NONE, command(spot = true, haveSpot = false))
     }
 
     @Test

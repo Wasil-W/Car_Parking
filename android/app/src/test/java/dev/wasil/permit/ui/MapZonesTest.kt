@@ -55,6 +55,91 @@ class MapZonesTest {
         assertEquals(75.0, clampZoneRadius(75.0), 0.0)
     }
 
+    // --- sizing a zone by number rather than by drag (v0.6.8) ---
+
+    @Test
+    fun `stepping moves five metres at a time`() {
+        assertEquals(65.0, stepZoneRadius(60.0, 1), 0.0)
+        assertEquals(55.0, stepZoneRadius(60.0, -1), 0.0)
+    }
+
+    @Test
+    fun `a dragged value is snapped onto the step grid before it is stepped`() {
+        // Dragging leaves 63.4 m; one press of + should read 65, not 68.4.
+        assertEquals(65.0, stepZoneRadius(63.4, 1), 0.0)
+        assertEquals(60.0, stepZoneRadius(63.4, -1), 0.0)
+    }
+
+    @Test
+    fun `stepping past either end stops rather than storing an unshowable number`() {
+        assertEquals(200.0, stepZoneRadius(198.0, 1), 0.0)
+        assertEquals(30.0, stepZoneRadius(31.0, -1), 0.0)
+    }
+
+    @Test
+    fun `a typed radius is read as metres`() {
+        assertEquals(80.0, parseZoneRadius("80")!!, 0.0)
+        assertEquals(80.0, parseZoneRadius(" 80 m ")!!, 0.0)
+        assertEquals(80.5, parseZoneRadius("80,5")!!, 0.0)
+    }
+
+    @Test
+    fun `a half-typed radius is not a number yet`() {
+        assertNull(parseZoneRadius(""))
+        assertNull(parseZoneRadius("m"))
+        assertNull(parseZoneRadius("-"))
+        assertNull(parseZoneRadius("0"))
+    }
+
+    @Test
+    fun `typing does not clamp, because clamping mid-keystroke rewrites what you typed`() {
+        // "3" on the way to "30" must stay 3 here. clampZoneRadius is applied
+        // once, on confirm — not on every character.
+        assertEquals(3.0, parseZoneRadius("3")!!, 0.0)
+        assertEquals(900.0, parseZoneRadius("900")!!, 0.0)
+    }
+
+    @Test
+    fun `the field shows whole metres, with no unit and no locale surprises`() {
+        assertEquals("60", radiusFieldText(60.0))
+        assertEquals("63", radiusFieldText(63.4))
+        assertEquals("64", radiusFieldText(63.5))
+    }
+
+    // --- the list of zones you have (v0.6.8) ---
+
+    @Test
+    fun `home comes first and the free zones keep their store order`() {
+        // The index inside ZoneRef.Free addresses the store directly, so a list
+        // that sorted itself would rename or delete the wrong zone.
+        val entries = zoneEntries(home, listOf(zoneB, zoneA))
+        assertEquals(listOf(ZoneRef.Home, ZoneRef.Free(0), ZoneRef.Free(1)), entries.map { it.ref })
+        assertEquals(zoneB, entries[1].zone)
+    }
+
+    @Test
+    fun `with no home zone the list is the free zones alone`() {
+        assertEquals(listOf(ZoneRef.Free(0)), zoneEntries(null, listOf(zoneA)).map { it.ref })
+        assertTrue(zoneEntries(null, emptyList()).isEmpty())
+    }
+
+    @Test
+    fun `a nameless zone is listed by its coordinates rather than as a blank row`() {
+        assertEquals("52.38000, 4.90000", zoneEntries(null, listOf(zoneA)).single().label)
+    }
+
+    @Test
+    fun `a zone's radius travels with its row`() {
+        assertEquals(50.0, zoneEntries(null, listOf(zoneA)).single().radiusM, 0.0)
+    }
+
+    @Test
+    fun `the menu counts the zones, and says the bare noun when there are none`() {
+        assertEquals("Your zones", zoneListMenuLabel(0))
+        assertEquals("Your zones · 1", zoneListMenuLabel(1))
+        assertEquals("Your zones · 12", zoneListMenuLabel(12))
+    }
+
     // --- mapHitAt: the one precedence rule for a tap on bare map (v0.5) ---
 
     /** Covers 52.36..52.38 N, 4.88..4.91 E — deliberately big enough to
@@ -108,7 +193,13 @@ class MapZonesTest {
     }
 
     @Test
-    fun `an empty tariff list is how the overlay is switched off`() {
+    fun `an empty tariff list is how a build with no bundled areas behaves`() {
+        // It used to be how the *overlay being off* behaved too — MapScreen
+        // passed the drawn areas here, which are empty whenever the layer is
+        // hidden, so tapping your own area did nothing and the week that
+        // v0.6.6 shipped was unreachable. The list passed in is now every area
+        // regardless of what is drawn; an empty one now means only that the
+        // bundled asset is missing or corrupt.
         val tap = GeoPoint(52.3650, 4.8850, 0f) // inside paidArea, outside every zone
         assertNull(mapHitAt(tap, home, emptyList(), emptyList()))
     }

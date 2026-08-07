@@ -5,4 +5,5 @@ class FakeFreeZoneStore(val zones: MutableList<FreeZone> = mutableListOf()) : Fr
     override fun add(zone: FreeZone) { zones += zone }
     override fun removeAt(index: Int) { zones.removeAt(index) }
     override fun updateLabel(index: Int, label: String) { zones[index] = zones[index].copy(label = label) }
+    override fun replaceAt(index: Int, zone: FreeZone) { zones[index] = zone }
 }

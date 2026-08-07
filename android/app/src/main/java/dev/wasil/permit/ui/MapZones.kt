@@ -8,6 +8,8 @@ import dev.wasil.permit.parking.zones.TariffArea
 import dev.wasil.permit.parking.zones.TariffNow
 import dev.wasil.permit.parking.zones.ZonePolygon
 import dev.wasil.permit.parking.zones.pointInPolygon
+import kotlin.math.ceil
+import kotlin.math.floor
 
 /** The smallest and largest a zone circle can be, and the size a fresh one starts at.
  *
@@ -20,7 +22,52 @@ const val ZONE_RADIUS_MIN_M = 30.0
 const val ZONE_RADIUS_MAX_M = 200.0
 const val ZONE_RADIUS_DEFAULT_M = 60.0
 
+/**
+ * How much one press of − or + moves the radius.
+ *
+ * Five metres because that is roughly a parked car: the step a person means
+ * when they say "a bit bigger". A 1 m step would need forty presses to cross
+ * the range and would be a slower slider; a 10 m step cannot express the
+ * difference between one side of a street and both.
+ */
+const val ZONE_RADIUS_STEP_M = 5.0
+
 fun clampZoneRadius(radiusM: Double): Double = radiusM.coerceIn(ZONE_RADIUS_MIN_M, ZONE_RADIUS_MAX_M)
+
+/**
+ * The radius [steps] presses away, on the 5 m grid.
+ *
+ * A value left off the grid by a slider drag snaps **towards the press**: from
+ * 63.4 m, + gives 65 and − gives 60. Rounding to the nearest multiple first
+ * would make the first + jump to 70 — two steps for one press, from a number
+ * the user never chose. Clamped, so holding + at the top of the range does
+ * nothing rather than storing a value the slider cannot show.
+ */
+fun stepZoneRadius(radiusM: Double, steps: Int): Double {
+    val gridsteps = radiusM / ZONE_RADIUS_STEP_M
+    val from = if (steps >= 0) floor(gridsteps) else ceil(gridsteps)
+    return clampZoneRadius((from + steps) * ZONE_RADIUS_STEP_M)
+}
+
+/**
+ * A radius typed into the field, or null while the text is not yet a number.
+ *
+ * **Deliberately not clamped.** "3" on the way to "30" must not snap the circle
+ * to the minimum under the finger, and a field that rewrites what you are
+ * typing is the reason people give up on typed inputs. Clamping happens once,
+ * when the value is committed — see [clampZoneRadius].
+ *
+ * A comma is accepted because this is a Dutch app and a Dutch keyboard offers
+ * one; a trailing "m" because the field says "m" beside it and people type it
+ * anyway.
+ */
+fun parseZoneRadius(text: String): Double? =
+    text.trim().removeSuffix("m").trim().replace(',', '.')
+        .toDoubleOrNull()
+        ?.takeIf { it.isFinite() && it > 0 }
+
+/** What the radius field shows: whole metres, no unit — the unit is beside it. */
+fun radiusFieldText(radiusM: Double): String = Math.round(radiusM).toString()
 
 /** Identifies one zone circle on the map: the single home zone, or one entry in
  * the free-zone list (by index, matching [dev.wasil.permit.parking.FreeZoneStore]'s
@@ -29,6 +76,44 @@ sealed interface ZoneRef {
     data object Home : ZoneRef
     data class Free(val index: Int) : ZoneRef
 }
+
+/**
+ * One row of "Your zones": which zone it is, what to call it, and how big.
+ *
+ * The list exists because until now the only way back to a zone was to find its
+ * circle on the map and hit it — which needs you to remember where you put it
+ * and to be looking at that part of the city. A zone placed at your mother's
+ * street six weeks ago was, in practice, unreachable.
+ *
+ * Pure so the ordering and the fallback naming can be held still by a test: the
+ * indices in [ZoneRef.Free] address the store directly, so a list that reordered
+ * itself would rename or delete the wrong zone.
+ */
+data class ZoneEntry(val ref: ZoneRef, val label: String, val zone: FreeZone) {
+    val radiusM: Double get() = zone.radiusM
+}
+
+/**
+ * Home first, then the free zones **in store order** — never sorted. The index
+ * inside [ZoneRef.Free] is the store's own index, so any reordering here would
+ * point the editor at a different zone than the row the user tapped.
+ *
+ * A blank label falls back to coordinates rather than to an empty row, matching
+ * what the map's own editor does when you save a nameless zone.
+ */
+fun zoneEntries(home: FreeZone?, freeZones: List<FreeZone>): List<ZoneEntry> = buildList {
+    home?.let { add(ZoneEntry(ZoneRef.Home, it.displayLabel(), it)) }
+    freeZones.forEachIndexed { index, zone ->
+        add(ZoneEntry(ZoneRef.Free(index), zone.displayLabel(), zone))
+    }
+}
+
+private fun FreeZone.displayLabel(): String =
+    label.trim().ifBlank { formatCoordinates(lat, lng) }
+
+/** "Your zones · 3", or the bare noun when there is nothing to count. */
+fun zoneListMenuLabel(count: Int): String =
+    if (count > 0) "Your zones · $count" else "Your zones"
 
 /**
  * Which existing zone circle, if any, contains [point] — used to let a tap on

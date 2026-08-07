@@ -12,6 +12,14 @@ class MapChromeTest {
     }
 
     @Test
+    fun `the header chip says what tapping it will do, in the same voice`() {
+        // Every control on this screen announces its outcome rather than its
+        // state — the focus button, the layers button, and now the chip.
+        assertEquals("Show the whole week", weekToggleLabel(expanded = false))
+        assertEquals("Hide the whole week", weekToggleLabel(expanded = true))
+    }
+
+    @Test
     fun `the home zone item is set the first time and move after that`() {
         assertEquals("Set home zone", homeZoneMenuLabel(homeZoneSet = false))
         assertEquals("Move home zone", homeZoneMenuLabel(homeZoneSet = true))
