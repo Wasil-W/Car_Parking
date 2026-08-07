@@ -45,10 +45,14 @@ fun plateChoiceFor(accountPlates: List<String>): PlateChoice {
  * rather than storing a guess — a wrong plate here means the permit moves to a
  * car that is not yours, which is the expensive direction.
  *
- * With more than two plates the app still stores two, because everything above
- * it is still built for two cars. That is a real limitation rather than a
- * hidden one: the roster refactor is the release that lifts it, and until then
- * picking the second explicitly beats guessing which of three the user meant.
+ * With more than two plates the app still stores two, and that is now a choice
+ * rather than a limitation. The roster can hold any number; it is built from
+ * *the plates the user picked*, not from every entry the account lists — and it
+ * has to be, because an account can carry plates that are not in play.
+ * `permit.py` records exactly that on Wasil's own permit: *"the third plate
+ * belongs to an inactive vehicle and is deliberately not selectable."* Reading
+ * `vrns` straight into the roster would put a car nobody drives on the screen
+ * and, worse, tip the arity past two and drop both brothers' colours.
  */
 fun platePairFor(accountPlates: List<String>, mine: String?, theirs: String?): Pair<String, String>? {
     val clean = accountPlates.map { it.trim().uppercase() }.filter { it.isNotEmpty() }.distinct()

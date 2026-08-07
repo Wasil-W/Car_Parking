@@ -8,7 +8,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
-import dev.wasil.permit.parking.MyCar
 
 /**
  * Colours ColorScheme has no slot for. Identity (wasil/walid) is only ever a
@@ -48,10 +47,26 @@ data class HandoffColors(
     val walidAction: Color,
     val onAction: Color,
 ) {
-    fun actionFor(car: MyCar) = if (car == MyCar.WASIL) wasilAction else walidAction
-    fun strongFor(car: MyCar) = if (car == MyCar.WASIL) wasilStrong else walidStrong
-    fun containerFor(car: MyCar) = if (car == MyCar.WASIL) wasilContainer else walidContainer
-    fun onContainerFor(car: MyCar) = if (car == MyCar.WASIL) wasilOnContainer else walidOnContainer
+    /**
+     * Identity colour by **roster slot**, not by car.
+     *
+     * Two pairs, and there will never be a third. Identity by hue is a
+     * two-body affordance: the palette already spends green on `fine`, rust on
+     * `alert`, two neutrals on zones, a grey-blue on tariff boundaries and a
+     * teal on the walk route, so there is no fourth safe hue — and colour stops
+     * working as an identifier past two anyway, because nobody remembers which
+     * car is the teal one. Past two,
+     * [dev.wasil.permit.parking.Roster.identitySlotOf] returns null and every
+     * caller falls back to the neutral branch it already had for "nobody is
+     * holding it".
+     *
+     * The names are the two slots' seeded names and nothing more; slot 0 is
+     * slot 0 on both phones because roster order comes from the permit account.
+     */
+    fun actionFor(slot: Int) = if (slot == 0) wasilAction else walidAction
+    fun strongFor(slot: Int) = if (slot == 0) wasilStrong else walidStrong
+    fun containerFor(slot: Int) = if (slot == 0) wasilContainer else walidContainer
+    fun onContainerFor(slot: Int) = if (slot == 0) wasilOnContainer else walidOnContainer
 }
 
 val LocalHandoffColors = staticCompositionLocalOf<HandoffColors> {

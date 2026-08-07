@@ -14,15 +14,13 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import dev.wasil.permit.PermitApp
+import dev.wasil.permit.data.store.roster
 import dev.wasil.permit.parking.FreeZone
 import dev.wasil.permit.parking.GiveBackResult
-import dev.wasil.permit.parking.MyCar
 import dev.wasil.permit.parking.ParkScheduler
 import dev.wasil.permit.parking.ParkStateStore
 import dev.wasil.permit.parking.PrefsFreeZoneStore
 import dev.wasil.permit.parking.PrefsParkStateStore
-import dev.wasil.permit.parking.label
-import dev.wasil.permit.parking.other
 import dev.wasil.permit.parking.shared.ClaimGuard
 import dev.wasil.permit.parking.shared.PhoneState
 import dev.wasil.permit.parking.takeoverBy
@@ -86,8 +84,9 @@ object SharedSync {
         val shared = app.sharedStateStore()
         if (!shared.configured) return
         val permit = shared.readPermit() ?: return
-        val by = takeoverBy(permit, store.myCar, store.lastAlertedClaimMs) ?: return
-        ParkNotifications(context).takeover(by.label())
+        val roster = app.credentialStore.roster()
+        val by = takeoverBy(permit, store.thisPhoneDrives, store.lastAlertedClaimMs, roster) ?: return
+        ParkNotifications(context).takeover(by.name, roster.identitySlotOf(by.id))
         store.lastAlertedClaimMs = permit.claimedAtMs
     }
 
@@ -231,11 +230,11 @@ class GiveBackWorker(context: Context, params: WorkerParameters) :
             val fresh = other.parkedOutside &&
                 System.currentTimeMillis() - other.heartbeatAtMs <= ClaimGuard.STALE_AFTER_MS
             if (!fresh) return Result.success()
-            val config = app.credentialStore.load() ?: return Result.success()
-            val mine = store.myCar ?: return Result.success()
-            val myPlate = if (mine == MyCar.WASIL) config.wasilPlate else config.walidPlate
-            if (app.repository.activePlate() == myPlate) {
-                ParkNotifications(applicationContext).askGiveBack(mine.other().label())
+            val roster = app.credentialStore.load()?.roster ?: return Result.success()
+            val mine = roster.byId(store.thisPhoneDrives) ?: return Result.success()
+            val otherCar = roster.other(mine.id) ?: return Result.success()
+            if (mine.plate.isNotBlank() && app.repository.activePlate() == mine.plate) {
+                ParkNotifications(applicationContext).askGiveBack(otherCar.name)
             }
             Result.success()
         } catch (e: Exception) {

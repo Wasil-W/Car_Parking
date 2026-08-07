@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import dev.wasil.permit.parking.ParkRecord
+import dev.wasil.permit.parking.Roster
 import dev.wasil.permit.ui.theme.HandoffShapes
 import dev.wasil.permit.ui.theme.LocalHandoffColors
 import java.text.SimpleDateFormat
@@ -42,7 +43,7 @@ import java.util.Locale
  * you, and the second is flattering enough to be a bad default.
  */
 @Composable
-fun HistoryScreen(records: List<ParkRecord>) {
+fun HistoryScreen(records: List<ParkRecord>, roster: Roster = Roster.SEED) {
     Column(Modifier.fillMaxSize()) {
         // Outside the list on purpose. It used to live inside it, and an empty
         // log therefore rendered a tab with no name on it — seen on screen. A
@@ -78,7 +79,7 @@ fun HistoryScreen(records: List<ParkRecord>) {
                     lastMonth = month
                     item(key = "month-$month") { MonthHeader(month) }
                 }
-                item(key = "park-${record.startedAtMs}") { RecordCard(record) }
+                item(key = "park-${record.startedAtMs}") { RecordCard(record, roster) }
             }
         }
     }
@@ -95,12 +96,13 @@ private fun MonthHeader(text: String) {
 }
 
 @Composable
-private fun RecordCard(record: ParkRecord) {
+private fun RecordCard(record: ParkRecord, roster: Roster) {
     val row = historyRowFor(
         record = record,
         dayDate = dayDate(record.startedAtMs),
         startClock = clock(record.startedAtMs),
         endClock = record.endedAtMs?.let(::clock),
+        roster = roster,
     )
     Card(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
@@ -158,13 +160,19 @@ private fun Badge(text: String, kind: BadgeKind) {
     val container: Color
     val content: Color
     when (kind) {
-        BadgeKind.PERMIT_WASIL -> {
+        BadgeKind.PERMIT_SLOT_0 -> {
             container = colors.wasilContainer
             content = colors.wasilOnContainer
         }
-        BadgeKind.PERMIT_WALID -> {
+        BadgeKind.PERMIT_SLOT_1 -> {
             container = colors.walidContainer
             content = colors.walidOnContainer
+        }
+        // A permit park with no hue to carry it. Neutral rather than borrowing
+        // `fine` or `alert`, which mean things about a place rather than a car.
+        BadgeKind.PERMIT_NEUTRAL -> {
+            container = MaterialTheme.colorScheme.surfaceContainerHighest
+            content = MaterialTheme.colorScheme.onSurface
         }
         BadgeKind.FREE -> {
             container = MaterialTheme.colorScheme.surfaceContainerHighest

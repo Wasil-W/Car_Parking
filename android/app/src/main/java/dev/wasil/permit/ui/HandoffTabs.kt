@@ -32,6 +32,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import dev.wasil.permit.PermitApp
 import dev.wasil.permit.parking.GeoPoint
+import dev.wasil.permit.parking.Roster
+import dev.wasil.permit.parking.Vehicle
 import dev.wasil.permit.parking.android.PlayServicesSignals
 import dev.wasil.permit.parking.android.reverseGeocodePlace
 import java.text.SimpleDateFormat
@@ -75,7 +77,7 @@ private enum class Tab(val label: String, val icon: ImageVector) {
 fun HandoffTabs(
     app: PermitApp,
     state: UiState,
-    onSwitch: (PlateOption) -> Unit,
+    onSwitch: (Vehicle) -> Unit,
     onRefresh: () -> Unit,
     onMessageShown: () -> Unit,
     onSavePermit: (String, String, String, String) -> Unit,
@@ -93,19 +95,16 @@ fun HandoffTabs(
     val snackbar = remember { SnackbarHostState() }
     val colors = LocalHandoffColors.current
 
-    // Which of the three permit screens is true. Recomputed on every tab change
-    // so adding a permit in Settings is visible the moment you come back.
-    val permitView = permitViewFor(
-        permitAdded = remember(tab) { app.credentialStore.load() != null },
-        // Two cars, not two phones. The permit moving between plates is a call
-        // to the permit site; the sync link only decides whether the other
-        // phone hears about it.
-        hasSecondPlate = remember(tab) {
-            app.credentialStore.load()?.let {
-                it.wasilPlate.isNotBlank() && it.walidPlate.isNotBlank()
-            } == true
-        },
-    )
+    // Re-read on every tab change so adding a permit in Settings is visible the
+    // moment you come back — including the roster it brings with it, which is
+    // what the whole screen below is now selected on.
+    val config = remember(tab) { app.credentialStore.load() }
+    val roster = config?.roster ?: Roster.SEED
+    // Which of the three permit screens is true. Two cars, not two phones: the
+    // permit moving between plates is a call to the permit site, and the sync
+    // link only decides whether the other phone hears about it.
+    val permitView = permitViewFor(permitAdded = config != null, roster = roster)
+    val myVehicle = roster.byId(app.parkStateStore.thisPhoneDrives)
 
     // The parked spot's name, for the Now screen. Same geocoder and same
     // two-level name as the map header, so the two screens cannot describe one
@@ -171,9 +170,12 @@ fun HandoffTabs(
         Box(Modifier.fillMaxSize().padding(padding)) {
             when (tab) {
                 Tab.NOW -> MainScreen(
-                    state = state,
+                    // The roster the screen draws from is the stored one, so a
+                    // permit added on the Settings tab shows up here without
+                    // waiting for the view model's next refresh.
+                    state = state.copy(roster = roster),
                     view = permitView,
-                    myCar = app.parkStateStore.myCar,
+                    myCar = myVehicle,
                     // Hidden while driving, for the same reason as the map tab.
                     car = parkedPoint,
                     parked = app.parkStateStore.parked,
@@ -193,7 +195,10 @@ fun HandoffTabs(
                 // Read on every visit rather than held in state: the log is
                 // written by background workers, so a cached list would be
                 // stale exactly when you look at it after a drive.
-                Tab.HISTORY -> HistoryScreen(records = remember(tab) { app.parkLogStore.all() })
+                Tab.HISTORY -> HistoryScreen(
+                    records = remember(tab) { app.parkLogStore.all() },
+                    roster = roster,
+                )
                 Tab.MAP -> MapScreen(
                     stateStore = app.parkStateStore,
                     freeZoneStore = app.freeZoneStore,

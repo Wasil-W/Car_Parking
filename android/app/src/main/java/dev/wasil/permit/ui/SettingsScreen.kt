@@ -53,9 +53,8 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import dev.wasil.permit.data.store.CredentialStore
 import dev.wasil.permit.parking.FreeZoneStore
-import dev.wasil.permit.parking.MyCar
 import dev.wasil.permit.parking.ParkStateStore
-import dev.wasil.permit.parking.label
+import dev.wasil.permit.parking.Roster
 import dev.wasil.permit.parking.android.SharedSync
 import dev.wasil.permit.parking.shared.SharedStateStore
 import dev.wasil.permit.ui.theme.LocalHandoffColors
@@ -148,7 +147,10 @@ fun SettingsScreen(
     var confirmRemovePermit by remember { mutableStateOf(false) }
     var carMac by remember { mutableStateOf(stateStore.carMac) }
     var carName by remember { mutableStateOf(stateStore.carName) }
-    var myCar by remember { mutableStateOf(stateStore.myCar) }
+    // The seed pair when no permit is stored, so "whose phone is this" is still
+    // answerable on an install that has declined one.
+    val roster = permit?.roster ?: Roster.SEED
+    var myVehicle by remember(roster) { mutableStateOf(roster.byId(stateStore.thisPhoneDrives)) }
     var autoClaim by remember { mutableStateOf(stateStore.autoClaim) }
     var zones by remember { mutableStateOf(freeZoneStore.all()) }
     var homeZone by remember { mutableStateOf(stateStore.homeZone) }
@@ -248,7 +250,7 @@ fun SettingsScreen(
                     // ("null's phone"). Currently unreachable because of
                     // branch ordering in MainActivity, but not guaranteed.
                     setupConfigurationLine(
-                        phoneLabel = myCar?.label(),
+                        phoneLabel = myVehicle?.name,
                         permitAdded = permit != null,
                         syncConfigured = syncUrl.isNotBlank(),
                     ),
@@ -261,17 +263,16 @@ fun SettingsScreen(
 
                     Text("Whose phone is this?", style = MaterialTheme.typography.bodyLarge)
                     Row {
-                        MyCar.entries.forEach { option ->
+                        roster.vehicles.forEach { option ->
                             Row(Modifier.clickable {
-                                stateStore.myCar = option
-                                myCar = option
+                                stateStore.thisPhoneDrives = option.id
+                                myVehicle = option
                             }.padding(end = 24.dp)) {
-                                RadioButton(selected = myCar == option, onClick = {
-                                    stateStore.myCar = option
-                                    myCar = option
+                                RadioButton(selected = myVehicle?.id == option.id, onClick = {
+                                    stateStore.thisPhoneDrives = option.id
+                                    myVehicle = option
                                 })
-                                Text(option.name.lowercase().replaceFirstChar { it.uppercase() },
-                                    Modifier.padding(top = 12.dp))
+                                Text(option.name, Modifier.padding(top = 12.dp))
                             }
                         }
                     }
@@ -332,18 +333,23 @@ fun SettingsScreen(
         if (editingPermit) {
             PermitEditor(
                 initialUsername = permit?.username.orEmpty(),
-                initialWasilPlate = permit?.wasilPlate.orEmpty(),
-                initialWalidPlate = permit?.walidPlate.orEmpty(),
+                // "Mine" and "theirs" relative to the car this phone drives,
+                // rather than to a fixed slot. Storing them by slot is what let
+                // "your plate" land in Wasil's slot on Walid's phone.
+                initialMyPlate = myVehicle?.plate.orEmpty(),
+                initialTheirPlate = roster.other(myVehicle?.id)?.plate.orEmpty(),
                 onSave = { u, p, a, b ->
                     onSavePermit(u, p, a, b)
                     permit = credentialStore.load()
+                    myVehicle = permit?.roster?.byId(stateStore.thisPhoneDrives)
                     editingPermit = false
                 },
                 onFindPlates = onFindPlates,
             )
         } else if (permit != null) {
-            SettingRow(label = "Wasil's plate", value = permit?.wasilPlate)
-            SettingRow(label = "Walid's plate", value = permit?.walidPlate)
+            roster.vehicles.forEach { car ->
+                SettingRow(label = "${car.name}'s plate", value = car.plate)
+            }
             SettingRow(label = "Remove permit", onClick = { confirmRemovePermit = true })
         }
 

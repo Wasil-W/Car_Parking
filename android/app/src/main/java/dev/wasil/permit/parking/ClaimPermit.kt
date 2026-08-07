@@ -19,24 +19,25 @@ class ClaimPermit(
      */
     private val parkLog: ParkLogStore? = null,
 ) {
-    suspend fun claim(target: MyCar? = null, zoneText: String? = null): ParkOutcome {
-        val config = credentialStore.load() ?: return ParkOutcome.NotConfigured
-        val car = target ?: stateStore.myCar ?: return ParkOutcome.NotConfigured
-        val (label, plate) = when (car) {
-            MyCar.WASIL -> "Wasil" to config.wasilPlate
-            MyCar.WALID -> "Walid" to config.walidPlate
-        }
+    suspend fun claim(target: VehicleId? = null, zoneText: String? = null): ParkOutcome {
+        val roster = credentialStore.load()?.roster ?: return ParkOutcome.NotConfigured
+        val car = roster.byId(target ?: stateStore.thisPhoneDrives)
+            ?: return ParkOutcome.NotConfigured
+        // A car with no plate cannot hold the permit, and asking the site to
+        // activate "" would be a 4xx dressed up as a switch failure.
+        if (car.plate.isBlank()) return ParkOutcome.NotConfigured
+        val identitySlot = roster.identitySlotOf(car.id)
         return try {
-            when (val result = repository.switchTo(plate)) {
+            when (val result = repository.switchTo(car.plate)) {
                 is PermitRepository.SwitchResult.Confirmed -> {
-                    notifier.statusPermitOn(label, result.activeVrn, zoneText)
+                    notifier.statusPermitOn(car.name, identitySlot, result.activeVrn, zoneText)
                     // Only while this phone is actually parked: a switch made
                     // from the sofa belongs to no park at all, and re-badging
                     // the last one would credit the permit to a spot it never
                     // covered.
                     if (stateStore.parked) {
-                        if (car == stateStore.myCar) {
-                            parkLog?.settleOpen(Settlement.PERMIT, car)
+                        if (car.id == stateStore.thisPhoneDrives) {
+                            parkLog?.settleOpen(Settlement.PERMIT, car.id)
                         } else {
                             // Handed to the other car while still parked here,
                             // so whatever this spot demands is no longer met by

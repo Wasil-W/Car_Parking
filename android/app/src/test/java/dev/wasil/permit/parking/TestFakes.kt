@@ -7,16 +7,37 @@ import dev.wasil.permit.data.api.LoginRequest
 import dev.wasil.permit.data.api.LoginResponse
 import dev.wasil.permit.data.api.PermitApi
 import dev.wasil.permit.data.api.VrnEntry
+import dev.wasil.permit.data.store.PermitConfig
 import dev.wasil.permit.parking.shared.PermitClaim
 import dev.wasil.permit.parking.shared.PhoneState
 import dev.wasil.permit.parking.shared.SharedStateStore
 import java.io.IOException
 
+/**
+ * The two-car account every test in this package works against: Wasil in slot
+ * 0 with RH950F, Walid in slot 1 with XX123Y — the same layout an install from
+ * before the roster migrates onto.
+ */
+fun testConfig(
+    mine: String = "RH950F",
+    theirs: String = "XX123Y",
+): PermitConfig = PermitConfig("u", "p", legacyRoster(mine, theirs))
+
+val WASIL: VehicleId = slotIdFor(0)
+val WALID: VehicleId = slotIdFor(1)
+
 class RecordingParkNotifier : ParkNotifier {
     val calls = mutableListOf<String>()
-    override fun statusPermitOn(label: String, vrn: String, zoneText: String?) {
-        calls += "status:$label:$vrn" + (zoneText?.let { ":$it" } ?: "")
+    override fun statusPermitOn(carName: String, identitySlot: Int?, vrn: String, zoneText: String?) {
+        calls += "status:$carName:$vrn" + (zoneText?.let { ":$it" } ?: "")
+        // Recorded separately so a test can assert the icon's dot lands on the
+        // right side without that assertion riding on the car's display name —
+        // which is exactly the coupling this release removed.
+        slots += identitySlot
     }
+
+    /** Identity slots passed to [statusPermitOn], in order. */
+    val slots = mutableListOf<Int?>()
     override fun statusParkedNoClaim(reason: String) { calls += "noclaim:$reason" }
     override fun askManualDecision() { calls += "manual" }
     override fun askGiveBack(otherLabel: String) { calls += "askgiveback:$otherLabel" }
@@ -25,7 +46,7 @@ class RecordingParkNotifier : ParkNotifier {
         // wordings the user sees and "blocked" alone cannot tell them apart.
         calls += "blocked:$otherLabel" + if (other.parkedOutsideKnown) "" else ":unknown"
     }
-    override fun takeover(byLabel: String) { calls += "takeover:$byLabel" }
+    override fun takeover(byName: String, identitySlot: Int?) { calls += "takeover:$byName" }
     override fun switchFailed(reason: String?) { calls += "failed" }
     override fun mismatchWarning(serverVrn: String?) { calls += "mismatch:$serverVrn" }
     override fun eventNote(text: String) { calls += "note:$text" }

@@ -1,6 +1,7 @@
 package dev.wasil.permit.data.auth
 
 import dev.wasil.permit.data.api.BrowserHeadersInterceptor
+import dev.wasil.permit.data.api.ClientProductLogInterceptor
 import dev.wasil.permit.data.api.LoginRequest
 import dev.wasil.permit.data.api.LoginResponse
 import dev.wasil.permit.data.api.PermitJson
@@ -75,6 +76,8 @@ fun buildAuthenticatedClient(
     baseUrl: HttpUrl,
     tokenStore: TokenStore,
     credentialStore: CredentialStore,
+    /** Debug builds only — see [ClientProductLogInterceptor] for why it exists. */
+    logClientProduct: Boolean = false,
 ): OkHttpClient {
     val bareClient = OkHttpClient.Builder()
         .addInterceptor(BrowserHeadersInterceptor())
@@ -82,6 +85,10 @@ fun buildAuthenticatedClient(
     return OkHttpClient.Builder()
         .addInterceptor(BrowserHeadersInterceptor())
         .addInterceptor(AuthInterceptor(tokenStore))
+        // A network interceptor rather than an application one, so it sees the
+        // body of the retried request after a 401 refresh rather than the empty
+        // 401 itself.
+        .addNetworkInterceptor(ClientProductLogInterceptor(logClientProduct))
         .authenticator(
             PermitAuthenticator(credentialStore, tokenStore, BlockingLoginClient(baseUrl, bareClient))
         )

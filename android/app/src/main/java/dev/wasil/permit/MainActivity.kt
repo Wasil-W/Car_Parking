@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.wasil.permit.data.store.roster
 import dev.wasil.permit.parking.PendingDecision
 import dev.wasil.permit.parking.android.ParkActionReceiver
 import dev.wasil.permit.parking.android.SharedSync
@@ -135,11 +136,13 @@ class MainActivity : ComponentActivity() {
                         // The form lives in Settings now, behind "Add a
                         // permit", and the first run asks the one thing
                         // detection genuinely cannot work without.
-                        val needsSetup = app.parkStateStore.myCar == null && !setupDone
+                        val needsSetup =
+                            app.parkStateStore.thisPhoneDrives == null && !setupDone
 
                         if (needsSetup) {
                             SetupFlow(
                                 stateStore = app.parkStateStore,
+                                roster = app.credentialStore.roster(),
                                 onDone = { setupDone = true },
                             )
                         } else {

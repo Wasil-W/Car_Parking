@@ -1,13 +1,16 @@
 package dev.wasil.permit.ui
 
-import dev.wasil.permit.parking.MyCar
-import dev.wasil.permit.parking.label
-import dev.wasil.permit.parking.other
+import dev.wasil.permit.parking.Roster
+import dev.wasil.permit.parking.Vehicle
 import dev.wasil.permit.parking.zones.TariffNow
 import dev.wasil.permit.parking.zones.ZoneInfo
 import dev.wasil.permit.parking.zones.tariffNow
 
-/** Wasil is always the left arc, Walid the right — identical on both phones. */
+/**
+ * Roster slot 0 is always the left arc, slot 1 the right — identical on both
+ * phones, because slot order is derived from the permit account rather than
+ * from which car is "mine".
+ */
 enum class Side { LEFT, RIGHT }
 
 /**
@@ -23,33 +26,44 @@ enum class MarkArcs { PAIR, SOLE }
 
 data class MarkState(val lit: Side?, val dot: Side?, val arcs: MarkArcs = MarkArcs.PAIR)
 
-fun markStateFor(holder: MyCar?): MarkState = when (holder) {
-    MyCar.WASIL -> MarkState(Side.LEFT, Side.LEFT)
-    MyCar.WALID -> MarkState(Side.RIGHT, Side.RIGHT)
-    null -> MarkState(null, null)
+fun markStateFor(identitySlot: Int?): MarkState = when (identitySlot) {
+    0 -> MarkState(Side.LEFT, Side.LEFT)
+    1 -> MarkState(Side.RIGHT, Side.RIGHT)
+    // No holder, or a roster too large for hue to identify anything: the mark
+    // becomes a wordmark and stops carrying state. That is the same drawing
+    // `holder == null` has always produced, so the N ≥ 3 path needed no new
+    // rendering code at all.
+    else -> MarkState(null, null)
 }
 
 /**
  * The same mark with its second arc dropped. Keeps the holder's colour, because
  * the one arc still belongs to a specific car.
  */
-fun soleMarkStateFor(holder: MyCar?): MarkState =
-    markStateFor(holder).copy(arcs = MarkArcs.SOLE)
+fun soleMarkStateFor(identitySlot: Int?): MarkState =
+    markStateFor(identitySlot).copy(arcs = MarkArcs.SOLE)
 
-data class PrimaryAction(val label: String, val target: MyCar)
+data class PrimaryAction(val label: String, val target: Vehicle)
 
 /**
  * With exactly two cars the permit can only ever move to one place, so the
  * screen needs one button rather than two.
+ *
+ * Null at any other arity, and the caller draws no button. That is not a
+ * degraded two-car screen: with three cars "hand it over" is a question — *to
+ * whom?* — and the answer is a picker this release deliberately does not build,
+ * because there is no third car to build it for. See `docs/TIMELINE.md`,
+ * Parked: "Three or more cars".
  */
-fun primaryActionFor(myCar: MyCar, holder: MyCar?): PrimaryAction = when (holder) {
-    myCar -> PrimaryAction("Hand to ${myCar.other().label()}", myCar.other())
-    null -> PrimaryAction("Claim it", myCar)
-    else -> PrimaryAction("Take it back", myCar)
+fun primaryActionFor(roster: Roster, mine: Vehicle, holder: Vehicle?): PrimaryAction? {
+    if (roster.size != Roster.PAIR) return null
+    val other = roster.other(mine.id) ?: return null
+    return when (holder?.id) {
+        mine.id -> PrimaryAction("Hand to ${other.name}", other)
+        null -> PrimaryAction("Claim it", mine)
+        else -> PrimaryAction("Take it back", mine)
+    }
 }
-
-fun holderFor(activeVrn: String?, options: List<PlateOption>): MyCar? =
-    options.firstOrNull { it.vrn == activeVrn }?.car
 
 /**
  * What this spot demands, independently of how it might be settled.
@@ -219,6 +233,13 @@ fun permitHeldNote(demand: SpotDemand): String? = when (demand) {
  *
  * A permit that lists one plate genuinely has nowhere to send anything, and that
  * is the case `Sole` is for.
+ *
+ * There is no fourth case for three or more cars, and that is deliberate rather
+ * than an omission. `Shared` degrades on its own: the hero card falls back to
+ * `surfaceVariant` because [Roster.identitySlotOf] stops assigning a hue, the
+ * mark falls back to a wordmark for the same reason, and the hand-over button
+ * disappears because [primaryActionFor] returns null. Every one of those
+ * branches already existed for `holder == null`.
  */
 sealed interface PermitView {
     /** Two phones, one permit: the hero card, the travelling dot, one button. */
@@ -231,9 +252,11 @@ sealed interface PermitView {
     data object NoPermit : PermitView
 }
 
-fun permitViewFor(permitAdded: Boolean, hasSecondPlate: Boolean): PermitView = when {
+fun permitViewFor(permitAdded: Boolean, roster: Roster): PermitView = when {
     !permitAdded -> PermitView.NoPermit
-    hasSecondPlate -> PermitView.Shared
+    // Cars the permit can actually reach. A roster entry with no plate is a
+    // seeded slot nobody has filled in, not a second car.
+    roster.platedCount >= Roster.PAIR -> PermitView.Shared
     else -> PermitView.Sole
 }
 

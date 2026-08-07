@@ -1,11 +1,26 @@
 package dev.wasil.permit.parking
 
-enum class MyCar { WASIL, WALID }
-
 interface ParkStateStore {
     var carMac: String?
     var carName: String?
-    var myCar: MyCar?
+
+    /**
+     * Which car in the roster this phone drives away in.
+     *
+     * `myCar: MyCar?` until v0.6.6, and it is the most important single field in
+     * the app. Two properties it must keep, both from `USER-MODEL.md`:
+     *
+     * - **Device-local.** It is never written to the shared room and never
+     *   inferable from it. The room stores state per car key already; it does
+     *   not need to know which handset is holding which.
+     * - **Changeable.** Phones get replaced and cars get swapped.
+     *
+     * Null means setup has not been done. Detection stops there — a park could
+     * not be attributed to anything — which is why this is the one question
+     * first run still asks.
+     */
+    var thisPhoneDrives: VehicleId?
+
     var autoClaim: Boolean
     var parked: Boolean
     var lastParkLocation: GeoPoint?

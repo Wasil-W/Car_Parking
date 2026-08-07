@@ -31,8 +31,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import dev.wasil.permit.parking.GeoPoint
-import dev.wasil.permit.parking.MyCar
-import dev.wasil.permit.parking.label
+import dev.wasil.permit.parking.Vehicle
 import dev.wasil.permit.ui.theme.HandoffShapes
 import dev.wasil.permit.ui.theme.LocalHandoffColors
 
@@ -52,7 +51,8 @@ import dev.wasil.permit.ui.theme.LocalHandoffColors
 fun MainScreen(
     state: UiState,
     view: PermitView,
-    myCar: MyCar?,
+    /** This phone's car, or null before setup has been done. */
+    myCar: Vehicle?,
     car: GeoPoint?,
     // Passed alongside [car] rather than inferred from it: "no pin" and "not
     // parked" are different states, and this card used to render them as one.
@@ -63,7 +63,7 @@ fun MainScreen(
     place: String?,
     /** "09:12", or null when nothing recorded a park time. */
     parkedSince: String?,
-    onSwitch: (PlateOption) -> Unit,
+    onSwitch: (Vehicle) -> Unit,
     onRefresh: () -> Unit,
     onOpenMap: () -> Unit,
     onOpenSettings: () -> Unit,
@@ -71,7 +71,11 @@ fun MainScreen(
     onDismissBlocked: () -> Unit,
 ) {
     val colors = LocalHandoffColors.current
-    val holder = holderFor(state.activeVrn, state.options)
+    // Matched on the plate the permit site actually reports, not on a label.
+    val holder = state.roster.holderFor(state.activeVrn)
+    // Null past two cars, which is what drops the screen back to neutrals: hue
+    // stops identifying anything once there are more identities than hues.
+    val holderSlot = state.roster.identitySlotOf(holder?.id)
 
     // Rhythm rather than a uniform gap: the card and its action belong
     // together (12dp), everything else is a separate thought (24dp). Uniform
@@ -88,12 +92,12 @@ fun MainScreen(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 HandoffMark(
                     when (view) {
-                        PermitView.Shared -> markStateFor(holder)
+                        PermitView.Shared -> markStateFor(holderSlot)
                         // Never `holder ?: myCar`. Whose phone this is says
                         // nothing about where the permit is, and lighting the
                         // arc on that basis is the mark stating a fact it does
                         // not have.
-                        PermitView.Sole -> soleMarkStateFor(holder)
+                        PermitView.Sole -> soleMarkStateFor(holderSlot)
                         // No permit, so nothing holds anything. The mark is a
                         // wordmark here, not a state display.
                         PermitView.NoPermit -> markStateFor(null)
@@ -216,14 +220,14 @@ fun MainScreen(
                     shape = HandoffShapes.Card,
                     border = BorderStroke(
                         1.dp,
-                        holder?.let(colors::strongFor) ?: MaterialTheme.colorScheme.outline,
+                        holderSlot?.let(colors::strongFor) ?: MaterialTheme.colorScheme.outline,
                     ),
                     colors = CardDefaults.cardColors(
-                        containerColor = holder?.let(colors::containerFor)
+                        containerColor = holderSlot?.let(colors::containerFor)
                             ?: MaterialTheme.colorScheme.surfaceVariant,
                     ),
                 ) {
-                    val onCard = holder?.let(colors::onContainerFor)
+                    val onCard = holderSlot?.let(colors::onContainerFor)
                         ?: MaterialTheme.colorScheme.onSurfaceVariant
                     Column(
                         modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
@@ -236,7 +240,7 @@ fun MainScreen(
                             // One car: naming a brother would be answering a
                             // question nobody asked. What matters is that the
                             // spot is covered.
-                            HandoffMark(soleMarkStateFor(holder), size = 60.dp)
+                            HandoffMark(soleMarkStateFor(holderSlot), size = 60.dp)
                             Text(
                                 soleCardTitle(covered = holder != null),
                                 style = MaterialTheme.typography.headlineLarge,
@@ -250,9 +254,9 @@ fun MainScreen(
                                 )
                             }
                         } else {
-                            HandoffMark(markStateFor(holder), size = 60.dp)
+                            HandoffMark(markStateFor(holderSlot), size = 60.dp)
                             Text(
-                                holder?.let { "${it.label()}'s car" } ?: "No plate active",
+                                holder?.let { "${it.name}'s car" } ?: "No plate active",
                                 style = MaterialTheme.typography.headlineLarge,
                                 color = onCard,
                             )
@@ -278,22 +282,30 @@ fun MainScreen(
                         QuietRow(soleStatusLine(parked, place, parkedSince))
                     }
                 } else if (myCar != null && !state.loading) {
-                    val action = primaryActionFor(myCar, holder)
-                    val target = state.options.firstOrNull { it.car == action.target }
-                    Button(
-                        onClick = { target?.let(onSwitch) },
-                        enabled = target != null && state.switching == null,
-                        modifier = Modifier.fillMaxWidth().height(54.dp),
-                        shape = HandoffShapes.Control,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = colors.actionFor(action.target),
-                            contentColor = colors.onAction,
-                        ),
-                    ) {
-                        Text(
-                            if (state.switching != null) "Switching…" else action.label,
-                            style = MaterialTheme.typography.labelLarge,
-                        )
+                    // Null with anything other than two cars: the permit then
+                    // has no single destination, so there is no one button that
+                    // could be right. Drawn as nothing rather than as a
+                    // disabled button, on the same reasoning as the sole case.
+                    val action = primaryActionFor(state.roster, myCar, holder)
+                    val targetSlot = action?.let { state.roster.identitySlotOf(it.target.id) }
+                    if (action != null) {
+                        Button(
+                            onClick = { onSwitch(action.target) },
+                            enabled = action.target.plate.isNotBlank() && state.switching == null,
+                            modifier = Modifier.fillMaxWidth().height(54.dp),
+                            shape = HandoffShapes.Control,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = targetSlot?.let(colors::actionFor)
+                                    ?: MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = targetSlot?.let { colors.onAction }
+                                    ?: MaterialTheme.colorScheme.onSurfaceVariant,
+                            ),
+                        ) {
+                            Text(
+                                if (state.switching != null) "Switching…" else action.label,
+                                style = MaterialTheme.typography.labelLarge,
+                            )
+                        }
                     }
                 }
 

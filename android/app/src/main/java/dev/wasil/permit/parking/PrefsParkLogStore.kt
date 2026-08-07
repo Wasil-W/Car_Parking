@@ -18,7 +18,7 @@ class PrefsParkLogStore(private val prefs: SharedPreferences) : ParkLogStore {
 
     override fun closeOpen(endedAtMs: Long) = save(all().withOpenParkClosed(endedAtMs))
 
-    override fun settleOpen(settlement: Settlement, holder: MyCar?) =
+    override fun settleOpen(settlement: Settlement, holder: VehicleId?) =
         save(all().withOpenParkSettled(settlement, holder))
 
     override fun uncoverOpen() = save(all().withOpenParkUncovered())
