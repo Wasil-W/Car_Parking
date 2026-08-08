@@ -470,6 +470,53 @@ prototype you can tap through answers "is this crowded" far better than two
 static frames side by side — which is the exact question three of the items
 below turn on.
 
+### First thinking, 2026-08-08 — for tomorrow's mockup, not decided
+
+**The timetable's problem is that it is a table.** Wasil proposed a row per day
+and doubted it in the same breath, and the doubt was right: seven rows where
+there are now two or three is more crowded, not less. But the current shape is
+not right either, so the useful question is what both get wrong.
+
+A table answers *"what is the rate on Thursday at 3pm"* — a lookup. That is not
+the question being asked. Standing at the car, the question is **what happens
+next**, and a table makes the reader compute that from a grid.
+
+Two shapes worth drawing instead, neither of them a table:
+
+1. **A sentence.** *"€1,72/h until 19:00, then free until 09:00 tomorrow."* One
+   line, no grid, and it is the actual answer. The whole week goes behind a
+   "show the week" affordance for the rare time it is wanted. Note this is very
+   close to what the header already says — which is either a sign it is right,
+   or a sign the expanded state has no reason to exist.
+2. **A week strip.** Seven short bars, one per day, shaded where charging
+   applies. Dense but *scanned* rather than read: "when is it free" is answered
+   by shape before any digit is parsed. Costs a legend, and legends are a
+   warning sign.
+
+The test for tomorrow: which one answers *"can I leave the car here overnight"*
+without the reader doing arithmetic.
+
+**The zone editor may shrink on its own.** Free zones became area-backed in
+v0.6.8, so they no longer need a radius at all — the +/- and the slider exist
+for the home zone. If the editor is split by kind rather than shared, the free
+path collapses to a name, a size and a confirm, which is most of the complaint
+gone without designing anything new.
+
+**The thin dotted tariff outline is a hierarchy, and worth stating as one.**
+Wasil's idea, and it generalises: zone outlines are *yours* and should be
+heavier; tariff sections are *ambient* and should be thin and dotted. Weight
+carries whose thing it is. That also stops the two competing, which is the
+reason the outlines needed thickening in v0.6.8 in the first place.
+
+**The animation is `animateContentSize()` on its default tween.** "Smoother and
+more elegant" is concrete: a spring instead of a tween so the growth eases
+rather than ramps, and the rows fading in rather than being clipped into view.
+Small, and the kind of thing that reads as quality without being noticed.
+
+**Build the mockup as a clickable prototype.** Three of the items above turn on
+"is this crowded", and tapping through a thing settles that in a way two static
+frames cannot.
+
 ### Carried from v0.6.9's feedback
 
 - **The timetable is still crowded.** He floated a row per day — ma/di/wo/do/vr/
