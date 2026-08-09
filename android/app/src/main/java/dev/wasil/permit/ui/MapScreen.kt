@@ -273,12 +273,14 @@ fun MapScreen(
         }
     }
 
-    // Recomputed whenever the highlighted area changes: the header answers
-    // "what does this cost right now", not "what is the timetable".
-    val clockNow = remember(highlight) { java.util.Calendar.getInstance() }
-    val dayIndex = (clockNow.get(java.util.Calendar.DAY_OF_WEEK) + 5) % 7
-    val minuteOfDay = clockNow.get(java.util.Calendar.HOUR_OF_DAY) * 60 +
-        clockNow.get(java.util.Calendar.MINUTE)
+    // The header answers "what does this cost right now", not "what is the
+    // timetable" — so the clock behind it has to keep moving. It used to be
+    // `remember(highlight) { Calendar.getInstance() }`, and `highlight`
+    // recomputes *equal* for a car that is not moving, so it was read once when
+    // the tab opened and never again. See [rememberMinuteClock].
+    val clockNow by rememberMinuteClock()
+    val dayIndex = clockNow.handoffDayIndex()
+    val minuteOfDay = clockNow.minuteOfDay()
 
     // Walking route, drawn in the app rather than by handing off to Google
     // Maps. Cleared whenever the car moves so a stale line can never point at

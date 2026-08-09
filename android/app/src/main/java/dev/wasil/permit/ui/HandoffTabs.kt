@@ -121,6 +121,10 @@ fun HandoffTabs(
     val permitView = permitViewFor(permitAdded = config != null, roster = roster)
     val myVehicle = roster.byId(app.parkStateStore.thisPhoneDrives)
 
+    // The permit strip says "Free now" and "charges from …", which stop being
+    // true on a schedule nothing else on this screen is watching.
+    val clockNow by rememberMinuteClock()
+
     // The parked spot's name, for the Now screen. Same lookup and same
     // two-level name as the map header, so the two screens cannot describe one
     // place differently. Null while it resolves and null if it fails — the
@@ -195,7 +199,7 @@ fun HandoffTabs(
                     car = parkedPoint,
                     parked = app.parkStateStore.parked,
                     me = me,
-                    demand = spotDemand(app),
+                    demand = spotDemand(app, clockNow),
                     place = place,
                     parkedSince = app.parkStateStore.parkedAtMs
                         .takeIf { it > 0 && app.parkStateStore.parked }
@@ -264,15 +268,19 @@ fun HandoffTabs(
  * Note the parked-with-no-position case: it hands `zone = null` through rather
  * than reporting "not parked", which is what this file used to do a line above
  * a card saying "Parked — location unknown".
+ *
+ * [now] is passed in rather than read here, because reading it here made the
+ * permit strip as stale as the map header was: nothing on the Now tab
+ * recomposes when a charging window opens, so "Free now" survived the moment it
+ * stopped being true. The caller holds a [rememberMinuteClock].
  */
-private fun spotDemand(app: PermitApp): SpotDemand {
+private fun spotDemand(app: PermitApp, now: Calendar): SpotDemand {
     val store = app.parkStateStore
     val car = store.lastParkLocation
-    val now = Calendar.getInstance()
     return spotDemandFor(
         parked = store.parked,
         zone = car?.let { app.zoneResolver().resolve(it) },
-        dayIndex = (now.get(Calendar.DAY_OF_WEEK) + 5) % 7,
-        minuteOfDay = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE),
+        dayIndex = now.handoffDayIndex(),
+        minuteOfDay = now.minuteOfDay(),
     )
 }
