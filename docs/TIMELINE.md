@@ -455,12 +455,52 @@ connected to any of them.
 
 ---
 
-## v0.7.0 — the design release
+## v0.7.0 — the big one: bugs *and* design
 
-Decided 2026-08-08: **v0.6.9 took the fixes small enough to make without
-drawing first; everything left is design and goes here.** v0.7.0 carries no bug
-fixes of its own — if one arrives it gets its own patch, so this release is not
-held hostage to it.
+**Superseded 2026-08-09.** This was "the design release", on the reasoning that
+v0.6.9 had taken the fixes small enough to make without drawing first, so
+everything left was design and a bug arriving later would get its own patch.
+
+Wasil overruled that the next day: *"i said also v0.7.0 is a big update
+containing both bug + design."* So v0.7.0 carries both, and the three defects
+found while measuring for the mockup (below) go **into it** rather than into a
+v0.6.10 ahead of it.
+
+The original reasoning is kept because it is not silly — it just loses to the
+fact that these particular defects are *in the thing being redesigned*. The
+timetable's shape and the strings it renders are one decision, and splitting
+them across two releases would mean designing a panel around sentences that are
+about to change.
+
+### The three defects, verified 2026-08-09
+
+Found while costing the mockup, each re-derived from source and the bundled data
+rather than taken on a reviewer's word. All three are wrong answers, not
+polish.
+
+1. **"· all day" is not all day.** `TariffSchedule.kt:73` only computes an end
+   `.takeIf { active.endMin < 1440 }`, so a window ending at midnight reports no
+   end and `MapZones.kt:367` renders "· all day". T17N charges 19:00–24:00; at
+   Monday 20:00 the app says "all day" after being free since 06:00 — and it
+   does not stop at midnight either, because the 00:00–06:00 band continues it.
+   True answer: until 06:00 Tuesday. **7 of 29 areas** are affected (T12A, T12B,
+   T13B, T14G, T16A, T16F, T17N). T11V/T12V/T13V genuinely charge round the
+   clock, so "all day" is correct for those and must stay.
+2. **The boundary loses its day.** `clock()` at `MapZones.kt:352` does
+   `minutes % 1440`, while `tariffNow` deliberately scans seven days. T17N on a
+   Saturday at 14:00 has its next charge on **Sunday 19:00, 29 hours out**, and
+   the app prints "Free · from 19:00" — which reads as tonight.
+3. **Stepped rates show only their first tier.** `TariffAreas.kt:85` cuts the
+   key at `[`. T17_UB01 is `0,10[0-180];1,72[180-…]` and renders "€0,10/h", so
+   nine hours reads as ninety cents against a real ~€10,60. T14_UA01 renders
+   "€1,72/h" where it becomes €4,19/h after three hours. T17F is
+   `1,72[…];1,72[…]` — genuinely flat, no defect.
+
+**And one reported defect that is not one, recorded so it does not come back:**
+"Free · no paid hours" is unreachable. All 29 areas parse to a non-empty window
+set, so `TariffNow.Free(null)` is dead code. A design proposed rendering "Hours
+unknown" for T14_UA01, which would have hidden that area's real 09:00–21:00
+schedule. The adversarial pass caught it; the design pass did not.
 
 **Mockup first, per `CLAUDE.md`.** And a new option worth using: *AI-powered
 artifacts* and *inline visualisations* are enabled on this account, so a mockup
@@ -517,6 +557,66 @@ Small, and the kind of thing that reads as quality without being noticed.
 "is this crowded", and tapping through a thing settles that in a way two static
 frames cannot.
 
+### The mockup, 2026-08-09 — three shapes judged, all three killed
+
+<https://claude.ai/code/artifact/4325d258-5aef-427d-a3a4-618de70e5f98>
+
+Both shapes above were drawn, plus a third. Each was designed without sight of
+the others, then reviewed by three readers with different jobs: **the street**
+(standing at the car, deciding whether to walk away), **the hard data** (the
+overnight area, the Thursday-late area, the stepped areas), and **the system**
+(tokens, palette, map budget). Nine reviews; several re-implemented the proposed
+logic and ran it over all 29 areas rather than trusting the design.
+
+| Shape | Score | Killed by |
+|---|---|---|
+| Run-length agenda from now | 21 | **+36 % taller than what ships**, while claiming to answer crowding |
+| Until / then, as a sentence | 19 | Names instants, never durations — "then €8,05/h" hides a 3 h window |
+| Week strip, anchored at 06:00 | 16 | Writes "free" beside a day that charges; the 06:00 anchor fixes the charged night and splits the free one |
+
+**The sentence was the right instinct and the wrong grammar; the week strip was
+the right instinct and the wrong anchor.** Recorded because both were Wasil's
+own two candidates from 2026-08-08, and the reasons they fail are not obvious
+from looking at them.
+
+**The fourth shape — what to build.** The kills do not overlap, so the parts are
+separable:
+
+- Keep the **run-length model**: stop rendering the week, render runs of state
+  starting now, so the join across midnight happens once in code rather than in
+  the reader's head. All three reviewers agreed this part is right.
+- Keep the **day letter** on any boundary that is not today. Two characters, and
+  it is the difference between "in five hours" and "in twenty-nine".
+- Fix the footprint by **refusing to say the same thing twice**. The winning
+  design states the current span as a row, then a clause, then a gutter time.
+  Fold all three into the collapsed line, which is already there and already
+  read.
+- Show **one** upcoming span, not two or three. The collapsed line says when the
+  current state ends; one more span says what follows. Together those answer
+  "can I walk away, and will it still be free when I get back". More than that
+  is week-browsing, and week-browsing is what the link is for.
+- **"Whole week ›"** demotes the v0.6.9 table into a sheet rather than deleting
+  it — *"maybe i am curious about tommorows rate"* still has an answer. Hidden
+  when the week has one row.
+
+Measured **123dp against the 129dp that ships**, drawn from `MapChrome.kt`'s
+real padding and line boxes.
+
+**Two cautions carried forward, both mine:**
+
+- **I got the height wrong first.** The mockup claimed 123dp for a panel that
+  actually drew 147dp — the arithmetic dropped the link row, and the browser
+  caught it, not the reasoning. The published page now measures its own panels
+  at load and writes the captions from the result. Same lesson as every other
+  entry in `CLAUDE.md`: the screen settles it.
+- **The stepped-area collapsed line does not fit.** "from €1,72/h until 21:00"
+  wraps at 158dp, growing the chip by a row. Unsolved, and it is the string that
+  decides whether this shape works at all.
+
+**The fourth shape has had no adversarial pass.** It is assembled by me from the
+survivors of three that each died. That is a weaker position than any of the
+three had, and it should be judged before it is built.
+
 ### Carried from v0.6.9's feedback
 
 - **The timetable is still crowded.** He floated a row per day — ma/di/wo/do/vr/
@@ -529,6 +629,50 @@ frames cannot.
   sections read without competing with zone outlines. His idea.
 - **Zone outlines more noticeable**, without shouting.
 - **A smoother, more elegant expand animation** for the timetable.
+
+### The palette, answered 2026-08-09
+
+Wasil: *"Do you think we can have a different colour palette than the one we
+currently have — sometimes i feel like it is too dull and dosent have any vibe
+to it."*
+
+**It is not dull, it is barely used.** Counted rather than judged: on the map
+screen the tiles are roughly three quarters of the pixels and they are stock
+MAPNIK. Of the rest, everything is a warm grey except the walk route and a
+0.07-alpha tariff tint. Identity colour — six tokens per brother, argued out
+over three versions — reaches exactly **two** elements, and neither is on that
+screen.
+
+`primary` is near-white `#DEDCD4`, and that was a side-effect rather than a
+decision. The rule was *"identity colour never enters a generic `ColorScheme`
+slot"*; it never said generic slots must be greyscale.
+
+Four levers, three taken:
+
+1. **Warm the dark neutrals** — `#171715`/`#201F1C`/`#2E2D28` →
+   `#16130E`/`#221D15`/`#332B20`. Red exceeds blue by 2–6 points today, which is
+   measurable and not perceptible. Contrast **improves**: 13.49:1 against 13.07:1
+   for primary text, 5.66:1 against 5.48:1 for secondary, computed from the sRGB
+   luminance formula. Warm not cool, because light mode is already cream and a
+   blue-black dark would make the two themes feel like two apps.
+2. **A 10 % fixed wash over the tiles.** The largest surface in the app is
+   somebody else's palette. One overlay, mode-independent by construction, which
+   is what the map-colour rule requires. Strength is a guess until seen on glass
+   — v0.5.1 is the scar this could reopen.
+3. **A signage face for numerals, times, rates and plates.** `Type.kt` is the
+   most carefully argued file in the theme and then the *face* is the platform
+   default. DIN is the voice of European road infrastructure and touches no
+   colour rule. Body copy stays on the system face. Bundled, ~40–90 KB.
+4. **A third hue for `primary` — declined.** Brass or violet are the only hues
+   far enough from fine/alert/walk/tariff/zones. Violet is the Material default
+   the theme spent effort escaping; brass sits three steps from Walid's
+   terracotta and would read as *a third person* on a small control at arm's
+   length. Identity must stay the only thing colour means — v0.6.5 already lost
+   the two-colour system once.
+
+**Still open:** light mode is unexamined (everything above is argued in dark,
+because that is what gets screenshotted); the wash strength needs a device; the
+specific font file is not chosen.
 
 ### Also his, from 2026-08-08
 
