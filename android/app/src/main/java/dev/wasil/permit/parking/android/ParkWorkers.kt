@@ -140,7 +140,7 @@ class ParkDetectionWorker(context: Context, params: WorkerParameters) :
                 val now = Calendar.getInstance()
                 val dayIndex = (now.get(Calendar.DAY_OF_WEEK) + 5) % 7
                 val minuteOfDay = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE)
-                tariffNowText(tariffNow(area.windows, dayIndex, minuteOfDay), minuteOfDay)
+                tariffNowText(tariffNow(area.windows, dayIndex, minuteOfDay), dayIndex, minuteOfDay)
             },
         ).run()
         // Retry the CLAIM, not the detection: we know we're parked.

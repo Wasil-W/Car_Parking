@@ -1,6 +1,7 @@
 package dev.wasil.permit.parking.zones
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -49,7 +50,12 @@ class TariffAreasTest {
     fun `tariff text formats plain and stepped prices`() {
         val areas = TariffAreas.parse(fixture)
         assertEquals("€8,05/h", areas.first { it.code == "T11V" }.tariffText)
-        assertEquals("€1,72/h (stepped)", areas.first { it.code == "T14_UA01" }.tariffText)
+        // Was "€1,72/h (stepped)" — a warning that a price changes, without
+        // saying what it changes to, which is a worry rather than an answer.
+        assertEquals(
+            "from €1,72/h · First 3 h €1,72/h, then €4,19/h",
+            areas.first { it.code == "T14_UA01" }.tariffText,
+        )
     }
 
     /**
@@ -63,10 +69,52 @@ class TariffAreasTest {
         assertEquals("€8,05/h", t11.rateText)
     }
 
+    /**
+     * The defect this replaces: everything after `[` was discarded, so an area
+     * that doubles its rate after three hours advertised the opening tier as
+     * though it were flat. Understating a price is the direction that costs
+     * money, which is why the label now says "from".
+     */
     @Test
-    fun `a stepped rate carries its first band as the number`() {
+    fun `a stepped rate says it is a floor, not a price`() {
         val stepped = TariffAreas.parse(fixture).first { it.code == "T14_UA01" }.windows.single()
-        assertEquals("€1,72/h", stepped.rateText)
+        assertEquals("from €1,72/h", stepped.rateText)
+        assertEquals("First 3 h €1,72/h, then €4,19/h", stepped.stepNote)
+    }
+
+    @Test
+    fun `two tiers at the same price are flat and get no note`() {
+        // T17F is `1,72[0-180];1,72[180-999999]` — bracketed, and yet nothing
+        // changes. A note saying the price stays the same is noise.
+        val flat = TariffAreas.rateFor("1,72[0-180];1,72[180-999999]")
+        assertEquals("€1,72/h", flat.label)
+        assertNull(flat.stepNote)
+    }
+
+    @Test
+    fun `the cheap opening tier is the one that misled hardest`() {
+        // Nine hours at T17_UB01 read as ninety cents; it is nearer €10,60.
+        val priced = TariffAreas.rateFor("0,10[0-180];1,72[180-999999]")
+        assertEquals("from €0,10/h", priced.label)
+        assertEquals("First 3 h €0,10/h, then €1,72/h", priced.stepNote)
+    }
+
+    @Test
+    fun `an unbracketed rate is untouched`() {
+        assertEquals("€8,05/h", TariffAreas.rateFor("8,05").label)
+        assertNull(TariffAreas.rateFor("8,05").stepNote)
+    }
+
+    @Test
+    fun `every stepped area in the real data is named, and only those`() {
+        val areas = TariffAreas.parse(
+            java.io.File("src/main/assets/amsterdam_tarieven.json").readText(),
+        )
+        val stepped = areas
+            .filter { area -> area.windows.any { it.stepNote != null } }
+            .map { it.code }
+            .toSet()
+        assertEquals(setOf("T14_UA01", "T17_UB01"), stepped)
     }
 
     @Test

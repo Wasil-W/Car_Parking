@@ -353,22 +353,57 @@ internal fun clock(minutes: Int): String {
     return "%02d:%02d".format(wrapped / 60, wrapped % 60)
 }
 
+private val DAY_SHORT = listOf("ma", "di", "wo", "do", "vr", "za", "zo")
+
+/**
+ * A moment [offsetMin] ahead of now, named so it cannot be read as today.
+ *
+ * "19:00" when it is later today, "zo 19:00" when it is not. The day is the
+ * v0.7.0 fix and it is worth two characters: [clock] alone does `% 1440`, while
+ * the offset handed to it comes from [tariffNow], which deliberately scans a
+ * whole week. On T17N at Saturday 14:00 the next charge is **Sunday 19:00** —
+ * twenty-nine hours out — and the app said "Free · from 19:00", which standing
+ * at the car reads as tonight at seven. You move it at 18:45 for nothing.
+ *
+ * Only ever grows the string when the day differs, so the common case — a
+ * boundary later today — is unchanged.
+ */
+internal fun clockAhead(dayOfWeek: Int, minuteOfDay: Int, offsetMin: Int): String {
+    val absolute = dayOfWeek * 1440 + minuteOfDay + offsetMin
+    // Midnight belongs to the day that is *ending*, written 24:00 — the
+    // convention Amsterdam's own data uses ("900-2400") and the one
+    // [weekSchedule] already prints. Six areas charge until midnight and stop,
+    // and "until ma 00:00" for tonight is a puzzle where "until 24:00" is not.
+    val atMidnight = absolute % 1440 == 0
+    val owningDay = if (atMidnight) absolute / 1440 - 1 else absolute / 1440
+    val day = ((owningDay % 7) + 7) % 7
+    val time = if (atMidnight) "24:00" else clock(absolute)
+    return if (day == dayOfWeek) time else "${DAY_SHORT[day]} $time"
+}
+
 /**
  * What this spot costs *right now*, in one line: "€3,01/h · until 19:00", or
- * "Free · from 09:00".
+ * "Free · from zo 19:00".
  *
  * This is the whole point of the schedule engine. Standing in the street, the
  * question is never "what is this area's timetable" — it is "am I paying, and
  * for how long". The timetable made you decode "ma-wo,vrij,za 09-19 · do 09-21"
  * yourself, in the rain.
+ *
+ * **"all day" now means what it says.** It used to appear whenever the active
+ * window ended at midnight, which is seven of the twenty-nine areas; it now
+ * appears only for the three that charge every minute of the week.
  */
-fun tariffNowText(now: TariffNow, minuteOfDay: Int): String = when (now) {
+fun tariffNowText(now: TariffNow, dayOfWeek: Int, minuteOfDay: Int): String = when (now) {
     is TariffNow.Charging -> when (val ends = now.endsInMin) {
         null -> "${now.rateText} · all day"
-        else -> "${now.rateText} · until ${clock(minuteOfDay + ends)}"
+        else -> "${now.rateText} · until ${clockAhead(dayOfWeek, minuteOfDay, ends)}"
     }
     is TariffNow.Free -> when (val starts = now.startsInMin) {
+        // Unreachable in practice — all 29 bundled areas parse at least one
+        // window — and kept because an area with no hours must never render as
+        // a free street on the strength of a parse failure.
         null -> "Free · no paid hours"
-        else -> "Free · from ${clock(minuteOfDay + starts)}"
+        else -> "Free · from ${clockAhead(dayOfWeek, minuteOfDay, starts)}"
     }
 }

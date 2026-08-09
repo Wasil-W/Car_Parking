@@ -134,11 +134,13 @@ class HistoryPresentationTest {
      * rather than against a remembered format.
      */
     @Test fun `the rate half survives whatever tariffNowText actually produces`() {
-        val charging = tariffNowText(TariffNow.Charging("€3,01/h", endsInMin = 120), minuteOfDay = 17 * 60)
+        val charging =
+            tariffNowText(TariffNow.Charging("€3,01/h", endsInMin = 120), dayOfWeek = 1, minuteOfDay = 17 * 60)
         assertEquals("€3,01/h · until 19:00", charging)
         assertEquals("€3,01/h", costTextFor(Settlement.UNSETTLED, charging))
 
-        val allDay = tariffNowText(TariffNow.Charging("€8,05/h", endsInMin = null), minuteOfDay = 0)
+        val allDay =
+            tariffNowText(TariffNow.Charging("€8,05/h", endsInMin = null), dayOfWeek = 1, minuteOfDay = 0)
         assertEquals("€8,05/h", costTextFor(Settlement.UNSETTLED, allDay))
     }
 

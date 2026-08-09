@@ -67,7 +67,7 @@ object TariffAreas {
         }
         return blocks.flatMap { block ->
             block.entries.flatMap { (rate, spec) ->
-                val label = rateLabel(rate)
+                val priced = rateFor(rate)
                 (spec as? JsonObject)?.entries.orEmpty().mapNotNull { (range, days) ->
                     val parts = range.split('-')
                     if (parts.size != 2) return@mapNotNull null
@@ -75,14 +75,55 @@ object TariffAreas {
                     val end = parseHhmm(parts[1]) ?: return@mapNotNull null
                     val onDays = parseDays(days.jsonPrimitive.content)
                     if (start >= end || onDays.isEmpty()) return@mapNotNull null
-                    TariffWindow(label, start, end, onDays)
+                    TariffWindow(priced.label, start, end, onDays, priced.stepNote)
                 }
             }
         }
     }
 
-    private fun rateLabel(key: String): String =
-        if ("[" in key) "€${key.substringBefore("[")}/h" else "€$key/h"
+    /** A rate as it should be shown, and what it does not fit on one line. */
+    internal data class PricedRate(val label: String, val stepNote: String?)
+
+    /**
+     * `"1,72"`, or `"1,72[0-180];4,19[180-999999]"`, read properly.
+     *
+     * **Everything after the bracket used to be discarded.** Three of the 29
+     * areas price by how long you stay, and the app showed the opening tier as
+     * though it were the whole story:
+     *
+     * - `T17_UB01` is `0,10[0-180];1,72[180-…]`, shown as **€0,10/h**. Nine
+     *   hours reads as ninety cents against a real €10,60 or so.
+     * - `T14_UA01` is `1,72[0-180];4,19[180-…]`, shown as **€1,72/h**, which is
+     *   two and a half times under after the third hour.
+     * - `T17F` is `1,72[…];1,72[…]` — two tiers at one price, so genuinely flat.
+     *   It gets no note, because a note that says nothing changes is noise.
+     *
+     * The label becomes **"from €1,72/h"** when tiers differ. That is one word,
+     * it fits where the old string fitted, and it stops the chip asserting a
+     * flat price it cannot honour — which matters more than the exact wording,
+     * because understating a rate is the direction that costs money.
+     */
+    internal fun rateFor(key: String): PricedRate {
+        if ("[" !in key) return PricedRate("€$key/h", null)
+        val tiers = key.split(';').mapNotNull { tier ->
+            val amount = tier.substringBefore("[").trim().ifEmpty { return@mapNotNull null }
+            val from = tier.substringAfter("[", "").substringBefore("-").toIntOrNull()
+            amount to (from ?: 0)
+        }
+        val opening = tiers.firstOrNull()?.first ?: key.substringBefore("[")
+        val distinct = tiers.map { it.first }.distinct()
+        if (distinct.size < 2) return PricedRate("€$opening/h", null)
+
+        val second = tiers[1]
+        return PricedRate(
+            label = "from €$opening/h",
+            stepNote = "First ${spanText(second.second)} €$opening/h, then €${second.first}/h",
+        )
+    }
+
+    /** `180` becomes "3 h"; `90` becomes "90 min". The boundaries are whole hours today. */
+    private fun spanText(minutes: Int): String =
+        if (minutes >= 60 && minutes % 60 == 0) "${minutes / 60} h" else "$minutes min"
 
     private fun tariffText(obj: JsonObject): String {
         val tarieven = obj["tarieven"] ?: return ""
@@ -92,6 +133,10 @@ object TariffAreas {
             else -> null
         } ?: return ""
         val key = entry.keys.firstOrNull() ?: return ""
-        return if ("[" in key) "€${key.substringBefore("[")}/h (stepped)" else "€$key/h"
+        val priced = rateFor(key)
+        // The note rather than the old bare "(stepped)": a reader who is told a
+        // price changes and not what it changes to has been given a worry
+        // instead of an answer.
+        return priced.stepNote?.let { "${priced.label} · $it" } ?: priced.label
     }
 }

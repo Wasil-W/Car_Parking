@@ -515,7 +515,11 @@ fun TariffChip(
                         )
                     }
                     Text(
-                        tariffNowText(tariffNow(area.windows, dayIndex, minuteOfDay), minuteOfDay),
+                        tariffNowText(
+                            tariffNow(area.windows, dayIndex, minuteOfDay),
+                            dayIndex,
+                            minuteOfDay,
+                        ),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
