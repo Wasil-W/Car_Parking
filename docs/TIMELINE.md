@@ -26,6 +26,7 @@ other document under `docs/` is a deep-dive that this one points at.
 
 | Version | What it did |
 |---|---|
+| `v0.7.1` | Three things v0.7.0's own release review found after it was tagged: a round cap that undid the walking route's dashes, a header that gave panel width to a chip that could not open, and a chevron announcing a week it no longer opens |
 | `v0.7.0` | **Bugs and design in one release.** Five wrong answers fixed — "all day" for 7 areas, boundaries that dropped their day, stepped rates shown as flat, a live line computed once and never again, timetable rows below the readability floor. The panel now says what happens next and the week moved one tap out. Every map line converted from device pixels to dp and given a hierarchy. The dark ground warmed |
 | `v0.1` | Switching the permit between two plates |
 | `v0.2` | Automatic park detection (Bluetooth + activity + GPS) |
@@ -494,6 +495,55 @@ that.
   Interior edges may read heavier than the city's outer edge, which is backwards.
 - **The stepped collapsed line** — "from €0,10/h until 19:00" — is the longest
   string the chip can hold and is known to wrap at 158dp.
+
+### v0.7.1 — what the release review found, after the tag
+
+The v0.7.0 diff went to three reviewers before it was tagged. Their verdict was
+"tag it", and the three things they called blockers — the uncommitted version
+bump, timeline and slider removal — were committed while the review was still
+running. One verifier added a consequence worth keeping: versionCode 26 was
+already spent on v0.6.9, so tagging that tree would not merely have
+self-reported the wrong version, it would have produced an APK Android refuses
+to install as an upgrade, because equal versionCode is not an upgrade.
+
+Their remaining findings arrived after the tag and are fixed here.
+
+**The walking route stopped being dashed.** v0.7.0 set `strokeCap = ROUND` on it
+and undid, one line later, the dash it was setting. A round cap extends every
+run by half a width at *each* end, so `[2.0w on, 1.5w off]` paints as 3.0w on
+and 0.5w off — six parts ink to one, a line with nicks in it. The mechanism is
+spelled out in `Line.dot`'s own comment, where it is the whole point of using
+ROUND; it was then applied to `dash` without being accounted for. Now BUTT, and
+stated explicitly on every dashed stroke rather than inherited from a bare
+`Paint`.
+
+**The header gave panel width to a chip that could not open.** `chipExpanded`
+still asked "is the week open and is an area selected" while the chip had moved
+on to "does this area open anything". For T11V, T12V and T13V those differ:
+expand a normal area, then select Centrum, and the header handed the chip two
+thirds of the row while it stayed collapsed, wrapping the parked line into a
+third of the width. It could not be undone either, because tapping such a chip
+is a no-op by design. Both now call one `tariffChipOpens`. This is the same
+desync v0.7.0 fixed *inside* the chip, missed one level up — which is the
+argument for sharing the predicate rather than restating it.
+
+**The chevron announced a week it no longer opens.** Its label still said "Show
+the whole week" after the week moved into its own sheet behind its own row. On
+an area whose week is a single row the panel it opens has no route to a week at
+all. It says "Show what happens next", which is what it reveals.
+
+**And the Firebase example.** v0.7.0 replaced the URL in step 4 with a
+placeholder and left step 1 suggesting the project name it was derived from,
+thirteen lines above — one substitution away. That example is gone. It does not
+close the hole: the literal string remains in three commits and in v0.7.0's own
+commit message, all immutable in a public repo. **Only rotating the database URL
+closes it**, and whether the live project carries that name is Wasil's to check.
+
+**Not seen on a screen:** the route fix. A clean install for the release smoke
+test left no parked car to route to. The change restores the geometry that
+shipped from v0.4 to v0.6.9 to within two pixels — `strokeWidth 12f`,
+dash `[26, 18]`, BUTT — so it is a return to a known-good rendering rather than
+a new one, but it wants an eye on a real walk.
 
 **Superseded 2026-08-09.** This was "the design release", on the reasoning that
 v0.6.9 had taken the fixes small enough to make without drawing first, so

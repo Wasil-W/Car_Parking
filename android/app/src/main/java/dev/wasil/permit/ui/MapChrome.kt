@@ -133,6 +133,30 @@ private val EFFECTS_DP: FiniteAnimationSpec<Dp> =
  */
 private val CHEVRON_SPIN: FiniteAnimationSpec<Float> = spring(dampingRatio = 0.75f, stiffness = 700f)
 
+/**
+ * Whether tapping this area's chip opens anything.
+ *
+ * One function, two callers, and that is the point. The chip decides whether to
+ * draw a chevron and whether to become a panel; `MapHeaderOverlay` decides
+ * whether to hand the chip two thirds of the header row. In v0.7.0 those were
+ * two different expressions of the same idea, and they disagreed: the header
+ * still asked "is an area selected and is the week open", so expanding a normal
+ * area and then tapping Centrum gave the chip panel width while it stayed a
+ * collapsed chip, squeezing "Parked 6 Aug 17:06" into a third of the row and
+ * wrapping it. Worse, it could not be undone — tapping such a chip is a no-op
+ * by design, so the flag had no way back down.
+ *
+ * That is the same desync v0.7.0 fixed *inside* the chip, missed one level up.
+ * Sharing the predicate is what stops it happening a third time.
+ *
+ * Asks about content rather than counting rows, which is what keeps T18P out of
+ * it: its week is a single row, but it has a next span worth reading.
+ */
+internal fun tariffChipOpens(area: TariffArea, dayIndex: Int, minuteOfDay: Int): Boolean =
+    tariffNext(area.windows, dayIndex, minuteOfDay) != null ||
+        area.windows.any { it.stepNote != null } ||
+        weekSchedule(area).size > 1
+
 /** What the tariff-areas button announces it will do, not what it is showing. */
 fun tariffToggleLabel(showing: Boolean): String =
     if (showing) "Hide tariff areas" else "Show tariff areas"
@@ -141,9 +165,19 @@ fun tariffToggleLabel(showing: Boolean): String =
  * What tapping the header chip will do. Same "announce the outcome" voice as
  * [tariffToggleLabel] and the focus button: the chevron pictures it, this is
  * what a screen reader says and what a long press shows.
+ *
+ * **It no longer says "the whole week"**, because the chevron no longer opens
+ * one. v0.7.0 moved the week into a sheet behind its own "Whole week" row and
+ * left this label describing the old behaviour — so a screen reader was
+ * promised a week, and on the areas whose week is a single row (T18P) the panel
+ * it opened had no route to one at all. What the chevron actually reveals is
+ * what happens after now, and for two areas the rate step.
+ *
+ * The voice is unchanged: it says the outcome of the next tap, not the current
+ * state.
  */
 fun weekToggleLabel(expanded: Boolean): String =
-    if (expanded) "Hide the whole week" else "Show the whole week"
+    if (expanded) "Hide what happens next" else "Show what happens next"
 
 /**
  * "Set" for the first home zone, "Move" once there is one. The old button said
@@ -528,10 +562,13 @@ fun TariffChip(
     // A chevron that opens nothing should not be drawn — the same rule the week
     // link follows. T11V, T12V and T13V charge every minute of the week, so
     // they have no next span, and their week is a single row; there is genuinely
-    // nothing behind the control for them. Note this asks about the *content*
-    // rather than about the row count, which is what stops it catching T18P by
-    // accident: T18P's week is one row too, but it has a next span worth reading.
-    val opensSomething = nextSpan != null || stepNote != null || rows.size > 1
+    // nothing behind the control for them.
+    //
+    // Via [tariffChipOpens] so the header row cannot disagree with the chip
+    // about it — see that function for what happened when they did.
+    val opensSomething = remember(area, dayIndex, minuteOfDay) {
+        tariffChipOpens(area, dayIndex, minuteOfDay)
+    }
 
     // One flag for "is this actually a panel right now", used for the body, the
     // fill, the border and the elevation together. They were keyed on
