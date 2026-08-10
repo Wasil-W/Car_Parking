@@ -123,6 +123,77 @@ class TariffScheduleTest {
         assertEquals(7 * 60, now.endsInMin)
     }
 
+    // ── The span after this one (v0.7.0) ──────────────────────────────────
+    //
+    // The panel's one new line. Every case below crosses a midnight, because
+    // the row layout this replaces could not express that — it had one day
+    // column and two bare clock times, so T17N on a Friday evening rendered
+    // "za Free 06:00 → 19:00" for a gap that really runs to Sunday.
+
+    @Test
+    fun `while charging, the next span is the free gap and it ends at the next charge`() {
+        // T17N, Friday 20:00. Charging until Saturday 06:00; then free until
+        // Sunday 19:00, because Saturday evening is in neither day-set.
+        val next = tariffNext(overnight, 4, 20 * 60)!!
+        assertEquals(false, next.charging)
+        assertNull(next.rateText)
+        // Fri 20:00 -> Sun 19:00 is 47 hours.
+        assertEquals(47 * 60, next.endsInMin)
+    }
+
+    @Test
+    fun `while free, the next span is the charge and it ends where the charge ends`() {
+        // T17N, Saturday 14:00. Next charge Sunday 19:00, running to Monday
+        // 06:00 — so the span ends 40 hours out, not 29.
+        val next = tariffNext(overnight, 5, 14 * 60)!!
+        assertEquals(true, next.charging)
+        assertEquals("€1,72/h", next.rateText)
+        assertEquals(40 * 60, next.endsInMin)
+    }
+
+    @Test
+    fun `a simple weekday area hands back tomorrow morning, not tonight`() {
+        // ma-vr 09:00-19:00, Tuesday 15:00: free from 19:00 until Wednesday
+        // 09:00. The gap ends 18 hours out.
+        val next = tariffNext(listOf(weekdays9to19), 1, 15 * 60)!!
+        assertEquals(false, next.charging)
+        assertEquals(18 * 60, next.endsInMin)
+    }
+
+    @Test
+    fun `an area that never stops charging has no next span`() {
+        val allDay = TariffWindow("€8,05/h", 0, 1440, setOf(0, 1, 2, 3, 4, 5, 6))
+        assertNull(tariffNext(listOf(allDay), 2, 13 * 60))
+        assertNull(tariffNext(emptyList(), 0, 600))
+    }
+
+    @Test
+    fun `every bundled area either never changes or names a real next span`() {
+        val areas = TariffAreas.parse(
+            java.io.File("src/main/assets/amsterdam_tarieven.json").readText(),
+        )
+        val neverChanges = mutableSetOf<String>()
+        areas.forEach { area ->
+            (0..6).forEach { day ->
+                (0 until 1440 step 15).forEach { minute ->
+                    val next = tariffNext(area.windows, day, minute)
+                    if (next == null) {
+                        neverChanges += area.code
+                    } else {
+                        // A span that ends now, or more than a week out, is a
+                        // wrap bug rather than a schedule.
+                        assertTrue(
+                            "${area.code} day $day min $minute -> ${next.endsInMin}",
+                            next.endsInMin in 1..WEEK_MINUTES,
+                        )
+                        assertEquals(next.charging, next.rateText != null)
+                    }
+                }
+            }
+        }
+        assertEquals(setOf("T11V", "T12V", "T13V"), neverChanges)
+    }
+
     @Test
     fun `the run merge does not swallow the week when charging never stops`() {
         val allDay = TariffWindow("€8,05/h", 0, 1440, setOf(0, 1, 2, 3, 4, 5, 6))

@@ -2,12 +2,14 @@ package dev.wasil.permit.ui
 
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -20,13 +22,17 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import dev.wasil.permit.parking.zones.TariffArea
+import dev.wasil.permit.parking.zones.TariffNext
+import dev.wasil.permit.parking.zones.tariffNext
 import dev.wasil.permit.parking.zones.tariffNow
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -441,6 +447,7 @@ fun MapHeaderOverlay(
  * unreachable in practice (see `MapScreen`'s tap handler), so the control that
  * opens it has to say out loud that it opens something.
  */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun TariffChip(
     area: TariffArea,
@@ -461,8 +468,29 @@ fun TariffChip(
     modifier: Modifier = Modifier,
 ) {
     val rows = remember(area) { weekSchedule(area) }
+    val nextSpan = remember(area, dayIndex, minuteOfDay) {
+        tariffNext(area.windows, dayIndex, minuteOfDay)
+    }
+    // The two duration-priced areas. Taken from any window, because a stepped
+    // key applies to the whole area rather than to one band.
+    val stepNote = remember(area) { area.windows.firstNotNullOfOrNull { it.stepNote } }
+    var showWeek by remember { mutableStateOf(false) }
+
+    // A chevron that opens nothing should not be drawn — the same rule the week
+    // link follows. T11V, T12V and T13V charge every minute of the week, so
+    // they have no next span, and their week is a single row; there is genuinely
+    // nothing behind the control for them. Note this asks about the *content*
+    // rather than about the row count, which is what stops it catching T18P by
+    // accident: T18P's week is one row too, but it has a next span worth reading.
+    val opensSomething = nextSpan != null || stepNote != null || rows.size > 1
+
+    // One flag for "is this actually a panel right now", used for the body, the
+    // fill, the border and the elevation together. They were keyed on
+    // `expanded` alone, which is the caller's and outlives a change of area.
+    val showingPanel = expanded && opensSomething
+
     Surface(
-        onClick = onToggle,
+        onClick = { if (opensSomething) onToggle() },
         // The grow is animated so the chip reads as the same object getting
         // bigger. Snapping between two sizes in the same place is what made the
         // old pair look like two cards in the first place.
@@ -476,7 +504,7 @@ fun TariffChip(
         // straight through the digits: seen on the emulator in dark mode, where
         // Centraal Station was legible through the Sunday row. Nothing on this
         // screen has ever been made harder to read on purpose.
-        color = if (expanded) {
+        color = if (showingPanel) {
             MaterialTheme.colorScheme.surfaceVariant
         } else {
             MaterialTheme.colorScheme.surfaceVariant.copy(alpha = OVER_TILES_ALPHA)
@@ -484,16 +512,16 @@ fun TariffChip(
         contentColor = MaterialTheme.colorScheme.onSurface,
         // The panel needs an edge that the tiles cannot supply, now that it is
         // no longer translucent enough for the map to draw one for it.
-        border = if (expanded) {
+        border = if (showingPanel) {
             BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
         } else {
             null
         },
-        shadowElevation = if (expanded) 3.dp else 0.dp,
+        shadowElevation = if (showingPanel) 3.dp else 0.dp,
     ) {
         Column(Modifier.padding(horizontal = 10.dp, vertical = 7.dp)) {
             Row(verticalAlignment = Alignment.Top) {
-                Column(Modifier.weight(1f, fill = expanded)) {
+                Column(Modifier.weight(1f, fill = showingPanel)) {
                     // While the lookup is in flight this stays blank rather than
                     // showing the code and swapping it a moment later. The code
                     // appears only once we know no name is coming.
@@ -524,14 +552,22 @@ fun TariffChip(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                Icon(
-                    if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
-                    contentDescription = weekToggleLabel(expanded),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 6.dp, top = 1.dp).size(18.dp),
-                )
+                if (opensSomething) {
+                    Icon(
+                        if (showingPanel) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                        contentDescription = weekToggleLabel(showingPanel),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 6.dp, top = 1.dp).size(18.dp),
+                    )
+                }
             }
-            if (expanded) {
+            // `expanded` belongs to the caller and survives a change of area, so
+            // it has to be gated on there being something to show as well.
+            // Without the second half: expand a normal area, then tap a
+            // round-the-clock one, and the panel keeps its border and elevation
+            // and draws a divider with nothing underneath. Seen on the emulator
+            // — Centrum, which charges every minute and has a one-row week.
+            if (showingPanel) {
                 HorizontalDivider(
                     Modifier.padding(top = 8.dp, bottom = 2.dp),
                     color = MaterialTheme.colorScheme.outline,
@@ -544,68 +580,176 @@ fun TariffChip(
                         modifier = Modifier.padding(top = 4.dp),
                     )
                 }
-                // Exactly one line is in force, and it is the one the reader
-                // came for. Everything else is dimmed rather than the active
-                // line being decorated, so the answer is found by looking
-                // rather than by comparing three prices against a clock —
-                // Wasil: "i see 3 prices i dont know which one is the correct
-                // one." Weight and colour together, so it survives a screen in
-                // sunlight and does not depend on colour alone.
-                val now = remember(rows, dayIndex, minuteOfDay) {
-                    activeRow(rows, dayIndex, minuteOfDay)
+
+                // What happens after now — the one fact the collapsed line does
+                // not carry, as a sentence rather than a row.
+                //
+                // It was drawn as a columned row first (day gutter, start time,
+                // end time) and that shape cannot tell the truth here: the next
+                // span crosses a midnight in 26 of the 29 areas, and *always*
+                // in 19 of them, so a single day column made T17N on a Friday
+                // evening read "za Free 06:00 → 19:00" for a gap that runs to
+                // Sunday. Thirty-seven hours rendered as thirteen — the exact
+                // defect [clockAhead] was written to remove, reinstated one
+                // line below it.
+                //
+                // A clause has no such problem, because it hands the boundary to
+                // clockAhead, which already names the day and already writes
+                // midnight as 24:00. It is also shorter, and it drops a
+                // duplication the row could not avoid: the row's start time was
+                // always the boundary the line above had just given.
+                nextSpan?.let { next ->
+                    Text(
+                        nextSpanText(next, dayIndex, minuteOfDay),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 5.dp),
+                    )
                 }
-                rows.forEach { row ->
-                    val live = row === now
-                    // No alpha. v0.6.9 dimmed the non-live rows to 0.65 on top
-                    // of using a quieter token, and the two together put them
-                    // under the readability floor: measured 2.91:1 in dark and
-                    // 2.71:1 in light against the 4.5:1 AA needs for body text.
-                    // Reaching 4.5 would take alpha 0.93, which is not a dim at
-                    // all, so the alpha was never the right instrument.
-                    //
-                    // The distinction survives without it, because it never
-                    // rested on the alpha: live is onSurface at Medium (12.0:1
-                    // dark, 15.5:1 light), not-live is onSurfaceVariant at
-                    // Normal (5.03:1 / 5.55:1). Two tokens and two weights,
-                    // both legible — which is what "i see 3 prices i dont know
-                    // which one is the correct one" actually asked for. A row
-                    // you cannot read is not a quiet answer, it is a missing
-                    // one, and this panel is read outdoors.
-                    val ink = when {
-                        live -> MaterialTheme.colorScheme.onSurface
-                        else -> MaterialTheme.colorScheme.onSurfaceVariant
-                    }
-                    val weight = if (live) FontWeight.Medium else FontWeight.Normal
+
+                // Only the two areas that price by duration. Shown here and not
+                // on the collapsed line because the line has "from" doing that
+                // job in one word, and this is the sentence behind it.
+                stepNote?.let { note ->
+                    Text(
+                        note,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 5.dp),
+                    )
+                }
+
+                // The week, one tap further. Not deleted — Wasil asked for it in
+                // v0.6.6 ("maybe i am curious about tommorows rate") and that
+                // still holds; it is simply no longer the thing you must read
+                // to find out what you are paying now.
+                //
+                // Its own row at 46dp, which is the size this app already uses
+                // for a real target. It was 22dp in the mockup, and 22dp inside
+                // a Surface whose own click *collapses the panel* means a near
+                // miss shuts the thing you were reading.
+                if (rows.size > 1) {
                     Row(
-                        Modifier.fillMaxWidth().padding(top = 5.dp),
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(top = 2.dp)
+                            .height(46.dp)
+                            .clickable { showWeek = true },
+                        horizontalArrangement = Arrangement.End,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            row.days,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = ink,
-                            fontWeight = weight,
-                            modifier = Modifier.width(78.dp),
+                            "Whole week",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        Text(
-                            row.hours ?: "free all day",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = ink,
-                            fontWeight = weight,
-                            modifier = Modifier.weight(1f),
-                        )
-                        Text(
-                            row.rate.orEmpty(),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = ink,
-                            fontWeight = weight,
+                        Icon(
+                            Icons.Filled.KeyboardArrowRight,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(16.dp),
                         )
                     }
                 }
             }
         }
     }
+
+    if (showWeek) {
+        ModalBottomSheet(
+            onDismissRequest = { showWeek = false },
+            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        ) {
+            WeekSheet(
+                heading = placeName ?: area.code,
+                detail = placeDetail,
+                rows = rows,
+                dayIndex = dayIndex,
+                minuteOfDay = minuteOfDay,
+            )
+        }
+    }
 }
+
+/**
+ * The v0.6.9 table, moved rather than rewritten.
+ *
+ * Same rows from [weekSchedule], same "the line in force is the only one at
+ * full strength" treatment. It reads better here than it did in the panel for a
+ * reason worth stating: a sheet is read, and the panel is glanced at, and this
+ * was always a thing to read.
+ */
+@Composable
+private fun WeekSheet(
+    heading: String,
+    detail: String?,
+    rows: List<ScheduleRow>,
+    dayIndex: Int,
+    minuteOfDay: Int,
+) {
+    val now = remember(rows, dayIndex, minuteOfDay) { activeRow(rows, dayIndex, minuteOfDay) }
+    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 28.dp)) {
+        Text(heading, style = MaterialTheme.typography.titleMedium)
+        if (detail != null && detail != heading) {
+            Text(
+                detail,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        HorizontalDivider(
+            Modifier.padding(top = 10.dp, bottom = 4.dp),
+            color = MaterialTheme.colorScheme.outline,
+        )
+        rows.forEach { row ->
+            val live = row === now
+            val ink = if (live) {
+                MaterialTheme.colorScheme.onSurface
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            }
+            val weight = if (live) FontWeight.Medium else FontWeight.Normal
+            Row(
+                Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    row.days,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = ink,
+                    fontWeight = weight,
+                    modifier = Modifier.width(86.dp),
+                )
+                Text(
+                    row.hours ?: "free all day",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = ink,
+                    fontWeight = weight,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    row.rate.orEmpty(),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = ink,
+                    fontWeight = weight,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * "then free until zo 19:00", or "then €1,72/h until ma 06:00".
+ *
+ * Deliberately names only the far edge of the next span. Its near edge is the
+ * end of the current state, which the line directly above has already given —
+ * saying it twice is what made the row form redundant as well as wrong.
+ */
+internal fun nextSpanText(next: TariffNext, dayOfWeek: Int, minuteOfDay: Int): String {
+    val until = clockAhead(dayOfWeek, minuteOfDay, next.endsInMin)
+    return if (next.charging) "then ${next.rateText} until $until" else "then free until $until"
+}
+
 
 /**
  * The OpenStreetMap credit. Required by the tile licence, so it is never

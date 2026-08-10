@@ -136,6 +136,77 @@ internal fun chargeRuns(windows: List<TariffWindow>): List<ChargeRun> {
 }
 
 /**
+ * The state *after* the one in force, and when that one ends in turn.
+ *
+ * The panel's one new line is "then free until zo 19:00", and this is what
+ * feeds it. It exists as its own function rather than as fields on [TariffNow]
+ * because it answers a different question — [TariffNow] is what you owe, this
+ * is what to plan around — and because it is null for the three areas that
+ * never change, which is the signal the chip uses to not offer a chevron at
+ * all.
+ *
+ * [endsInMin] counts from *now*, not from the start of the span, so the caller
+ * hands it straight to `clockAhead` exactly like [TariffNow.Charging.endsInMin].
+ */
+data class TariffNext(
+    val charging: Boolean,
+    /** The rate that will apply, or null when the next span is free. */
+    val rateText: String?,
+    /** Minutes from now until the next span itself ends. */
+    val endsInMin: Int,
+)
+
+/**
+ * What happens after the current state, or null when nothing ever changes.
+ *
+ * Null means one of two things and both want the same treatment: an area that
+ * charges every minute of the week (T11V, T12V, T13V), or one with no windows
+ * at all. Neither has a "next", so neither should draw a control promising one.
+ */
+fun tariffNext(windows: List<TariffWindow>, dayOfWeek: Int, minuteOfDay: Int): TariffNext? {
+    if (windows.isEmpty()) return null
+    val runs = chargeRuns(windows)
+    if (runs.isEmpty()) return null
+    if (runs.sumOf { it.end - it.start } >= WEEK_MINUTES) return null
+
+    val now = dayOfWeek * MINUTES_PER_DAY + minuteOfDay
+    val active = runs.firstOrNull { now >= it.start && now < it.end }
+        ?: runs.firstOrNull { now + WEEK_MINUTES >= it.start && now + WEEK_MINUTES < it.end }
+
+    // Starts of every run, as offsets from now, soonest first. Sorting rather
+    // than taking a minimum because charging needs the *second* boundary: the
+    // free gap it is about to enter ends when the following run begins.
+    val startsAhead = runs
+        .map { run ->
+            val delta = (run.start % WEEK_MINUTES) - now
+            if (delta >= 0) delta else delta + WEEK_MINUTES
+        }
+        .sorted()
+
+    if (active != null) {
+        // Charging: the next span is the free gap, and it ends at the next run
+        // to begin. The gap's own start is already on the collapsed line as
+        // this run's end, which is why the clause names only the far edge.
+        val nextStart = startsAhead.firstOrNull { it > 0 } ?: return null
+        return TariffNext(charging = false, rateText = null, endsInMin = nextStart)
+    }
+
+    // Free: the next span is the run about to begin, ending where it ends.
+    val soonest = startsAhead.firstOrNull() ?: return null
+    val startAbsolute = (now + soonest) % WEEK_MINUTES
+    val run = runs.firstOrNull { it.start % WEEK_MINUTES == startAbsolute } ?: return null
+    val rate = windows
+        .firstOrNull { window ->
+            val startDay = (startAbsolute / MINUTES_PER_DAY) % 7
+            val startMinute = startAbsolute % MINUTES_PER_DAY
+            startDay in window.days && startMinute == window.startMin
+        }
+        ?.rateText
+        ?: windows.first().rateText
+    return TariffNext(charging = true, rateText = rate, endsInMin = soonest + (run.end - run.start))
+}
+
+/**
  * Whether [windows] charge at [dayOfWeek] (Monday 0) and [minuteOfDay], and how
  * long that state lasts.
  *
