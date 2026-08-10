@@ -1,13 +1,28 @@
 package dev.wasil.permit.ui
 
-import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColor
+import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.VisibilityThreshold
+import androidx.compose.animation.core.animateDp
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.updateTransition
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -20,13 +35,17 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import dev.wasil.permit.parking.zones.TariffArea
+import dev.wasil.permit.parking.zones.TariffNext
+import dev.wasil.permit.parking.zones.tariffNext
 import dev.wasil.permit.parking.zones.tariffNow
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -35,7 +54,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -77,6 +100,38 @@ private val CONTROL_GAP = 9.dp
  * continuous behind the header rather than sliced by it.
  */
 internal const val OVER_TILES_ALPHA = 0.92f
+
+/**
+ * How the tariff panel opens and closes.
+ *
+ * Written out rather than taken from a motion scheme because the Material 3 in
+ * use here has none. Two families, and the split is the point: **size** may
+ * overshoot a little, because a panel that arrives with a touch of weight reads
+ * as physical; **effects** — colour, elevation — may not, because an overshoot
+ * on a channel that clamps at 0 or 1 shows as a flat spot in the middle of the
+ * fade.
+ *
+ * `visibilityThreshold` is mandatory on the size springs. Without it the
+ * threshold falls back to a hundredth of a pixel and the animation runs on long
+ * after it has visually finished, which is exactly why the library's own
+ * default passes one.
+ *
+ * Opening is springier and slower than closing on purpose: this panel is opened
+ * deliberately and dismissed impatiently, and an exit that lingers reads as lag.
+ */
+private val OPEN_SIZE: FiniteAnimationSpec<IntSize> =
+    spring(dampingRatio = 0.9f, stiffness = 700f, visibilityThreshold = IntSize.VisibilityThreshold)
+private val CLOSE_SIZE: FiniteAnimationSpec<IntSize> =
+    spring(dampingRatio = 1f, stiffness = 1800f, visibilityThreshold = IntSize.VisibilityThreshold)
+private val EFFECTS_COLOR: FiniteAnimationSpec<Color> = spring(dampingRatio = 1f, stiffness = 1600f)
+private val EFFECTS_DP: FiniteAnimationSpec<Dp> =
+    spring(dampingRatio = 1f, stiffness = 1600f, visibilityThreshold = Dp.VisibilityThreshold)
+
+/**
+ * The one place a visible overshoot is free: 2.8% of 180° is about five
+ * degrees, on an 18dp glyph that cannot clip or reflow anything.
+ */
+private val CHEVRON_SPIN: FiniteAnimationSpec<Float> = spring(dampingRatio = 0.75f, stiffness = 700f)
 
 /** What the tariff-areas button announces it will do, not what it is showing. */
 fun tariffToggleLabel(showing: Boolean): String =
@@ -441,6 +496,7 @@ fun MapHeaderOverlay(
  * unreachable in practice (see `MapScreen`'s tap handler), so the control that
  * opens it has to say out loud that it opens something.
  */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun TariffChip(
     area: TariffArea,
@@ -461,39 +517,103 @@ fun TariffChip(
     modifier: Modifier = Modifier,
 ) {
     val rows = remember(area) { weekSchedule(area) }
+    val nextSpan = remember(area, dayIndex, minuteOfDay) {
+        tariffNext(area.windows, dayIndex, minuteOfDay)
+    }
+    // The two duration-priced areas. Taken from any window, because a stepped
+    // key applies to the whole area rather than to one band.
+    val stepNote = remember(area) { area.windows.firstNotNullOfOrNull { it.stepNote } }
+    var showWeek by remember { mutableStateOf(false) }
+
+    // A chevron that opens nothing should not be drawn — the same rule the week
+    // link follows. T11V, T12V and T13V charge every minute of the week, so
+    // they have no next span, and their week is a single row; there is genuinely
+    // nothing behind the control for them. Note this asks about the *content*
+    // rather than about the row count, which is what stops it catching T18P by
+    // accident: T18P's week is one row too, but it has a next span worth reading.
+    val opensSomething = nextSpan != null || stepNote != null || rows.size > 1
+
+    // One flag for "is this actually a panel right now", used for the body, the
+    // fill, the border and the elevation together. They were keyed on
+    // `expanded` alone, which is the caller's and outlives a change of area.
+    val showingPanel = expanded && opensSomething
+
+    // ── The open, as one movement ─────────────────────────────────────────
+    //
+    // `animateContentSize()` used to do this, and the brief for v0.7.0 said to
+    // swap its tween for a spring. That was wrong twice over, and both halves
+    // are worth writing down.
+    //
+    // First, it was never a tween: `animateContentSize()`'s default is already
+    // `spring(dampingRatio = NoBouncy, stiffness = MediumLow)`. Retuning it
+    // would have been a release spent on nothing.
+    //
+    // Second, the reason it looked cheap is not the curve. The factory is
+    // `clipToBounds() then SizeAnimationModifier`, and it was applied to
+    // `modifier` — *outside* the Surface. So the Surface was measured and drawn
+    // at its full open size and then clipped to a growing rectangle anchored
+    // top-left: for the whole open, the right and bottom edges were square
+    // cuts with no rounded corner, no outline and no shadow, and they snapped
+    // round on the final frame.
+    //
+    // Meanwhile everything that is not size — fill, border, elevation, chevron
+    // — changed in a single frame at the start. The card took on its whole new
+    // material identity instantly and then slowly grew into it. Four properties
+    // at four rates, three of them infinite.
+    //
+    // So: the size animation moves *inside* the Surface, where it grows a child
+    // and the Surface redraws its own corners, border and shadow at the true
+    // size every frame; and the other three ride one transition so they arrive
+    // with the growth rather than before it.
+    val opening = updateTransition(showingPanel, label = "tariffChip")
+    val container by opening.animateColor(
+        transitionSpec = { EFFECTS_COLOR },
+        label = "container",
+    ) { open ->
+        val base = MaterialTheme.colorScheme.surfaceVariant
+        // Translucent as a chip, opaque as a panel — a change of job, not an
+        // inconsistency. One line of rate over streets is what OVER_TILES_ALPHA
+        // was measured for. A table of days and prices is read rather than
+        // glanced at, and at 0.92 the streets run straight through the digits.
+        if (open) base else base.copy(alpha = OVER_TILES_ALPHA)
+    }
+    // Faded rather than switched on: a border that appears takes no layout, so
+    // alpha 0 is genuinely nothing on screen and there is no jump.
+    val edge by opening.animateColor(transitionSpec = { EFFECTS_COLOR }, label = "edge") { open ->
+        MaterialTheme.colorScheme.outline.copy(alpha = if (open) 1f else 0f)
+    }
+    val lift by opening.animateDp(transitionSpec = { EFFECTS_DP }, label = "lift") { open ->
+        if (open) 3.dp else 0.dp
+    }
+    // Held as State, not unwrapped with `by`: it is read inside graphicsLayer,
+    // so the rotation never enters composition and costs nothing per frame.
+    val chevron = opening.animateFloat(transitionSpec = { CHEVRON_SPIN }, label = "chevron") { open ->
+        if (open) 180f else 0f
+    }
+
     Surface(
-        onClick = onToggle,
-        // The grow is animated so the chip reads as the same object getting
-        // bigger. Snapping between two sizes in the same place is what made the
-        // old pair look like two cards in the first place.
-        modifier = modifier.animateContentSize(),
+        onClick = { if (opensSomething) onToggle() },
+        modifier = modifier,
         shape = HandoffShapes.Control,
-        // Translucent as a chip, opaque as a panel — and that is a change of
-        // job, not an inconsistency. One line of rate over streets is what
-        // OVER_TILES_ALPHA was measured for, and seeing the map continue behind
-        // a small chip is worth having. A table of days, times and prices is
-        // read rather than glanced at, and at 0.92 the streets underneath run
-        // straight through the digits: seen on the emulator in dark mode, where
-        // Centraal Station was legible through the Sunday row. Nothing on this
-        // screen has ever been made harder to read on purpose.
-        color = if (expanded) {
-            MaterialTheme.colorScheme.surfaceVariant
-        } else {
-            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = OVER_TILES_ALPHA)
-        },
+        color = container,
         contentColor = MaterialTheme.colorScheme.onSurface,
-        // The panel needs an edge that the tiles cannot supply, now that it is
-        // no longer translucent enough for the map to draw one for it.
-        border = if (expanded) {
-            BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
-        } else {
-            null
-        },
-        shadowElevation = if (expanded) 3.dp else 0.dp,
+        border = BorderStroke(1.dp, edge),
+        shadowElevation = lift,
     ) {
-        Column(Modifier.padding(horizontal = 10.dp, vertical = 7.dp)) {
+        // Bottom padding goes to zero once the week row is present: that row is
+        // 40dp of tap target with a 17dp line in it, so it already supplies the
+        // breathing room the padding was for, and paying twice is what made the
+        // panel look bottom-heavy.
+        Column(
+            Modifier.padding(
+                start = 10.dp,
+                end = 10.dp,
+                top = 7.dp,
+                bottom = if (showingPanel && rows.size > 1) 0.dp else 7.dp,
+            ),
+        ) {
             Row(verticalAlignment = Alignment.Top) {
-                Column(Modifier.weight(1f, fill = expanded)) {
+                Column(Modifier.weight(1f, fill = showingPanel)) {
                     // While the lookup is in flight this stays blank rather than
                     // showing the code and swapping it a moment later. The code
                     // appears only once we know no name is coming.
@@ -515,19 +635,53 @@ fun TariffChip(
                         )
                     }
                     Text(
-                        tariffNowText(tariffNow(area.windows, dayIndex, minuteOfDay), minuteOfDay),
+                        tariffNowText(
+                            tariffNow(area.windows, dayIndex, minuteOfDay),
+                            dayIndex,
+                            minuteOfDay,
+                        ),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                Icon(
-                    if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
-                    contentDescription = weekToggleLabel(expanded),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 6.dp, top = 1.dp).size(18.dp),
-                )
+                if (opensSomething) {
+                    // One glyph rotated, not two glyphs swapped. The swap was a
+                    // hard cut in the middle of a soft movement, and the two
+                    // arrows are the same centred chevron anyway.
+                    Icon(
+                        Icons.Filled.KeyboardArrowDown,
+                        contentDescription = weekToggleLabel(showingPanel),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .padding(start = 6.dp, top = 1.dp)
+                            .size(18.dp)
+                            .graphicsLayer { rotationZ = chevron.value },
+                    )
+                }
             }
-            if (expanded) {
+            // `expanded` belongs to the caller and survives a change of area, so
+            // it has to be gated on there being something to show as well.
+            // Without the second half: expand a normal area, then tap a
+            // round-the-clock one, and the panel keeps its border and elevation
+            // and draws a divider with nothing underneath. Seen on the emulator
+            // — Centrum, which charges every minute and has a one-row week.
+            // AnimatedVisibility, not animateContentSize on the Surface: the
+            // growth happens to a *child*, so the Surface measures itself
+            // around it and redraws its rounded corners, border and shadow at
+            // the true size on every frame. That is the whole fix for the
+            // square-cut edges — see the transition above.
+            //
+            // Opening is a touch springy and closing is fast and flat: a panel
+            // over a map is opened deliberately and dismissed impatiently, and
+            // an exit that lingers reads as lag rather than as grace.
+            AnimatedVisibility(
+                visible = showingPanel,
+                enter = expandVertically(animationSpec = OPEN_SIZE) +
+                    fadeIn(animationSpec = tween(durationMillis = 90, delayMillis = 30)),
+                exit = shrinkVertically(animationSpec = CLOSE_SIZE) +
+                    fadeOut(animationSpec = tween(durationMillis = 60)),
+            ) {
+                Column {
                 HorizontalDivider(
                     Modifier.padding(top = 8.dp, bottom = 2.dp),
                     color = MaterialTheme.colorScheme.outline,
@@ -540,53 +694,205 @@ fun TariffChip(
                         modifier = Modifier.padding(top = 4.dp),
                     )
                 }
-                // Exactly one line is in force, and it is the one the reader
-                // came for. Everything else is dimmed rather than the active
-                // line being decorated, so the answer is found by looking
-                // rather than by comparing three prices against a clock —
-                // Wasil: "i see 3 prices i dont know which one is the correct
-                // one." Weight and colour together, so it survives a screen in
-                // sunlight and does not depend on colour alone.
-                val now = remember(rows, dayIndex, minuteOfDay) {
-                    activeRow(rows, dayIndex, minuteOfDay)
+
+                // What happens after now — the one fact the collapsed line does
+                // not carry, as a sentence rather than a row.
+                //
+                // It was drawn as a columned row first (day gutter, start time,
+                // end time) and that shape cannot tell the truth here: the next
+                // span crosses a midnight in 26 of the 29 areas, and *always*
+                // in 19 of them, so a single day column made T17N on a Friday
+                // evening read "za Free 06:00 → 19:00" for a gap that runs to
+                // Sunday. Thirty-seven hours rendered as thirteen — the exact
+                // defect [clockAhead] was written to remove, reinstated one
+                // line below it.
+                //
+                // A clause has no such problem, because it hands the boundary to
+                // clockAhead, which already names the day and already writes
+                // midnight as 24:00. It is also shorter, and it drops a
+                // duplication the row could not avoid: the row's start time was
+                // always the boundary the line above had just given.
+                nextSpan?.let { next ->
+                    Text(
+                        nextSpanText(next, dayIndex, minuteOfDay),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 5.dp),
+                    )
                 }
-                rows.forEach { row ->
-                    val live = row === now
-                    val ink = when {
-                        live -> MaterialTheme.colorScheme.onSurface
-                        else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f)
-                    }
-                    val weight = if (live) FontWeight.Medium else FontWeight.Normal
+
+                // Only the two areas that price by duration. Shown here and not
+                // on the collapsed line because the line has "from" doing that
+                // job in one word, and this is the sentence behind it.
+                stepNote?.let { note ->
+                    Text(
+                        note,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 5.dp),
+                    )
+                }
+
+                // The week, one tap further. Not deleted — Wasil asked for it in
+                // v0.6.6 ("maybe i am curious about tommorows rate") and that
+                // still holds; it is simply no longer the thing you must read
+                // to find out what you are paying now.
+                //
+                // Its own row, because 22dp inside a Surface whose own click
+                // *collapses the panel* means a near miss shuts the thing you
+                // were reading. 40dp, not the 46dp first tried: centred text in
+                // a 46dp row put 14dp of nothing above and below a 17dp line,
+                // and Wasil saw it straight away — "too big of a negative space
+                // on whole week". 40dp is what this app's own text buttons use,
+                // and the panel's bottom padding is dropped below it because the
+                // row is already carrying that space.
+                if (rows.size > 1) {
                     Row(
-                        Modifier.fillMaxWidth().padding(top = 5.dp),
+                        Modifier
+                            .fillMaxWidth()
+                            .height(40.dp)
+                            .clickable { showWeek = true },
+                        horizontalArrangement = Arrangement.End,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            row.days,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = ink,
-                            fontWeight = weight,
-                            modifier = Modifier.width(78.dp),
+                            "Whole week",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        Text(
-                            row.hours ?: "free all day",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = ink,
-                            fontWeight = weight,
-                            modifier = Modifier.weight(1f),
-                        )
-                        Text(
-                            row.rate.orEmpty(),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = ink,
-                            fontWeight = weight,
+                        Icon(
+                            Icons.Filled.KeyboardArrowRight,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(16.dp),
                         )
                     }
+                }
                 }
             }
         }
     }
+
+    if (showWeek) {
+        ModalBottomSheet(
+            onDismissRequest = { showWeek = false },
+            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+            // The stock handle carries 22dp of padding above and below, which on
+            // a sheet holding two rows of table is most of what you see. A
+            // 4dp bar with 8dp around it says "drag me" just as well and gives
+            // the content back about 28dp.
+            dragHandle = {
+                Box(
+                    Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Box(
+                        Modifier
+                            .width(32.dp)
+                            .height(4.dp)
+                            .background(
+                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                                CircleShape,
+                            ),
+                    )
+                }
+            },
+        ) {
+            WeekSheet(
+                heading = placeName ?: area.code,
+                detail = placeDetail,
+                rows = rows,
+                dayIndex = dayIndex,
+                minuteOfDay = minuteOfDay,
+            )
+        }
+    }
 }
+
+/**
+ * The v0.6.9 table, moved rather than rewritten.
+ *
+ * Same rows from [weekSchedule], same "the line in force is the only one at
+ * full strength" treatment. It reads better here than it did in the panel for a
+ * reason worth stating: a sheet is read, and the panel is glanced at, and this
+ * was always a thing to read.
+ */
+@Composable
+private fun WeekSheet(
+    heading: String,
+    detail: String?,
+    rows: List<ScheduleRow>,
+    dayIndex: Int,
+    minuteOfDay: Int,
+) {
+    val now = remember(rows, dayIndex, minuteOfDay) { activeRow(rows, dayIndex, minuteOfDay) }
+    // Tight. A sheet holding two lines of table does not need a room around it,
+    // and the first pass gave it 28dp below plus 6dp on every row on top of the
+    // drag handle's own inset — Wasil: "same for the whole week itself". The
+    // sheet already floats; the space between it and the screen edge is the
+    // scrim's job, not the content's.
+    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 12.dp)) {
+        Text(heading, style = MaterialTheme.typography.titleMedium)
+        if (detail != null && detail != heading) {
+            Text(
+                detail,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        HorizontalDivider(
+            Modifier.padding(top = 8.dp, bottom = 2.dp),
+            color = MaterialTheme.colorScheme.outline,
+        )
+        rows.forEach { row ->
+            val live = row === now
+            val ink = if (live) {
+                MaterialTheme.colorScheme.onSurface
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            }
+            val weight = if (live) FontWeight.Medium else FontWeight.Normal
+            Row(
+                Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    row.days,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = ink,
+                    fontWeight = weight,
+                    modifier = Modifier.width(86.dp),
+                )
+                Text(
+                    row.hours ?: "free all day",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = ink,
+                    fontWeight = weight,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    row.rate.orEmpty(),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = ink,
+                    fontWeight = weight,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * "then free until zo 19:00", or "then €1,72/h until ma 06:00".
+ *
+ * Deliberately names only the far edge of the next span. Its near edge is the
+ * end of the current state, which the line directly above has already given —
+ * saying it twice is what made the row form redundant as well as wrong.
+ */
+internal fun nextSpanText(next: TariffNext, dayOfWeek: Int, minuteOfDay: Int): String {
+    val until = clockAhead(dayOfWeek, minuteOfDay, next.endsInMin)
+    return if (next.charging) "then ${next.rateText} until $until" else "then free until $until"
+}
+
 
 /**
  * The OpenStreetMap credit. Required by the tile licence, so it is never

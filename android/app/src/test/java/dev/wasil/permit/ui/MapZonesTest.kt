@@ -303,21 +303,82 @@ class MapZonesTest {
     @Test
     fun `charging reads as the rate and when it stops`() {
         val now = TariffNow.Charging("€3,01/h", endsInMin = 8 * 60 + 30)
-        assertEquals("€3,01/h · until 19:00", tariffNowText(now, 10 * 60 + 30))
+        // Tuesday 10:30, ending the same day, so no day letter is spent.
+        assertEquals("€3,01/h · until 19:00", tariffNowText(now, 1, 10 * 60 + 30))
     }
 
     @Test
-    fun `a window to midnight reads as all day rather than until 00 00`() {
-        assertEquals("€8,05/h · all day", tariffNowText(TariffNow.Charging("€8,05/h", null), 13 * 60))
+    fun `all day is reserved for charging that never stops`() {
+        assertEquals(
+            "€8,05/h · all day",
+            tariffNowText(TariffNow.Charging("€8,05/h", null), 2, 13 * 60),
+        )
+    }
+
+    // --- the day on the boundary (v0.7.0) ---
+
+    @Test
+    fun `a boundary later today is named without a day`() {
+        // Tuesday 07:00, charging from 09:00 — two hours, same day, no letter.
+        assertEquals("Free · from 09:00", tariffNowText(TariffNow.Free(2 * 60), 1, 7 * 60))
     }
 
     @Test
-    fun `free reads as when charging starts, wrapping past midnight`() {
-        assertEquals("Free · from 09:00", tariffNowText(TariffNow.Free(13 * 60), 20 * 60))
+    fun `crossing only midnight is already another day`() {
+        // Tuesday 20:00 plus thirteen hours is Wednesday morning. The old
+        // string here was a bare "09:00", and this test previously asserted it
+        // under the name "wrapping past midnight" — the wrap was noticed and
+        // then thrown away by clock()'s modulo.
+        assertEquals("Free · from wo 09:00", tariffNowText(TariffNow.Free(13 * 60), 1, 20 * 60))
+    }
+
+    @Test
+    fun `a boundary on another day is named with it`() {
+        // The T17N Saturday case. Twenty-nine hours out, and the old string was
+        // "Free · from 19:00" — which reads as tonight at seven.
+        assertEquals(
+            "Free · from zo 19:00",
+            tariffNowText(TariffNow.Free(29 * 60), dayOfWeek = 5, minuteOfDay = 14 * 60),
+        )
+    }
+
+    @Test
+    fun `a charge run ending tomorrow morning says so`() {
+        assertEquals(
+            "€1,72/h · until di 06:00",
+            tariffNowText(
+                TariffNow.Charging("€1,72/h", 10 * 60),
+                dayOfWeek = 0,
+                minuteOfDay = 20 * 60,
+            ),
+        )
+    }
+
+    @Test
+    fun `a boundary that wraps past Sunday lands back on Monday`() {
+        assertEquals("ma 06:00", clockAhead(dayOfWeek = 6, minuteOfDay = 23 * 60, offsetMin = 7 * 60))
+    }
+
+    @Test
+    fun `midnight tonight is 24 00 today, not 00 00 tomorrow`() {
+        // The six areas charging "900-2400" stop at midnight and do not resume.
+        // Naming that boundary "ma 00:00" on a Sunday evening is technically
+        // right and reads as a day away.
+        assertEquals("24:00", clockAhead(dayOfWeek = 6, minuteOfDay = 20 * 60, offsetMin = 4 * 60))
+        assertEquals(
+            "€6,98/h · until 24:00",
+            tariffNowText(TariffNow.Charging("€6,98/h", 4 * 60), dayOfWeek = 6, minuteOfDay = 20 * 60),
+        )
+    }
+
+    @Test
+    fun `a midnight further out is named on the day that ends`() {
+        // Monday 22:00 plus 26 hours is the midnight closing Tuesday.
+        assertEquals("di 24:00", clockAhead(dayOfWeek = 0, minuteOfDay = 22 * 60, offsetMin = 26 * 60))
     }
 
     @Test
     fun `nothing scheduled says so instead of inventing a time`() {
-        assertEquals("Free · no paid hours", tariffNowText(TariffNow.Free(null), 12 * 60))
+        assertEquals("Free · no paid hours", tariffNowText(TariffNow.Free(null), 2, 12 * 60))
     }
 }

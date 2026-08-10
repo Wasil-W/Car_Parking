@@ -235,7 +235,14 @@ fun MapCanvas(
                 } else {
                     tariffAreas.flatMap { area ->
                         area.polygons.map { ring ->
-                            tariffPolygon(map, ring, colors.tariffBoundary, fillAlpha = 0.07f, strokeWidthPx = 2f)
+                            tariffPolygon(
+                                map,
+                                ring,
+                                colors.tariffBoundary,
+                                fillAlpha = 0f,
+                                strokeWidthDp = Line.AMBIENT_DP,
+                                dotted = true,
+                            )
                         }
                     }.also { tariffCache.value = tariffAreas to it }
                 }
@@ -243,13 +250,13 @@ fun MapCanvas(
             }
             highlightRing?.let { ring ->
                 map.overlays.add(
-                    tariffPolygon(map, ring, colors.tariffSelected, fillAlpha = 0.16f, strokeWidthPx = 7f),
+                    tariffPolygon(map, ring, colors.tariffSelected, fillAlpha = 0.16f, strokeWidthDp = Line.PROMOTED_DP),
                 )
             }
 
             homeZone?.let {
                 map.overlays.add(
-                    zoneCircle(map, it, colors.zoneHome, dashed = false, fillAlpha = 0.18f, strokeWidthPx = 4f),
+                    zoneCircle(map, it, colors.zoneHome, dashed = false, fillAlpha = 0.18f, strokeWidthDp = Line.YOURS_CLOSED_DP),
                 )
             }
             // Circle or outline, same colour and same dashes either way.
@@ -268,11 +275,11 @@ fun MapCanvas(
             // emulator in light mode, which is the only way this was ever going
             // to be caught. Same hue, same dashes, more of them.
             freeZones.forEach { zone ->
-                zoneShapes(map, zone, areaShape, colors.zoneFree, fillAlpha = 0.16f, strokeWidthPx = 9f)
+                zoneShapes(map, zone, areaShape, colors.zoneFree, fillAlpha = 0.16f, strokeWidthDp = Line.YOURS_OPEN_DP)
                     .forEach { map.overlays.add(it) }
             }
             candidateZone?.let { zone ->
-                zoneShapes(map, zone, areaShape, colors.zoneCandidate, fillAlpha = 0.24f, strokeWidthPx = 6f)
+                zoneShapes(map, zone, areaShape, colors.zoneCandidate, fillAlpha = 0.24f, strokeWidthDp = Line.UNSAVED_DP)
                     .forEach { map.overlays.add(it) }
             }
 
@@ -283,8 +290,10 @@ fun MapCanvas(
                     Polyline(map).apply {
                         setPoints(walkRoute.map { OsmGeoPoint(it.lat, it.lng) })
                         outlinePaint.color = colors.walkRoute.toArgb()
-                        outlinePaint.strokeWidth = 12f
-                        outlinePaint.pathEffect = DashPathEffect(floatArrayOf(26f, 18f), 0f)
+                        outlinePaint.strokeWidth = map.px(Line.ROUTE_DP)
+                        outlinePaint.strokeCap = android.graphics.Paint.Cap.ROUND
+                        outlinePaint.pathEffect =
+                            DashPathEffect(Line.dash(map.px(Line.ROUTE_DP)), 0f)
                         infoWindow = null
                     },
                 )
@@ -371,25 +380,99 @@ private fun frameOn(map: MapView, focus: List<GeoPoint>, zoom: Double) {
  * which zone a tap hit, rather than osmdroid's own polygon geometry.
  */
 /**
- * One ring of a tariff area.
+ * The map's line hierarchy, in **dp**.
  *
- * Holes are ignored. osmdroid's Polygon does support them, but a boundary drawn
- * at 0.07 alpha reads the same either way, and the app's own point-in-polygon
- * test — which does honour holes — is what actually decides anything. Returns
- * false from its click listener for the same reason [zoneCircle] does:
- * [mapHitAt] is the single place that decides what a tap hit.
+ * Every stroke width and dash interval in this file used to be a raw device
+ * pixel — `strokeWidth = 9f`, `DashPathEffect(floatArrayOf(18f, 14f))` — handed
+ * straight to a `Paint`, which takes pixels. So the whole hierarchy moved with
+ * the device: the `9f` that v0.6.8 finally made a free-zone boundary visible
+ * with is 3.4dp at density 2.625 and 2.25dp at density 4, which is back under
+ * the 6px that had already failed to show up. The relationships between these
+ * lines were tuned by eye on one emulator and were not reproducible anywhere
+ * else. That is fixed first, because nothing else here is meaningful until it
+ * is.
+ *
+ * **What the three channels mean**, so a new line has somewhere to go:
+ *
+ * - **Weight says whose line it is.** The city's published lines are thin; the
+ *   ones you placed are thick. A city line you promoted by tapping sits between
+ *   — enough to win against the other 169 rings, never enough to reach the top
+ *   of your own band, because it is still not yours.
+ * - **Texture says how many there are.** Solid means there is exactly one (the
+ *   home zone; the part you tapped). Dashed means one of several you placed.
+ *   Dotted means published rather than placed. This keeps v0.6.8's existing
+ *   home-solid / free-dashed meaning rather than redefining it.
+ * - **Opacity is spent on fills, never on strokes.** Not taste — arithmetic.
+ *   `TariffBoundary` measures 3.61:1 against MAPNIK's building fill, the worst
+ *   realistic tile background. At alpha 0.75 that is 2.50:1, under the 3:1
+ *   floor for a non-text graphic, in light mode, which the map cannot escape.
+ *   There is about 0.6:1 of headroom in the entire channel.
+ *
+ * **The tariff line goes up, not down.** Wasil asked for something thinner —
+ * *"a really thin dotted line for when we use the tariff layer"* — and the
+ * instinct is right while the word is the wrong half. At 2f it was already
+ * 0.67dp at density 3, and below about 1dp the rasteriser takes over: a
+ * diagonal anti-aliases into grey mush whose darkness varies with zoom. So the
+ * mark gets *wider* (1.0dp, surviving anti-aliasing) and *intermittent* — 22%
+ * ink coverage. Net, about a third of the ink from a mark half again as wide.
+ * Intermittency is the only demotion that does not cost the legibility of the
+ * individual mark.
+ *
+ * Patterns are multiples of the line's own width so their rhythm survives every
+ * density and every weight. That was already latent in the code: the free zone
+ * (9px, 18/14) and the walk route (12px, 26/18) both sat at roughly 2.0w/1.5w.
+ */
+private object Line {
+    const val AMBIENT_DP = 1.0f
+    const val PROMOTED_DP = 2.5f
+    const val YOURS_CLOSED_DP = 2.5f
+    const val YOURS_OPEN_DP = 3.0f
+    const val UNSAVED_DP = 3.5f
+    const val ROUTE_DP = 4.0f
+
+    fun dash(widthPx: Float) = floatArrayOf(widthPx * 2.0f, widthPx * 1.5f)
+
+    /**
+     * A round cap extends each run by half the width at both ends, so an "on"
+     * of 0.1w paints a near-circular dot of diameter w with a 4w gap. Never
+     * zero — Skia drops zero-length segments on some versions.
+     */
+    fun dot(widthPx: Float) = floatArrayOf(widthPx * 0.1f, widthPx * 4.9f)
+}
+
+/** dp is the spec; Paint takes pixels. */
+private fun MapView.px(dp: Float): Float = dp * resources.displayMetrics.density
+
+/**
+ * One ring of a tariff area — ambient, so dotted and unfilled.
+ *
+ * Holes are ignored. osmdroid's Polygon does support them, and the app's own
+ * point-in-polygon test — which does honour holes — is what actually decides
+ * anything.
+ *
+ * **The fill is gone**, down from 0.07. With 29 areas tiling the city the tint
+ * was answering "is this ground inside some tariff area", and the chip answers
+ * that in words for the area that matters. This is the one number here most
+ * worth looking at rather than reasoning about: if the wash reads as *paid
+ * parking country starts here*, 0.04 brings it back.
  */
 private fun tariffPolygon(
     map: MapView,
     ring: ZonePolygon,
     color: Color,
     fillAlpha: Float,
-    strokeWidthPx: Float,
+    strokeWidthDp: Float,
+    dotted: Boolean = false,
 ): Polygon = Polygon(map).apply {
+    val width = map.px(strokeWidthDp)
     points = ring.outer.map { OsmGeoPoint(it.lat, it.lng) }
     fillColor = color.copy(alpha = fillAlpha).toArgb()
     strokeColor = color.toArgb()
-    strokeWidth = strokeWidthPx
+    strokeWidth = width
+    if (dotted) {
+        outlinePaint.strokeCap = android.graphics.Paint.Cap.ROUND
+        outlinePaint.pathEffect = DashPathEffect(Line.dot(width), 0f)
+    }
     setOnClickListener { _, _, _ -> false }
     infoWindow = null
 }
@@ -410,10 +493,10 @@ private fun zoneShapes(
     areaShape: (String) -> List<ZonePolygon>?,
     color: Color,
     fillAlpha: Float,
-    strokeWidthPx: Float,
+    strokeWidthDp: Float,
 ): List<Polygon> {
     val buurt = zone.buurt
-        ?: return listOf(zoneCircle(map, zone, color, dashed = true, fillAlpha, strokeWidthPx))
+        ?: return listOf(zoneCircle(map, zone, color, dashed = true, fillAlpha, strokeWidthDp))
     val rings = areaShape(buurt) ?: return emptyList()
     return rings.map { ring ->
         Polygon(map).apply {
@@ -425,10 +508,11 @@ private fun zoneShapes(
             if (ring.holes.isNotEmpty()) {
                 holes = ring.holes.map { hole -> hole.map { OsmGeoPoint(it.lat, it.lng) } }
             }
+            val width = map.px(strokeWidthDp)
             fillColor = color.copy(alpha = fillAlpha).toArgb()
             strokeColor = color.toArgb()
-            strokeWidth = strokeWidthPx
-            outlinePaint.pathEffect = DashPathEffect(floatArrayOf(18f, 14f), 0f)
+            strokeWidth = width
+            outlinePaint.pathEffect = DashPathEffect(Line.dash(width), 0f)
             setOnClickListener { _, _, _ -> false }
             infoWindow = null
         }
@@ -441,13 +525,14 @@ private fun zoneCircle(
     color: Color,
     dashed: Boolean,
     fillAlpha: Float,
-    strokeWidthPx: Float,
+    strokeWidthDp: Float,
 ): Polygon = Polygon(map).apply {
+    val width = map.px(strokeWidthDp)
     points = Polygon.pointsAsCircle(OsmGeoPoint(zone.lat, zone.lng), zone.radiusM)
     fillColor = color.copy(alpha = fillAlpha).toArgb()
     strokeColor = color.toArgb()
-    strokeWidth = strokeWidthPx
-    if (dashed) outlinePaint.pathEffect = DashPathEffect(floatArrayOf(18f, 14f), 0f)
+    strokeWidth = width
+    if (dashed) outlinePaint.pathEffect = DashPathEffect(Line.dash(width), 0f)
     setOnClickListener { _, _, _ -> false }
     infoWindow = null
 }

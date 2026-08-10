@@ -164,9 +164,12 @@ fun spotDemandFor(
     zone !is ZoneInfo.Paid -> SpotDemand.Free(freeReasonFor(zone))
     zone.area == null -> SpotDemand.RateUnknown
     else -> when (val now = tariffNow(zone.area.windows, dayIndex, minuteOfDay)) {
-        is TariffNow.Charging -> SpotDemand.Payable(tariffNowText(now, minuteOfDay))
+        is TariffNow.Charging -> SpotDemand.Payable(tariffNowText(now, dayIndex, minuteOfDay))
         is TariffNow.Free -> SpotDemand.FreeForNow(
-            untilClock = now.startsInMin?.let { clock(minuteOfDay + it) },
+            // clockAhead, not clock: the same day-dropping defect lived here.
+            // "Free until 09:00" over a gap that runs to Monday is the reading
+            // that gets a car moved for nothing — see MapZones.clockAhead.
+            untilClock = now.startsInMin?.let { clockAhead(dayIndex, minuteOfDay, it) },
         )
     }
 }

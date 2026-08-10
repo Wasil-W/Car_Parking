@@ -26,6 +26,7 @@ other document under `docs/` is a deep-dive that this one points at.
 
 | Version | What it did |
 |---|---|
+| `v0.7.0` | **Bugs and design in one release.** Five wrong answers fixed — "all day" for 7 areas, boundaries that dropped their day, stepped rates shown as flat, a live line computed once and never again, timetable rows below the readability floor. The panel now says what happens next and the week moved one tap out. Every map line converted from device pixels to dp and given a hierarchy. The dark ground warmed |
 | `v0.1` | Switching the permit between two plates |
 | `v0.2` | Automatic park detection (Bluetooth + activity + GPS) |
 | `v0.3` | Shared state between two phones, with a collision guard |
@@ -455,7 +456,44 @@ connected to any of them.
 
 ---
 
-## v0.7.0 — the big one: bugs *and* design
+## v0.7.0 — the big one: bugs *and* design — SHIPPED 2026-08-11
+
+**What actually shipped**, in the order it was built. Everything below the
+"Superseded" heading is the reasoning that got here, kept because the reasons
+are the useful part.
+
+| | |
+|---|---|
+| Five wrong answers | "all day" for 7 of 29 areas; boundaries that dropped their day; stepped rates shown as flat; the live line computed once and never again; timetable rows at 2.91:1 |
+| The panel | Says what happens next as a clause; the week moved into a sheet one tap further; no chevron where nothing opens |
+| The map | Every line in dp instead of device pixels, with a weight/texture hierarchy; tariff outlines thin and dotted, no fill; taps gated on the layer being on |
+| The palette | Dark neutrals warmed; a third hue for `primary` drawn and declined |
+| Motion | The open is one movement instead of four properties at four rates |
+| Two dead things | The Now-tab map preview never fired its click; the radius Slider was justified by a comment that was false |
+
+**Two mockups, and the second one earned its keep.** Three timetable shapes were
+designed independently and judged by nine reviewers; all three died. A fourth
+was assembled from the survivors — and putting *that* through the same pass
+found it reinstating, one line below the fix for it, the exact defect
+`clockAhead` was written to remove. The shape that shipped is the one after
+that.
+<https://claude.ai/code/artifact/4325d258-5aef-427d-a3a4-618de70e5f98>
+
+**What is still open**, and none of it is hidden:
+
+- **Light mode is unexamined.** Every palette argument here is made in dark,
+  because that is what gets screenshotted.
+- **The zone editor is only half done.** The Slider is gone (48dp) and the card
+  is tighter, but the full split into a home bar and an area bar — and the
+  finding that the *home* card is the fat one at 261dp, not the free one — is
+  not built.
+- **The tile wash and the signage face** from the palette work are not built.
+  The face needs a licence-checked file, which is not a code decision.
+- **Shared edges on the dotted tariff outlines.** The 29 areas tile the city, so
+  most boundaries are drawn twice and two dot runs will not agree in phase.
+  Interior edges may read heavier than the city's outer edge, which is backwards.
+- **The stepped collapsed line** — "from €0,10/h until 19:00" — is the longest
+  string the chip can hold and is known to wrap at 158dp.
 
 **Superseded 2026-08-09.** This was "the design release", on the reasoning that
 v0.6.9 had taken the fixes small enough to make without drawing first, so

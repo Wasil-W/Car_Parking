@@ -21,8 +21,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -73,20 +71,31 @@ internal enum class ZoneKind { HOME, FREE }
 internal fun ZoneKind.title(): String = if (this == ZoneKind.HOME) "Home zone" else "Free zone"
 
 /**
- * A radius in metres, three ways: typed, stepped, dragged.
+ * A radius in metres, two ways: typed and stepped.
  *
- * **Why all three.** Wasil wants placing and sizing to be more exact than
- * dragging a slider over a map, and he is right that a slider cannot be told a
- * number — it can only be pushed until the label happens to read one. But the
- * slider is still the fastest way to get roughly right, and it is the only one
- * of the three that shows the circle growing under your finger while you decide.
- * So the field is for "eighty metres", the steppers are for "a bit more", and
- * the slider is for "about like that".
+ * **The slider is gone**, and the reason it survived this long was a sentence in
+ * this very comment that was not true. It claimed the slider was "the only one
+ * of the three that shows the circle growing under your finger while you
+ * decide". It never was: `MapScreen` rebuilds `candidateZone` from
+ * `candidateRadius` on every recomposition and hands it to `MapCanvas`, which
+ * draws it — so the circle on the map has always redrawn for whichever control
+ * moved the value. The slider had no property the other two lacked.
+ *
+ * What it did have was 48dp, on the card Wasil said takes too much of the
+ * screen, for the action performed once ever — a home zone is your house. And
+ * it is the one control that cannot be told a number, which is the complaint
+ * that produced the field in the first place. The field is for "eighty metres";
+ * the steppers are for "a bit more", one to three taps across the range the
+ * app allows.
+ *
+ * Kept as a note rather than a silent deletion because this repo has a rule
+ * about verifying claims, including its own: a comment asserting why a control
+ * must exist is not evidence that it must.
  *
  * The field holds its own text rather than reformatting on every keystroke:
  * rewriting what someone is halfway through typing is how typed inputs get
  * abandoned. It is re-synced whenever the value changes from the outside — a
- * stepper press or a slider drag — and clamped once, on the way out.
+ * stepper press — and clamped once, on the way out.
  */
 @Composable
 internal fun RadiusControl(
@@ -94,8 +103,8 @@ internal fun RadiusControl(
     onRadiusChange: (Float) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // Keyed on the value so a stepper press or a slider drag rewrites the field,
-    // while typing into the field does not fight itself.
+    // Keyed on the value so a stepper press rewrites the field, while typing
+    // into the field does not fight itself.
     var text by remember(radiusM) { mutableStateOf(radiusFieldText(radiusM.toDouble())) }
     Column(modifier) {
         Row(
@@ -125,20 +134,6 @@ internal fun RadiusControl(
                 onRadiusChange(stepZoneRadius(radiusM.toDouble(), 1).toFloat())
             }
         }
-        // Explicit colours: the stock inactive track resolves to a neutral that
-        // is invisible against these cards' own neutral surface, so the slider
-        // rendered as a thumb floating next to a stray dot with no track
-        // between them. Found on screen in v0.6.4; do not delete the colours.
-        Slider(
-            value = radiusM.coerceIn(ZONE_RADIUS_MIN_M.toFloat(), ZONE_RADIUS_MAX_M.toFloat()),
-            onValueChange = onRadiusChange,
-            valueRange = ZONE_RADIUS_MIN_M.toFloat()..ZONE_RADIUS_MAX_M.toFloat(),
-            colors = SliderDefaults.colors(
-                thumbColor = MaterialTheme.colorScheme.onSurface,
-                activeTrackColor = MaterialTheme.colorScheme.onSurface,
-                inactiveTrackColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-            ),
-        )
     }
 }
 
@@ -332,7 +327,11 @@ internal fun ZoneCandidateCard(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
     ) {
-        Column(Modifier.fillMaxWidth().padding(14.dp)) {
+        // Bottom padding is 4dp, not 14dp: the action row below is a 40dp tap
+        // target with a 20dp label in it, so it already carries 10dp of space
+        // under the text. Paying 14dp on top is the same double-charge that made
+        // the tariff panel look bottom-heavy.
+        Column(Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 14.dp, bottom = 4.dp)) {
             val offerable = kind == ZoneKind.HOME || areaName != null
             when {
                 kind == ZoneKind.HOME -> {

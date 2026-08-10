@@ -20,8 +20,14 @@ are public). It lives only in the app's Settings on the two phones.**
 
    The root stays unreadable, so nobody can list rooms. Each room path is
    derived from the permit username (128-bit hash) — unguessable in practice.
-4. Copy the database URL shown at the top of the Data tab. It looks like
-   `https://permit-switcher-default-rtdb.europe-west1.firebasedatabase.app`.
+4. Copy the database URL shown at the top of the Data tab. It has the shape
+   `https://<YOUR-PROJECT>-default-rtdb.europe-west1.firebasedatabase.app`.
+
+   > **Never commit the real one.** This repo and its APKs are public, and the
+   > rules above put security entirely on the room hash: URL plus room hash is
+   > read and write. The placeholder here used to spell out the example project
+   > name from step 1, which made it indistinguishable from a real URL for
+   > anyone who followed the guide literally.
 5. On BOTH phones: app → Settings → **Shared state (Firebase)** → paste the
    URL → Save → **Test connection** must say "Connection OK."
 

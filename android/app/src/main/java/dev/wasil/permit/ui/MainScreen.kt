@@ -360,6 +360,23 @@ fun MainScreen(
             } else {
                 Box(Modifier.fillMaxSize().clip(HandoffShapes.Card)) {
                     MapCanvas(car = car, me = me, interactive = false, zoom = 16.0)
+                    // The Card above is clickable and has been since v0.3.3, and
+                    // it never once fired here. A non-interactive MapCanvas sets
+                    // `setOnTouchListener { _, _ -> !interactive }`, which
+                    // returns **true** — "handled" — so the MapView ate every
+                    // tap before it could reach the Card. The preview looked
+                    // like a button and was inert, which is worse than not
+                    // looking like one.
+                    //
+                    // Caught here rather than by loosening the touch listener,
+                    // because that listener is what stops a preview from panning
+                    // under a scrolling thumb. An empty Box above the map takes
+                    // the tap and leaves the map's own behaviour alone.
+                    Box(
+                        Modifier
+                            .matchParentSize()
+                            .clickable(onClick = onOpenMap),
+                    )
                 }
             }
         }

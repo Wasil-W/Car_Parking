@@ -134,7 +134,11 @@ class PermitPresentationTest {
         // says when it stops being true.
         val sundayNoon = spotDemandFor(true, ZoneInfo.Paid(paidWeekdays), dayIndex = 6, minuteOfDay = 720)
         assertTrue("expected FreeForNow, got $sundayNoon", sundayNoon is SpotDemand.FreeForNow)
-        assertEquals("09:00", (sundayNoon as SpotDemand.FreeForNow).untilClock)
+        // "ma", not a bare "09:00": this is Sunday noon and charging resumes
+        // twenty-one hours later. Until v0.7.0 this test pinned the bare form,
+        // which is the defect — the screen said "free until 09:00" about a
+        // morning that had not happened yet.
+        assertEquals("ma 09:00", (sundayNoon as SpotDemand.FreeForNow).untilClock)
     }
 
     @Test
@@ -191,7 +195,8 @@ class PermitPresentationTest {
     }
 
     @Test fun `the split is pinned against what tariffNowText actually writes`() {
-        val line = tariffNowText(TariffNow.Charging("€3,01/h", endsInMin = 120), minuteOfDay = 17 * 60)
+        val line =
+            tariffNowText(TariffNow.Charging("€3,01/h", endsInMin = 120), dayOfWeek = 1, minuteOfDay = 17 * 60)
         assertEquals("€3,01/h" to "until 19:00", splitRateLine(line))
     }
 

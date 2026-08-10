@@ -77,9 +77,35 @@ val AlertOnContainerDark = Color(0xFFD9A08F)
 val AlertContainerLight = Color(0xFFF5E4DF)
 val AlertOnContainerLight = Color(0xFF6B2E1F)
 
-val SurfaceDark = Color(0xFF171715)
-val CardDark = Color(0xFF201F1C)
-val HairlineDark = Color(0xFF2E2D28)
+// The dark ground, warmed in v0.7.0.
+//
+// Wasil: *"sometimes i feel like it is too dull and dosent have any vibe to
+// it."* Counted before changing anything: on the map screen the tiles are about
+// three quarters of the pixels and they are stock OpenStreetMap; of the rest,
+// everything is a warm grey except the walk route. Identity colour — six tokens
+// per brother, argued out over three versions — reaches exactly two elements,
+// and neither is on that screen. So the palette is not dull, it is barely worn.
+//
+// The neutrals were #171715 / #201F1C / #2E2D28: red exceeding blue by 2, 4 and
+// 6 points. That is warmth you can measure and not warmth you can see, which is
+// the definition of a ground that has not decided anything. Pushing blue down
+// until it reads costs no new token, no new hue and no rule, and it governs
+// about nine tenths of the non-map pixels — the most effect available for the
+// least risk.
+//
+// Checked rather than assumed: against the existing text colours the warmer
+// ground is very slightly *better*, not worse.
+//   primary text   13.07:1 -> 13.49:1
+//   secondary      5.48:1  -> 5.66:1
+// Computed from the sRGB relative-luminance formula.
+//
+// Warm and not cool. A blue-black was drawn and rejected: light mode is already
+// a cream #FAF9F5, so a cool dark would make the two themes feel like two
+// different apps, and it drifts toward Wasil's own blue-grey, which is the one
+// hue on this screen that already means something.
+val SurfaceDark = Color(0xFF16130E)
+val CardDark = Color(0xFF221D15)
+val HairlineDark = Color(0xFF332B20)
 val TextPrimaryDark = Color(0xFFDEDCD4)
 val TextSecondaryDark = Color(0xFF918E85)
 
@@ -87,8 +113,13 @@ val TextSecondaryDark = Color(0xFF918E85)
 // dark/light neutral family as Surface/Card/Hairline above, just filling the
 // gaps at the darkest (dark mode) and mid-tone (light mode) ends so no
 // container slot has to fall back to Material 3's default purple.
-val SurfaceContainerLowestDark = Color(0xFF0F0F0E)
-val SurfaceContainerHighDark = Color(0xFF272622)
+//
+// Warmed with the rest in v0.7.0. Left on the old near-neutral values these
+// would have been the two steps in the ramp that did not belong to it — and
+// SurfaceContainerHighDark is the *pressed* state of every map control, so the
+// mismatch would have shown up exactly where a control is being looked at.
+val SurfaceContainerLowestDark = Color(0xFF0E0B07)
+val SurfaceContainerHighDark = Color(0xFF2A241A)
 
 val SurfaceLight = Color(0xFFFAF9F5)
 val CardLight = Color(0xFFFFFFFF)
@@ -105,8 +136,19 @@ val SurfaceContainerHighLight = Color(0xFFEAE8DE)
 // above rather than a new hue, so a zone circle can never be misread as
 // "whose car" or "is something wrong". Home is the darker, solid-ring
 // treatment (singular, permanent); free zones are the lighter, dashed-ring
-// treatment (plural, more casual); the candidate being placed is the
-// darkest and thickest of the three so it visibly "pops" as unsaved.
+// treatment (plural, more casual); the candidate being placed is the darkest
+// and thickest of the three so it visibly "pops" as unsaved.
+//
+// The "thickest" half of that was **untrue for two versions** and is only true
+// again as of v0.7.0. v0.6.8 raised free zones 4f -> 9f to make them visible at
+// all and left the candidate behind at 6f, so the unsaved ring — the one whose
+// whole job is to stand out — was the *thinner* of the two. Nobody noticed,
+// because the sentence above kept saying otherwise. Widths now live in
+// MapCanvas.Line, in dp, where the candidate is genuinely the widest.
+//
+// Kept rather than quietly corrected, because this repo has a rule about
+// trusting its own documents: a comment that describes what the code should do
+// is not evidence that it does.
 //
 // These are the same value in both light and dark mode — deliberately not
 // mode-paired like identity/state above. The map tile layer itself
@@ -125,9 +167,18 @@ val ZoneCandidate = Color(0xFF211E19)
 // Same reasoning as the zone colours — one value for both modes, because the
 // MAPNIK tiles underneath stay light whatever the app theme does. A grey-blue
 // kept clear of both brothers' identity hues, so a boundary can never be
-// misread as "whose car". Twenty-nine of these are on screen at once when the
-// overlay is up, which is why the fill is drawn at 0.07 alpha: enough to tell
-// one region from its neighbour, not enough to bury a zone circle.
+// misread as "whose car".
+//
+// **No fill.** This used to end "which is why the fill is drawn at 0.07 alpha",
+// and v0.7.0 took the fill to zero without updating the sentence — the exact
+// failure this release corrected twice elsewhere, committed here in the same
+// breath. With 29 areas tiling the city that wash answered "is this ground
+// inside some tariff area", which is nearly always yes, so it greyed the map
+// without telling anyone anything; the chip names the area that matters in
+// words. Wasil, shown both magnified side by side: *"no fill from now on."*
+//
+// The boundary itself carries the whole job now, as a 1.0dp dotted line — see
+// MapCanvas.Line for why intermittent and not fainter.
 val TariffBoundary = Color(0xFF5B6B7A)
 
 // The selected part, which has to win against 28 others drawn in TariffBoundary
