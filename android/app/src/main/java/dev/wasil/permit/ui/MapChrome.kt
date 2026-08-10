@@ -1,6 +1,18 @@
 package dev.wasil.permit.ui
 
-import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColor
+import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.VisibilityThreshold
+import androidx.compose.animation.core.animateDp
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.updateTransition
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -42,7 +54,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -84,6 +100,38 @@ private val CONTROL_GAP = 9.dp
  * continuous behind the header rather than sliced by it.
  */
 internal const val OVER_TILES_ALPHA = 0.92f
+
+/**
+ * How the tariff panel opens and closes.
+ *
+ * Written out rather than taken from a motion scheme because the Material 3 in
+ * use here has none. Two families, and the split is the point: **size** may
+ * overshoot a little, because a panel that arrives with a touch of weight reads
+ * as physical; **effects** — colour, elevation — may not, because an overshoot
+ * on a channel that clamps at 0 or 1 shows as a flat spot in the middle of the
+ * fade.
+ *
+ * `visibilityThreshold` is mandatory on the size springs. Without it the
+ * threshold falls back to a hundredth of a pixel and the animation runs on long
+ * after it has visually finished, which is exactly why the library's own
+ * default passes one.
+ *
+ * Opening is springier and slower than closing on purpose: this panel is opened
+ * deliberately and dismissed impatiently, and an exit that lingers reads as lag.
+ */
+private val OPEN_SIZE: FiniteAnimationSpec<IntSize> =
+    spring(dampingRatio = 0.9f, stiffness = 700f, visibilityThreshold = IntSize.VisibilityThreshold)
+private val CLOSE_SIZE: FiniteAnimationSpec<IntSize> =
+    spring(dampingRatio = 1f, stiffness = 1800f, visibilityThreshold = IntSize.VisibilityThreshold)
+private val EFFECTS_COLOR: FiniteAnimationSpec<Color> = spring(dampingRatio = 1f, stiffness = 1600f)
+private val EFFECTS_DP: FiniteAnimationSpec<Dp> =
+    spring(dampingRatio = 1f, stiffness = 1600f, visibilityThreshold = Dp.VisibilityThreshold)
+
+/**
+ * The one place a visible overshoot is free: 2.8% of 180° is about five
+ * degrees, on an 18dp glyph that cannot clip or reflow anything.
+ */
+private val CHEVRON_SPIN: FiniteAnimationSpec<Float> = spring(dampingRatio = 0.75f, stiffness = 700f)
 
 /** What the tariff-areas button announces it will do, not what it is showing. */
 fun tariffToggleLabel(showing: Boolean): String =
@@ -490,35 +538,67 @@ fun TariffChip(
     // `expanded` alone, which is the caller's and outlives a change of area.
     val showingPanel = expanded && opensSomething
 
+    // ── The open, as one movement ─────────────────────────────────────────
+    //
+    // `animateContentSize()` used to do this, and the brief for v0.7.0 said to
+    // swap its tween for a spring. That was wrong twice over, and both halves
+    // are worth writing down.
+    //
+    // First, it was never a tween: `animateContentSize()`'s default is already
+    // `spring(dampingRatio = NoBouncy, stiffness = MediumLow)`. Retuning it
+    // would have been a release spent on nothing.
+    //
+    // Second, the reason it looked cheap is not the curve. The factory is
+    // `clipToBounds() then SizeAnimationModifier`, and it was applied to
+    // `modifier` — *outside* the Surface. So the Surface was measured and drawn
+    // at its full open size and then clipped to a growing rectangle anchored
+    // top-left: for the whole open, the right and bottom edges were square
+    // cuts with no rounded corner, no outline and no shadow, and they snapped
+    // round on the final frame.
+    //
+    // Meanwhile everything that is not size — fill, border, elevation, chevron
+    // — changed in a single frame at the start. The card took on its whole new
+    // material identity instantly and then slowly grew into it. Four properties
+    // at four rates, three of them infinite.
+    //
+    // So: the size animation moves *inside* the Surface, where it grows a child
+    // and the Surface redraws its own corners, border and shadow at the true
+    // size every frame; and the other three ride one transition so they arrive
+    // with the growth rather than before it.
+    val opening = updateTransition(showingPanel, label = "tariffChip")
+    val container by opening.animateColor(
+        transitionSpec = { EFFECTS_COLOR },
+        label = "container",
+    ) { open ->
+        val base = MaterialTheme.colorScheme.surfaceVariant
+        // Translucent as a chip, opaque as a panel — a change of job, not an
+        // inconsistency. One line of rate over streets is what OVER_TILES_ALPHA
+        // was measured for. A table of days and prices is read rather than
+        // glanced at, and at 0.92 the streets run straight through the digits.
+        if (open) base else base.copy(alpha = OVER_TILES_ALPHA)
+    }
+    // Faded rather than switched on: a border that appears takes no layout, so
+    // alpha 0 is genuinely nothing on screen and there is no jump.
+    val edge by opening.animateColor(transitionSpec = { EFFECTS_COLOR }, label = "edge") { open ->
+        MaterialTheme.colorScheme.outline.copy(alpha = if (open) 1f else 0f)
+    }
+    val lift by opening.animateDp(transitionSpec = { EFFECTS_DP }, label = "lift") { open ->
+        if (open) 3.dp else 0.dp
+    }
+    // Held as State, not unwrapped with `by`: it is read inside graphicsLayer,
+    // so the rotation never enters composition and costs nothing per frame.
+    val chevron = opening.animateFloat(transitionSpec = { CHEVRON_SPIN }, label = "chevron") { open ->
+        if (open) 180f else 0f
+    }
+
     Surface(
         onClick = { if (opensSomething) onToggle() },
-        // The grow is animated so the chip reads as the same object getting
-        // bigger. Snapping between two sizes in the same place is what made the
-        // old pair look like two cards in the first place.
-        modifier = modifier.animateContentSize(),
+        modifier = modifier,
         shape = HandoffShapes.Control,
-        // Translucent as a chip, opaque as a panel — and that is a change of
-        // job, not an inconsistency. One line of rate over streets is what
-        // OVER_TILES_ALPHA was measured for, and seeing the map continue behind
-        // a small chip is worth having. A table of days, times and prices is
-        // read rather than glanced at, and at 0.92 the streets underneath run
-        // straight through the digits: seen on the emulator in dark mode, where
-        // Centraal Station was legible through the Sunday row. Nothing on this
-        // screen has ever been made harder to read on purpose.
-        color = if (showingPanel) {
-            MaterialTheme.colorScheme.surfaceVariant
-        } else {
-            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = OVER_TILES_ALPHA)
-        },
+        color = container,
         contentColor = MaterialTheme.colorScheme.onSurface,
-        // The panel needs an edge that the tiles cannot supply, now that it is
-        // no longer translucent enough for the map to draw one for it.
-        border = if (showingPanel) {
-            BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
-        } else {
-            null
-        },
-        shadowElevation = if (showingPanel) 3.dp else 0.dp,
+        border = BorderStroke(1.dp, edge),
+        shadowElevation = lift,
     ) {
         // Bottom padding goes to zero once the week row is present: that row is
         // 40dp of tap target with a 17dp line in it, so it already supplies the
@@ -565,11 +645,17 @@ fun TariffChip(
                     )
                 }
                 if (opensSomething) {
+                    // One glyph rotated, not two glyphs swapped. The swap was a
+                    // hard cut in the middle of a soft movement, and the two
+                    // arrows are the same centred chevron anyway.
                     Icon(
-                        if (showingPanel) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                        Icons.Filled.KeyboardArrowDown,
                         contentDescription = weekToggleLabel(showingPanel),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(start = 6.dp, top = 1.dp).size(18.dp),
+                        modifier = Modifier
+                            .padding(start = 6.dp, top = 1.dp)
+                            .size(18.dp)
+                            .graphicsLayer { rotationZ = chevron.value },
                     )
                 }
             }
@@ -579,7 +665,23 @@ fun TariffChip(
             // round-the-clock one, and the panel keeps its border and elevation
             // and draws a divider with nothing underneath. Seen on the emulator
             // — Centrum, which charges every minute and has a one-row week.
-            if (showingPanel) {
+            // AnimatedVisibility, not animateContentSize on the Surface: the
+            // growth happens to a *child*, so the Surface measures itself
+            // around it and redraws its rounded corners, border and shadow at
+            // the true size on every frame. That is the whole fix for the
+            // square-cut edges — see the transition above.
+            //
+            // Opening is a touch springy and closing is fast and flat: a panel
+            // over a map is opened deliberately and dismissed impatiently, and
+            // an exit that lingers reads as lag rather than as grace.
+            AnimatedVisibility(
+                visible = showingPanel,
+                enter = expandVertically(animationSpec = OPEN_SIZE) +
+                    fadeIn(animationSpec = tween(durationMillis = 90, delayMillis = 30)),
+                exit = shrinkVertically(animationSpec = CLOSE_SIZE) +
+                    fadeOut(animationSpec = tween(durationMillis = 60)),
+            ) {
+                Column {
                 HorizontalDivider(
                     Modifier.padding(top = 8.dp, bottom = 2.dp),
                     color = MaterialTheme.colorScheme.outline,
@@ -665,6 +767,7 @@ fun TariffChip(
                             modifier = Modifier.size(16.dp),
                         )
                     }
+                }
                 }
             }
         }
