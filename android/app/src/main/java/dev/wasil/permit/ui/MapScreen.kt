@@ -381,16 +381,34 @@ fun MapScreen(
                             }
                         }
                     }
-                    // `tariffAreas`, not `visibleTariffAreas`. This one word is
-                    // why "still no way to see the full timetable": the tap was
-                    // matched against the *drawn* areas, which are an empty list
-                    // whenever the overlay is off — and the overlay is off by
-                    // default. Tapping the area the header was already naming
-                    // did nothing at all, silently, so the week shipped in
-                    // v0.6.6 and was unreachable without first finding the
-                    // layers button. Selecting an area is about what is under
-                    // your finger, never about which layer happens to be drawn.
-                    else -> when (val hit = mapHitAt(point, homeZone, freeZones, tariffAreas, areaShape)) {
+                    // `visibleTariffAreas` — the drawn ones — which reverses
+                    // v0.6.8, and the reversal needs its reason on the record
+                    // because the thing it reverses was a real fix.
+                    //
+                    // v0.6.8 matched against *all* areas because matching the
+                    // drawn ones meant the tap did nothing whenever the overlay
+                    // was off, and the overlay is off by default: the week
+                    // shipped in v0.6.6 and was unreachable without first
+                    // finding the layers button.
+                    //
+                    // That reason has expired. The chip now follows
+                    // `selectedHit ?: carHit`, so the area you are parked in is
+                    // named and expandable with no tap and no layer at all —
+                    // which is the case the v0.6.8 fix existed to rescue. What
+                    // was left was a map where every tap on bare ground silently
+                    // re-pointed the header at some neighbouring area, with
+                    // nothing drawn to say which one had been hit. Wasil,
+                    // 2026-08-10: *"make it so that zones are not pressable
+                    // (only zone active is current zone) until layers is
+                    // active."*
+                    //
+                    // So selection is now available exactly when the thing being
+                    // selected is on screen. Zones are unaffected — they are
+                    // always drawn, so they stay tappable either way.
+                    else -> when (
+                        val hit =
+                            mapHitAt(point, homeZone, freeZones, visibleTariffAreas, areaShape)
+                    ) {
                         is MapHit.Zone -> zoneDialogTarget = hit.ref
                         is MapHit.Tariff -> {
                             selectedHit = hit.hit
@@ -610,7 +628,18 @@ fun MapScreen(
                 // *drawn* area — with tapping fixed, switching the layer off
                 // and having the header snap back to the car's area would throw
                 // away a choice the user made without the overlay's help.
-                onToggleTariff = { showTariff = !showTariff },
+                onToggleTariff = {
+                    showTariff = !showTariff
+                    // Switching the layer off drops the selection back to the
+                    // car's own area. The note above used to argue the opposite
+                    // — that clearing it threw away a choice the user made —
+                    // and that held while any area could be selected at any
+                    // time. Now that selecting requires the layer, keeping a
+                    // selection you can no longer change or see is the worse
+                    // half of the trade: the header would go on naming a place
+                    // with nothing on the map pointing at it.
+                    if (!showTariff) selectedHit = null
+                },
                 onSetHomeZone = { addingKind = ZoneKind.HOME },
                 onAddFreeZone = { addingKind = ZoneKind.FREE },
                 onOpenZoneList = { zoneListOpen = true },

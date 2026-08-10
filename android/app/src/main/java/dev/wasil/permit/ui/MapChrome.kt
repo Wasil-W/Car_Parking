@@ -2,6 +2,7 @@ package dev.wasil.permit.ui
 
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -519,7 +520,18 @@ fun TariffChip(
         },
         shadowElevation = if (showingPanel) 3.dp else 0.dp,
     ) {
-        Column(Modifier.padding(horizontal = 10.dp, vertical = 7.dp)) {
+        // Bottom padding goes to zero once the week row is present: that row is
+        // 40dp of tap target with a 17dp line in it, so it already supplies the
+        // breathing room the padding was for, and paying twice is what made the
+        // panel look bottom-heavy.
+        Column(
+            Modifier.padding(
+                start = 10.dp,
+                end = 10.dp,
+                top = 7.dp,
+                bottom = if (showingPanel && rows.size > 1) 0.dp else 7.dp,
+            ),
+        ) {
             Row(verticalAlignment = Alignment.Top) {
                 Column(Modifier.weight(1f, fill = showingPanel)) {
                     // While the lookup is in flight this stays blank rather than
@@ -624,16 +636,19 @@ fun TariffChip(
                 // still holds; it is simply no longer the thing you must read
                 // to find out what you are paying now.
                 //
-                // Its own row at 46dp, which is the size this app already uses
-                // for a real target. It was 22dp in the mockup, and 22dp inside
-                // a Surface whose own click *collapses the panel* means a near
-                // miss shuts the thing you were reading.
+                // Its own row, because 22dp inside a Surface whose own click
+                // *collapses the panel* means a near miss shuts the thing you
+                // were reading. 40dp, not the 46dp first tried: centred text in
+                // a 46dp row put 14dp of nothing above and below a 17dp line,
+                // and Wasil saw it straight away — "too big of a negative space
+                // on whole week". 40dp is what this app's own text buttons use,
+                // and the panel's bottom padding is dropped below it because the
+                // row is already carrying that space.
                 if (rows.size > 1) {
                     Row(
                         Modifier
                             .fillMaxWidth()
-                            .padding(top = 2.dp)
-                            .height(46.dp)
+                            .height(40.dp)
                             .clickable { showWeek = true },
                         horizontalArrangement = Arrangement.End,
                         verticalAlignment = Alignment.CenterVertically,
@@ -659,6 +674,26 @@ fun TariffChip(
         ModalBottomSheet(
             onDismissRequest = { showWeek = false },
             containerColor = MaterialTheme.colorScheme.surfaceContainer,
+            // The stock handle carries 22dp of padding above and below, which on
+            // a sheet holding two rows of table is most of what you see. A
+            // 4dp bar with 8dp around it says "drag me" just as well and gives
+            // the content back about 28dp.
+            dragHandle = {
+                Box(
+                    Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Box(
+                        Modifier
+                            .width(32.dp)
+                            .height(4.dp)
+                            .background(
+                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                                CircleShape,
+                            ),
+                    )
+                }
+            },
         ) {
             WeekSheet(
                 heading = placeName ?: area.code,
@@ -688,7 +723,12 @@ private fun WeekSheet(
     minuteOfDay: Int,
 ) {
     val now = remember(rows, dayIndex, minuteOfDay) { activeRow(rows, dayIndex, minuteOfDay) }
-    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 28.dp)) {
+    // Tight. A sheet holding two lines of table does not need a room around it,
+    // and the first pass gave it 28dp below plus 6dp on every row on top of the
+    // drag handle's own inset — Wasil: "same for the whole week itself". The
+    // sheet already floats; the space between it and the screen edge is the
+    // scrim's job, not the content's.
+    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 12.dp)) {
         Text(heading, style = MaterialTheme.typography.titleMedium)
         if (detail != null && detail != heading) {
             Text(
@@ -698,7 +738,7 @@ private fun WeekSheet(
             )
         }
         HorizontalDivider(
-            Modifier.padding(top = 10.dp, bottom = 4.dp),
+            Modifier.padding(top = 8.dp, bottom = 2.dp),
             color = MaterialTheme.colorScheme.outline,
         )
         rows.forEach { row ->
@@ -710,7 +750,7 @@ private fun WeekSheet(
             }
             val weight = if (live) FontWeight.Medium else FontWeight.Normal
             Row(
-                Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                Modifier.fillMaxWidth().padding(vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
