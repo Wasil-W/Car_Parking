@@ -556,9 +556,24 @@ fun TariffChip(
                 }
                 rows.forEach { row ->
                     val live = row === now
+                    // No alpha. v0.6.9 dimmed the non-live rows to 0.65 on top
+                    // of using a quieter token, and the two together put them
+                    // under the readability floor: measured 2.91:1 in dark and
+                    // 2.71:1 in light against the 4.5:1 AA needs for body text.
+                    // Reaching 4.5 would take alpha 0.93, which is not a dim at
+                    // all, so the alpha was never the right instrument.
+                    //
+                    // The distinction survives without it, because it never
+                    // rested on the alpha: live is onSurface at Medium (12.0:1
+                    // dark, 15.5:1 light), not-live is onSurfaceVariant at
+                    // Normal (5.03:1 / 5.55:1). Two tokens and two weights,
+                    // both legible — which is what "i see 3 prices i dont know
+                    // which one is the correct one" actually asked for. A row
+                    // you cannot read is not a quiet answer, it is a missing
+                    // one, and this panel is read outdoors.
                     val ink = when {
                         live -> MaterialTheme.colorScheme.onSurface
-                        else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f)
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
                     }
                     val weight = if (live) FontWeight.Medium else FontWeight.Normal
                     Row(
