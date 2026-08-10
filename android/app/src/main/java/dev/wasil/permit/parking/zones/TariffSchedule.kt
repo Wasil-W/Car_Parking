@@ -187,7 +187,20 @@ fun tariffNext(windows: List<TariffWindow>, dayOfWeek: Int, minuteOfDay: Int): T
         // Charging: the next span is the free gap, and it ends at the next run
         // to begin. The gap's own start is already on the collapsed line as
         // this run's end, which is why the clause names only the far edge.
-        val nextStart = startsAhead.firstOrNull { it > 0 } ?: return null
+        //
+        // The fallback is for an area whose entire week is one run — a
+        // hypothetical market-day zone — read at the exact minute it starts.
+        // There is then no strictly-positive start left, because the only one
+        // is this run's own, at delta zero. The gap after it ends when the same
+        // run comes round next week, which is [WEEK_MINUTES] from now. Returning
+        // null there would have said "this area never changes" about an area
+        // that changes twice a week.
+        //
+        // Unreachable with the bundled data — every one of the 29 areas charges
+        // on five days or more, so all of them have five to seven runs — and
+        // fixed rather than left because the data is the city's and gets
+        // refreshed.
+        val nextStart = startsAhead.firstOrNull { it > 0 } ?: WEEK_MINUTES
         return TariffNext(charging = false, rateText = null, endsInMin = nextStart)
     }
 

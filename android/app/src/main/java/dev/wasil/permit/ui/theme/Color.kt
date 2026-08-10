@@ -167,9 +167,18 @@ val ZoneCandidate = Color(0xFF211E19)
 // Same reasoning as the zone colours — one value for both modes, because the
 // MAPNIK tiles underneath stay light whatever the app theme does. A grey-blue
 // kept clear of both brothers' identity hues, so a boundary can never be
-// misread as "whose car". Twenty-nine of these are on screen at once when the
-// overlay is up, which is why the fill is drawn at 0.07 alpha: enough to tell
-// one region from its neighbour, not enough to bury a zone circle.
+// misread as "whose car".
+//
+// **No fill.** This used to end "which is why the fill is drawn at 0.07 alpha",
+// and v0.7.0 took the fill to zero without updating the sentence — the exact
+// failure this release corrected twice elsewhere, committed here in the same
+// breath. With 29 areas tiling the city that wash answered "is this ground
+// inside some tariff area", which is nearly always yes, so it greyed the map
+// without telling anyone anything; the chip names the area that matters in
+// words. Wasil, shown both magnified side by side: *"no fill from now on."*
+//
+// The boundary itself carries the whole job now, as a 1.0dp dotted line — see
+// MapCanvas.Line for why intermittent and not fainter.
 val TariffBoundary = Color(0xFF5B6B7A)
 
 // The selected part, which has to win against 28 others drawn in TariffBoundary

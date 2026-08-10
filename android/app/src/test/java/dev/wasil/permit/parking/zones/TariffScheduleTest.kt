@@ -161,6 +161,24 @@ class TariffScheduleTest {
     }
 
     @Test
+    fun `a one-day-a-week area still has a next span at the minute it opens`() {
+        // No bundled area looks like this — all 29 charge on five days or more
+        // — but the data is the city's and gets refreshed. Read at exactly
+        // 09:00 the only run start is this one, at delta zero, and the guard
+        // that skips it used to leave nothing, which every caller reads as
+        // "never changes".
+        val marketDay = listOf(TariffWindow("€3,01/h", 9 * 60, 19 * 60, setOf(0)))
+        val atOpen = tariffNext(marketDay, 0, 9 * 60)!!
+        assertEquals(false, atOpen.charging)
+        assertEquals(WEEK_MINUTES, atOpen.endsInMin)
+
+        // A minute either side was already right; pinned so the fix cannot
+        // regress into a special case that only handles the boundary.
+        assertEquals(10 * 60 + 1, tariffNext(marketDay, 0, 8 * 60 + 59)!!.endsInMin)
+        assertEquals(false, tariffNext(marketDay, 0, 9 * 60 + 1)!!.charging)
+    }
+
+    @Test
     fun `an area that never stops charging has no next span`() {
         val allDay = TariffWindow("€8,05/h", 0, 1440, setOf(0, 1, 2, 3, 4, 5, 6))
         assertNull(tariffNext(listOf(allDay), 2, 13 * 60))
