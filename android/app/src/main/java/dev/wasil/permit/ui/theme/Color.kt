@@ -77,9 +77,35 @@ val AlertOnContainerDark = Color(0xFFD9A08F)
 val AlertContainerLight = Color(0xFFF5E4DF)
 val AlertOnContainerLight = Color(0xFF6B2E1F)
 
-val SurfaceDark = Color(0xFF171715)
-val CardDark = Color(0xFF201F1C)
-val HairlineDark = Color(0xFF2E2D28)
+// The dark ground, warmed in v0.7.0.
+//
+// Wasil: *"sometimes i feel like it is too dull and dosent have any vibe to
+// it."* Counted before changing anything: on the map screen the tiles are about
+// three quarters of the pixels and they are stock OpenStreetMap; of the rest,
+// everything is a warm grey except the walk route. Identity colour — six tokens
+// per brother, argued out over three versions — reaches exactly two elements,
+// and neither is on that screen. So the palette is not dull, it is barely worn.
+//
+// The neutrals were #171715 / #201F1C / #2E2D28: red exceeding blue by 2, 4 and
+// 6 points. That is warmth you can measure and not warmth you can see, which is
+// the definition of a ground that has not decided anything. Pushing blue down
+// until it reads costs no new token, no new hue and no rule, and it governs
+// about nine tenths of the non-map pixels — the most effect available for the
+// least risk.
+//
+// Checked rather than assumed: against the existing text colours the warmer
+// ground is very slightly *better*, not worse.
+//   primary text   13.07:1 -> 13.49:1
+//   secondary      5.48:1  -> 5.66:1
+// Computed from the sRGB relative-luminance formula.
+//
+// Warm and not cool. A blue-black was drawn and rejected: light mode is already
+// a cream #FAF9F5, so a cool dark would make the two themes feel like two
+// different apps, and it drifts toward Wasil's own blue-grey, which is the one
+// hue on this screen that already means something.
+val SurfaceDark = Color(0xFF16130E)
+val CardDark = Color(0xFF221D15)
+val HairlineDark = Color(0xFF332B20)
 val TextPrimaryDark = Color(0xFFDEDCD4)
 val TextSecondaryDark = Color(0xFF918E85)
 
@@ -87,8 +113,13 @@ val TextSecondaryDark = Color(0xFF918E85)
 // dark/light neutral family as Surface/Card/Hairline above, just filling the
 // gaps at the darkest (dark mode) and mid-tone (light mode) ends so no
 // container slot has to fall back to Material 3's default purple.
-val SurfaceContainerLowestDark = Color(0xFF0F0F0E)
-val SurfaceContainerHighDark = Color(0xFF272622)
+//
+// Warmed with the rest in v0.7.0. Left on the old near-neutral values these
+// would have been the two steps in the ramp that did not belong to it — and
+// SurfaceContainerHighDark is the *pressed* state of every map control, so the
+// mismatch would have shown up exactly where a control is being looked at.
+val SurfaceContainerLowestDark = Color(0xFF0E0B07)
+val SurfaceContainerHighDark = Color(0xFF2A241A)
 
 val SurfaceLight = Color(0xFFFAF9F5)
 val CardLight = Color(0xFFFFFFFF)
