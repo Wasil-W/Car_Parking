@@ -105,8 +105,19 @@ val SurfaceContainerHighLight = Color(0xFFEAE8DE)
 // above rather than a new hue, so a zone circle can never be misread as
 // "whose car" or "is something wrong". Home is the darker, solid-ring
 // treatment (singular, permanent); free zones are the lighter, dashed-ring
-// treatment (plural, more casual); the candidate being placed is the
-// darkest and thickest of the three so it visibly "pops" as unsaved.
+// treatment (plural, more casual); the candidate being placed is the darkest
+// and thickest of the three so it visibly "pops" as unsaved.
+//
+// The "thickest" half of that was **untrue for two versions** and is only true
+// again as of v0.7.0. v0.6.8 raised free zones 4f -> 9f to make them visible at
+// all and left the candidate behind at 6f, so the unsaved ring — the one whose
+// whole job is to stand out — was the *thinner* of the two. Nobody noticed,
+// because the sentence above kept saying otherwise. Widths now live in
+// MapCanvas.Line, in dp, where the candidate is genuinely the widest.
+//
+// Kept rather than quietly corrected, because this repo has a rule about
+// trusting its own documents: a comment that describes what the code should do
+// is not evidence that it does.
 //
 // These are the same value in both light and dark mode — deliberately not
 // mode-paired like identity/state above. The map tile layer itself
