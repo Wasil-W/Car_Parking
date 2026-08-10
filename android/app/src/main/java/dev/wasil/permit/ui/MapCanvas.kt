@@ -291,7 +291,19 @@ fun MapCanvas(
                         setPoints(walkRoute.map { OsmGeoPoint(it.lat, it.lng) })
                         outlinePaint.color = colors.walkRoute.toArgb()
                         outlinePaint.strokeWidth = map.px(Line.ROUTE_DP)
-                        outlinePaint.strokeCap = android.graphics.Paint.Cap.ROUND
+                        // BUTT, not ROUND. v0.7.0 set ROUND here and undid the
+                        // dash it was setting one line below: a round cap
+                        // extends every run by half a width at *each* end, so
+                        // [2.0w on, 1.5w off] paints as 3.0w on and 0.5w off —
+                        // six parts ink to one, a line with nicks in it rather
+                        // than a dashed line. The mechanism is spelled out in
+                        // Line.dot's own comment, where it is the whole point;
+                        // it was applied to dash without being accounted for.
+                        //
+                        // Explicit rather than left to the default, because
+                        // osmdroid hands out a bare Paint and a default is not
+                        // a decision.
+                        outlinePaint.strokeCap = android.graphics.Paint.Cap.BUTT
                         outlinePaint.pathEffect =
                             DashPathEffect(Line.dash(map.px(Line.ROUTE_DP)), 0f)
                         infoWindow = null
@@ -512,6 +524,11 @@ private fun zoneShapes(
             fillColor = color.copy(alpha = fillAlpha).toArgb()
             strokeColor = color.toArgb()
             strokeWidth = width
+            // Stated, not inherited: a dash only keeps its rhythm under a BUTT
+            // cap, and osmdroid hands out a bare Paint whose default is not a
+            // decision anyone here made. See the walk route for what a ROUND
+            // cap does to a dash.
+            outlinePaint.strokeCap = android.graphics.Paint.Cap.BUTT
             outlinePaint.pathEffect = DashPathEffect(Line.dash(width), 0f)
             setOnClickListener { _, _, _ -> false }
             infoWindow = null
@@ -532,7 +549,10 @@ private fun zoneCircle(
     fillColor = color.copy(alpha = fillAlpha).toArgb()
     strokeColor = color.toArgb()
     strokeWidth = width
-    if (dashed) outlinePaint.pathEffect = DashPathEffect(Line.dash(width), 0f)
+    if (dashed) {
+        outlinePaint.strokeCap = android.graphics.Paint.Cap.BUTT
+        outlinePaint.pathEffect = DashPathEffect(Line.dash(width), 0f)
+    }
     setOnClickListener { _, _, _ -> false }
     infoWindow = null
 }

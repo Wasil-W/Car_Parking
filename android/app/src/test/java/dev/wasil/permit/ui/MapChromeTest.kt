@@ -15,8 +15,26 @@ class MapChromeTest {
     fun `the header chip says what tapping it will do, in the same voice`() {
         // Every control on this screen announces its outcome rather than its
         // state — the focus button, the layers button, and now the chip.
-        assertEquals("Show the whole week", weekToggleLabel(expanded = false))
-        assertEquals("Hide the whole week", weekToggleLabel(expanded = true))
+        //
+        // "What happens next", not "the whole week": v0.7.0 moved the week into
+        // its own sheet and left this label describing the chevron's old job,
+        // so a screen reader was promised a week the chevron does not open — and
+        // on a single-row area the panel had no route to one at all. The voice
+        // is unchanged; only the claim is.
+        assertEquals("Show what happens next", weekToggleLabel(expanded = false))
+        assertEquals("Hide what happens next", weekToggleLabel(expanded = true))
+    }
+
+    @Test
+    fun `a chip opens only when it has something behind it`() {
+        val areas = dev.wasil.permit.parking.zones.TariffAreas.parse(
+            java.io.File("src/main/assets/amsterdam_tarieven.json").readText(),
+        )
+        // Wednesday 13:00 — a moment with nothing special about it.
+        val silent = areas.filterNot { tariffChipOpens(it, 2, 13 * 60) }.map { it.code }.toSet()
+        // Exactly the three that charge every minute of the week. T18P's week is
+        // one row too, and it must NOT be in here: it has a next span.
+        assertEquals(setOf("T11V", "T12V", "T13V"), silent)
     }
 
     @Test

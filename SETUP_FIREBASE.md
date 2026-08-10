@@ -8,8 +8,9 @@ google-services.json — only a database URL entered in the app.
 are public). It lives only in the app's Settings on the two phones.**
 
 1. Go to https://console.firebase.google.com → **Add project**. Name it
-   anything (e.g. `permit-switcher`). Disable Analytics. Free Spark plan — no
-   credit card.
+   anything you like — but **not** a name you would be happy to publish, because
+   the database URL is derived from it and step 4 explains why that matters.
+   Disable Analytics. Free Spark plan — no credit card.
 2. In the left menu: **Build → Realtime Database → Create Database**. Choose
    **Belgium (europe-west1)**. Start in **locked mode**.
 3. Open the **Rules** tab, replace the contents with exactly this, and publish:

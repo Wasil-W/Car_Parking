@@ -434,7 +434,12 @@ fun MapScreen(
             title = "Map",
             subtitle = carPositionLine(car, stateStore.parked, parkedAt, driving),
             modifier = Modifier.align(Alignment.TopStart),
-            chipExpanded = weekExpanded && highlightArea != null,
+            // Widened only when the chip will actually become a panel. Asking
+            // "is the week open and is an area selected" was not the same
+            // question, and for the three round-the-clock areas the two
+            // answers differed — see [tariffChipOpens].
+            chipExpanded = weekExpanded && highlightArea != null &&
+                tariffChipOpens(highlightArea, dayIndex, minuteOfDay),
             // The chip is now both halves of what v0.6.6 shipped as two cards:
             // the live rate, and the whole week behind a chevron. The street
             // name that used to sit between them is gone — "in the small
