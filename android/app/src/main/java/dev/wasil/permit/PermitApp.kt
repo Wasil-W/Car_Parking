@@ -19,6 +19,7 @@ import dev.wasil.permit.parking.PrefsFreeZoneStore
 import dev.wasil.permit.parking.PrefsParkLogStore
 import dev.wasil.permit.parking.PrefsParkStateStore
 import dev.wasil.permit.parking.android.ParkNotifications
+import dev.wasil.permit.parking.facilities.FacilityRegistry
 import dev.wasil.permit.parking.shared.RtdbSharedStateStore
 import dev.wasil.permit.parking.shared.SharedStateStore
 import dev.wasil.permit.parking.shared.UnconfiguredSharedStateStore
@@ -106,6 +107,20 @@ class PermitApp : Application() {
         runCatching {
             assets.open("amsterdam_zones.json").bufferedReader().use { it.readText() }
         }.mapCatching { ZoneRegistry.parse(it) }.getOrNull()
+    }
+
+    /**
+     * Amsterdam's 37 published garages and P+R sites; null when the asset is
+     * missing or corrupt, in which case the layer simply never appears.
+     *
+     * Display only, like [zoneRegistry]. A garage cannot settle the permit —
+     * the visitor permit does not pay for one — so nothing on the claim path
+     * reads this, and [zoneResolver] is untouched.
+     */
+    val facilityRegistry: FacilityRegistry? by lazy {
+        runCatching {
+            assets.open("amsterdam_facilities.json").bufferedReader().use { it.readText() }
+        }.mapCatching { FacilityRegistry.parse(it) }.getOrNull()
     }
 
     /** Rebuilt per call: settings (URL, my car, credentials) can change at runtime. */
