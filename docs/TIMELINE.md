@@ -26,6 +26,7 @@ other document under `docs/` is a deep-dive that this one points at.
 
 | Version | What it did |
 |---|---|
+| `v0.7.5` | **Built, not released** — Amsterdam's 37 published garages and P+R sites on their own map layer, with what they cost in the operator's own words. See below |
 | `v0.7.1` | Three things v0.7.0's own release review found after it was tagged: a round cap that undid the walking route's dashes, a header that gave panel width to a chip that could not open, and a chevron announcing a week it no longer opens |
 | `v0.7.0` | **Bugs and design in one release.** Five wrong answers fixed — "all day" for 7 areas, boundaries that dropped their day, stepped rates shown as flat, a live line computed once and never again, timetable rows below the readability floor. The panel now says what happens next and the week moved one tap out. Every map line converted from device pixels to dp and given a hierarchy. The dark ground warmed |
 | `v0.1` | Switching the permit between two plates |
@@ -456,6 +457,138 @@ connected to any of them.
 | **Deciding the permit by tariff** | Decided 2026-08-05. "The expensive spot keeps the permit" only pays off once the cheaper car can **pay instead**; today it gets a fine either way, so deciding by rate would change which brother is fined and nothing else. It was built and tested in v0.6.2 and **deleted again in v0.6.3** on Wasil's call — no unused machinery. It gets built against a working payment path, or not at all. Recoverable from git if that day comes, but likely to need different requirements by then anyway. |
 
 ---
+
+## v0.7.5 — the garages, and the price they publish — BUILT 2026-08-12, not released
+
+**Wasil, 2026-08-11:** *"I want you to gather all data about all parking lots /
+garages in amsterdam in order to add them too"*, pointing at the council's own
+tariff map. Then, on what it is for: *"display the tariffs so people can know
+how much it would cost to park in that garage. and then most of the time a
+garage has real life tickets or licence plate scanners so you wont need to pay
+in the app itself."*
+
+That last sentence is the whole design. The app never touches money — it says
+what a place costs and the barrier handles the rest, which is the same
+*say what you know, then hand off* shape already chosen for paying (Q1 below).
+
+**Held back deliberately.** Wasil: *"we dont release them until i have found
+some bugs/fixes we need to fix."* `versionCode 29` is claimed, nothing is
+tagged, and `v0.8.0` is queued behind it.
+
+### What ships
+
+**37 facilities, 12 KB** — 26 municipal garages and 11 P+R, from the gemeente's
+`locaties.json`, the file behind the map he linked. **17 carry a published
+rate**; the other 20 say plainly that they do not.
+
+**Why not the 75 that exist.** Three registers publish Amsterdam facilities and
+they disagree. Reconciled they give 75 distinct places — but the 28 municipal
+entries in RDW's `PARKEERGEBIED` carry **a name and nothing else**: no
+coordinate, and RDW's address table holds the council's own postbus rather than
+the garage. Placing those means geocoding a name, and PDOK given `P+R RAI`
+returns **P+R Muiden, 11 km away**; `Piet Hein` returns a restaurant. Measured,
+not assumed. A pin is a claim about where something is, so the ones that ship
+are the ones the council itself positioned. The other 38 return when each has a
+verified location.
+
+**Rates are quoted, never computed, and that is a reversal made mid-build.** The
+register also publishes structured `intervalRates`, so the obvious move is to
+evaluate them. They cannot be evaluated: P3 Mikado's hourly entry carries three
+bands over *overlapping* durations — `1 per 24min [0,24)`, `1 per 25min [24,∞)`
+and `1 per 20min [0,∞)` — which cannot all apply, and its own description says
+the third. Summing them quoted **€130 for a day at a garage whose day ticket is
+€30**. That would have been the most confidently wrong number this app ever
+showed. So there is no garage rate engine; `RateLine.text` is the operator's
+sentence, verbatim, and it stays in Dutch because translating a published price
+risks changing a claim about money.
+
+**The marker problem, and the answer.** Dutch parking signage is a white P on
+blue, and blue means Wasil. Nine colours already carry meaning on that one
+screen and [`USER-MODEL`](USER-MODEL.md) had already established there is no
+fourth safe hue. So facilities take **no colour of their own**: a near-black
+plate reusing `ZoneCandidate`, separated from everything by *shape and glyph* —
+the same argument v0.7.0 made for the line hierarchy. A plate and not a
+teardrop, because a teardrop here means *a point someone chose*.
+
+**The layers button stopped being a boolean**, since two layers cannot share one
+toggle and a button cycling four states is unpredictable. It opens the same
+`DropdownMenu` the zones button already uses — a third disclosure grammar would
+have cost more than the row. Both layers default off. Switching facilities on
+does **not** move the camera: tariff areas are 3 km wide so they need the zoom
+out, points are only useful near you, and yanking the map is the fault v0.6.5
+removed.
+
+### Corrections to this file's own earlier research
+
+**The 2026-08-07 garage assessment was right about scope and wrong about
+freshness.** It rejected garages partly on *"rates expired in February 2022, and
+no field says which"*. That generalised from one record. The NPR index carries
+`staticDataLastUpdated`, and **all 19 matched facilities were refreshed
+2024-12-12 or later**; the matched tariff entries carry no `validityEndOfPeriod`
+at all.
+
+Its stronger objection — *a garage answers a question this app does not ask* —
+still stands for this release, and is worth keeping. What changes it is the case
+with no answer today: both cars in paid areas, one permit, and the second
+brother's only options are strand your brother or do nothing. **A garage, and
+especially a P+R, is a third answer that needs no payment integration.**
+P+R Sloterdijk is `1,00 per 24u` against €8,05/h on a Centrum street. This
+release is the dataset that makes that possible; it is not that feature.
+
+### Seen on a screen, in both themes
+
+Light and dark: the menu, both switches, plates over Centrum tiles, the sheet
+with rates (Markenhoven → *"0,50 per 7 min" / "Dagkaart 47,50"*) and without
+(Rokin → the admission line). The mode-independent marker colours hold.
+
+**One edge, found by looking:** a facility directly beneath your own position is
+**invisible** — the me-marker is larger than a 15dp plate and draws above it.
+The z-order is correct and is not changing, but the facility you are standing on
+is the one you cannot tap. It cost ten minutes here believing the layer was
+broken.
+
+**Not settled**, and carried rather than hidden:
+
+- **Plate density at city zoom.** 37 markers are fine at parking zoom; zoomed
+  out they clump around Centrum and Zuidoost, and nothing clusters or thins
+  them. May need a minimum zoom before the layer draws.
+- **Whether P+R deserves its own switch.** Folded into one row, and they are
+  arguably a different product from an hourly garage.
+- **20 facilities have no rate**, including Rokin, Marnix, Albert Cuyp, De
+  Hallen and Mercatorplein.
+- **Two disclosure grammars.** The tariff panel expands in place from its chip;
+  this opens from the bottom.
+
+**Mockup, published before the code:**
+<https://claude.ai/code/artifact/ab68f7ce-cc42-4b07-a67d-e89f0a5c2736>
+
+## v0.8.0 — the map that takes a moment, and the introduction — PLANNED
+
+Two halves, and Wasil wants the second designed rather than assumed:
+*"it should be somewhat of a introduction, figure out what the user wants and
+what we can customize for him. we should brainstorm more about that."*
+
+**The loading screen.** His words, and the thread behind them did **not** survive
+the reinstall — searched across the six digests and the full 73 MB archive.
+Settled by asking him: it is **map tile loading**, not the launch splash. The
+complaint is old and never addressed — 2026-07-30: *"the loading of the map is
+quite bad, initially when i wanted to add a map i wanted it to be kinda on the
+main screen because then you see it instantly."* It was hit repeatedly during
+v0.7.0's own emulator work (*"the map was still settling"*).
+
+**The introduction.** This is not new ground and should not be started from
+scratch: [`USER-MODEL`](USER-MODEL.md)'s "The onboarding sequence" already
+designs it, and the 2026-08-07 mockup already drew it —
+<https://claude.ai/code/artifact/5e388efc-0ee1-4974-bcef-530a716f23de>, §02
+"First run, reversed". The governing idea is **show something true before asking
+anything**: the obligation layer can state what the spot under your feet costs
+without knowing one thing about you. The permit moves from the first question to
+the seventh. Two steps become confirmations rather than questions — the
+Bluetooth device, and the home zone after several overnight parks in one place.
+
+What is genuinely open, and what the brainstorm is for: *what can be customised
+for him* is not the same question as *what must be asked*, and this file has no
+answer to the first one. Planned item 5 is the old framing; treat it as input.
 
 ## v0.7.0 — the big one: bugs *and* design — SHIPPED 2026-08-11
 
