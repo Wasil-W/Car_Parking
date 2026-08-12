@@ -46,6 +46,8 @@ import dev.wasil.permit.parking.areaSqKm
 import dev.wasil.permit.parking.zones.LatLng
 import dev.wasil.permit.parking.zones.TariffArea
 import dev.wasil.permit.parking.zones.ZonePolygon
+import dev.wasil.permit.parking.facilities.Facility
+import dev.wasil.permit.parking.facilities.FacilityRegistry
 import dev.wasil.permit.parking.zones.ZoneRegistry
 import dev.wasil.permit.parking.route.WalkRoute
 import dev.wasil.permit.parking.route.fetchWalkRoute
@@ -145,6 +147,12 @@ fun MapScreen(
      * always did, which is also what happens anywhere outside the city.
      */
     zoneRegistry: ZoneRegistry?,
+    /**
+     * The city's garages and P+R sites, or null when the asset is unreadable —
+     * in which case the layer never appears and its menu row is disabled rather
+     * than hidden, so the menu is the same shape on every install.
+     */
+    facilityRegistry: FacilityRegistry?,
     // A factory, not an instance: the resolver closes over the home zone and
     // the free-zone list, both of which this very screen can change.
     zoneResolver: () -> ZoneResolver,
@@ -193,6 +201,13 @@ fun MapScreen(
     var zoneListOpen by remember { mutableStateOf(false) }
 
     var showTariff by remember { mutableStateOf(false) }
+    // Off by default, like the tariff layer and for the same reason. Unlike it,
+    // switching this on does NOT move the camera: tariff areas are up to 3 km
+    // across so at parking zoom you are inside one and see nothing, but
+    // facilities are points and only useful near you. Yanking the map away from
+    // where you are standing is the fault v0.6.5 removed from the other layer.
+    var showFacilities by remember { mutableStateOf(false) }
+    var selectedFacility by remember { mutableStateOf<Facility?>(null) }
     var selectedHit by remember { mutableStateOf<TariffHit?>(null) }
     // The header chip, showing the whole week instead of just now. One control
     // where v0.6.6 had two — see TariffChip for why.
@@ -345,6 +360,15 @@ fun MapScreen(
             areaShape = areaShape,
             tariffAreas = visibleTariffAreas,
             highlightRing = highlight?.ring,
+            // Suppressed entirely while the pin is being corrected. That flow
+            // asks you to tap the true spot on the map, and 37 tappable plates
+            // over it would be 37 ways to miss.
+            facilities = if (showFacilities && !movingPin) {
+                facilityRegistry?.facilities.orEmpty()
+            } else {
+                emptyList()
+            },
+            onFacilityTap = { selectedFacility = it },
             ghostCar = pending?.point,
             walkRoute = route?.points.orEmpty(),
             overviewRequest = overviewRequest,
@@ -585,6 +609,8 @@ fun MapScreen(
                 homeZoneSet = homeZone != null,
                 tariffShowing = showTariff,
                 tariffEnabled = tariffAreas.isNotEmpty(),
+                facilitiesShowing = showFacilities,
+                facilitiesEnabled = facilityRegistry != null,
                 locating = locating,
                 zoneCount = zoneEntries(homeZone, freeZones).size,
                 nextFocus = shownFocus,
@@ -644,6 +670,12 @@ fun MapScreen(
                     // half of the trade: the header would go on naming a place
                     // with nothing on the map pointing at it.
                     if (!showTariff) selectedHit = null
+                },
+                // Mirrors the tariff rule directly above: switching a layer off
+                // drops the selection that only that layer could have made.
+                onToggleFacilities = {
+                    showFacilities = !showFacilities
+                    if (!showFacilities) selectedFacility = null
                 },
                 onSetHomeZone = { addingKind = ZoneKind.HOME },
                 onAddFreeZone = { addingKind = ZoneKind.FREE },
@@ -752,6 +784,14 @@ fun MapScreen(
                 },
             )
         }
+    }
+
+    selectedFacility?.let { facility ->
+        FacilitySheet(
+            facility = facility,
+            onOpenPage = { openFacilityPage(context, it) },
+            onDismiss = { selectedFacility = null },
+        )
     }
 
     // Every zone you have, and the way back to one you cannot see. Tapping a
@@ -866,6 +906,21 @@ private fun MovePinCard(
  * need). `google.navigation` opens turn-by-turn walking directions directly
  * in Google Maps; `geo:` is the fallback any maps app understands.
  */
+/**
+ * The council's page for a facility, in whatever browser the phone has.
+ *
+ * Swallows the no-browser case the same way [openWalkingDirections] swallows a
+ * missing maps app — a device with no browser is not a state this app can fix,
+ * and a crash on the way out of a parking sheet is worse than a dead button.
+ */
+private fun openFacilityPage(context: Context, url: String) {
+    try {
+        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+    } catch (e: ActivityNotFoundException) {
+        // No browser. Nothing further to offer.
+    }
+}
+
 private fun openWalkingDirections(context: Context, point: GeoPoint) {
     val primary = Intent(Intent.ACTION_VIEW, Uri.parse(walkingDirectionsUri(point)))
         .setPackage("com.google.android.apps.maps")

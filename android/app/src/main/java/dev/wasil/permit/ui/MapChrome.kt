@@ -13,8 +13,10 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.annotation.DrawableRes
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -31,6 +33,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
@@ -43,6 +46,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import dev.wasil.permit.parking.facilities.Facility
+import dev.wasil.permit.parking.facilities.FacilityKind
 import dev.wasil.permit.parking.zones.TariffArea
 import dev.wasil.permit.parking.zones.TariffNext
 import dev.wasil.permit.parking.zones.tariffNext
@@ -296,6 +301,8 @@ fun MapControlStack(
     homeZoneSet: Boolean,
     tariffShowing: Boolean,
     tariffEnabled: Boolean,
+    facilitiesShowing: Boolean,
+    facilitiesEnabled: Boolean,
     locating: Boolean,
     /** How many zones exist — home plus free. Zero hides the list item. */
     zoneCount: Int,
@@ -303,12 +310,14 @@ fun MapControlStack(
     nextFocus: MapFocus,
     onFocus: () -> Unit,
     onToggleTariff: () -> Unit,
+    onToggleFacilities: () -> Unit,
     onSetHomeZone: () -> Unit,
     onAddFreeZone: () -> Unit,
     onOpenZoneList: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
+    var layersOpen by remember { mutableStateOf(false) }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(CONTROL_GAP)) {
         // One button, cycling, rather than the two v0.6.4 shipped. Its icon and
         // label say where the *next* tap goes, so it is never a guess: the
@@ -319,13 +328,49 @@ fun MapControlStack(
             onClick = onFocus,
             busy = locating,
         )
-        MapControlButton(
-            icon = painterResource(R.drawable.ic_map_layers),
-            label = tariffToggleLabel(tariffShowing),
-            onClick = onToggleTariff,
-            active = tariffShowing,
-            enabled = tariffEnabled,
-        )
+        // Two layers, so this stopped being a boolean in v0.7.5. It opens rather
+        // than toggles, and the reason is that the alternative is worse: one
+        // button cycling four combinations is the control nobody can predict,
+        // and the stack has no room for a fifth circle.
+        //
+        // Same DropdownMenu as the zones button below rather than a second kind
+        // of panel. The stack already taught that a control here either does a
+        // thing or opens a list; adding a third grammar would be the expensive
+        // part, not the row.
+        Box {
+            MapControlButton(
+                icon = painterResource(R.drawable.ic_map_layers),
+                label = "Layers",
+                onClick = { layersOpen = true },
+                active = layersOpen || tariffShowing || facilitiesShowing,
+                enabled = tariffEnabled || facilitiesEnabled,
+            )
+            DropdownMenu(
+                expanded = layersOpen,
+                onDismissRequest = { layersOpen = false },
+                containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                shape = HandoffShapes.Control,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+            ) {
+                // The menu stays open on a tap. Layers are compared — on, off,
+                // both — and a menu that shut after each one would make trying
+                // a combination three round trips.
+                LayerToggleItem(
+                    label = "Tariff areas",
+                    icon = R.drawable.ic_map_layers,
+                    checked = tariffShowing,
+                    enabled = tariffEnabled,
+                    onClick = onToggleTariff,
+                )
+                LayerToggleItem(
+                    label = "Garages & P+R",
+                    icon = R.drawable.ic_map_facility,
+                    checked = facilitiesShowing,
+                    enabled = facilitiesEnabled,
+                    onClick = onToggleFacilities,
+                )
+            }
+        }
         Box {
             MapControlButton(
                 icon = painterResource(R.drawable.ic_map_more),
@@ -390,6 +435,201 @@ fun MapControlStack(
             }
         }
     }
+}
+
+/**
+ * What a facility says when you tap its plate.
+ *
+ * Four facts the data actually carries — name, kind, address, the council's own
+ * page — and, when there is no published rate, one admission.
+ *
+ * **The admission is the load-bearing part.** Twenty of the thirty-seven have no
+ * rate in the register, and the tempting move is to leave the line off and let
+ * the absence pass unremarked. A parking sheet with no price reads as *free* to
+ * anyone moving quickly, and this app's whole failure history is confident
+ * wrongness. So it says what it does not know and points at where the answer
+ * lives, which is the same shape the project already chose for paying: state
+ * what you know, then hand off.
+ *
+ * Rates are the operator's own Dutch, unedited — see [RateLine].
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun FacilitySheet(
+    facility: Facility,
+    onOpenPage: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(start = 20.dp, end = 20.dp, bottom = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(facility.name, style = MaterialTheme.typography.titleMedium)
+            facility.address?.let {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            Row(
+                Modifier.padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                FacilityTag(
+                    when (facility.kind) {
+                        FacilityKind.PARK_AND_RIDE -> "P+R"
+                        FacilityKind.GARAGE -> "Garage"
+                    },
+                )
+                FacilityTag("Gemeente")
+            }
+
+            if (facility.rates.isNotEmpty()) {
+                Column(
+                    Modifier.padding(top = 14.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    facility.rates.forEach { line ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            // Only when it is not every day — a "ma–vr" on every
+                            // row would be noise, and the exception is the point.
+                            if (line.days.isNotEmpty()) {
+                                Text(
+                                    weekdayRange(line.days),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.width(46.dp),
+                                )
+                            }
+                            Text(line.text, style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                }
+                Text(
+                    "Published by the operator. Check the page before paying.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 10.dp),
+                )
+            } else {
+                Text(
+                    when (facility.kind) {
+                        FacilityKind.PARK_AND_RIDE ->
+                            "Handoff has no published rate for this P+R. Most charge a flat " +
+                                "day rate if you travel on by public transport."
+                        FacilityKind.GARAGE ->
+                            "Handoff has no published rate for this garage. Garages charge by " +
+                                "how long you stay, and the app only reads street tariffs."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 14.dp),
+                )
+            }
+
+            facility.url?.let { url ->
+                Button(
+                    onClick = { onOpenPage(url) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 16.dp),
+                    shape = HandoffShapes.Control,
+                ) {
+                    Text(
+                        if (facility.rates.isEmpty()) "Rates on amsterdam.nl" else "Open on amsterdam.nl",
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FacilityTag(label: String) {
+    Text(
+        label,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh, HandoffShapes.Control)
+            .padding(horizontal = 8.dp, vertical = 3.dp),
+    )
+}
+
+/**
+ * "ma–vr" for a contiguous run, "ma, wo, vr" otherwise. Dutch abbreviations,
+ * matching the tariff timetable this app already renders.
+ */
+internal fun weekdayRange(days: Set<Int>): String {
+    val names = listOf("ma", "di", "wo", "do", "vr", "za", "zo")
+    val sorted = days.sorted()
+    if (sorted.isEmpty()) return ""
+    val contiguous = sorted.zipWithNext().all { (a, b) -> b == a + 1 }
+    return if (contiguous && sorted.size > 2) {
+        "${names[sorted.first() - 1]}–${names[sorted.last() - 1]}"
+    } else {
+        sorted.joinToString(", ") { names[it - 1] }
+    }
+}
+
+/**
+ * One row of the layers menu: an icon, a name, and a box that says whether the
+ * layer is on.
+ *
+ * The tick is drawn as a filled or hollow square rather than a `Checkbox`,
+ * because a stock checkbox pulls its colour from the generic `primary` slot,
+ * and this app's `primary` is a near-white neutral by rule — identity colour
+ * may never enter a generic slot. A filled square in `onSurface` says the same
+ * thing and stays inside the palette.
+ *
+ * Disabled when the data behind the layer is missing, rather than hidden: a row
+ * that disappears makes the menu a different shape on a broken install, and
+ * "Garages & P+R" greyed out is a truer statement than no row at all.
+ */
+@Composable
+private fun LayerToggleItem(
+    label: String,
+    @DrawableRes icon: Int,
+    checked: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    DropdownMenuItem(
+        enabled = enabled,
+        text = { Text(label) },
+        leadingIcon = { Icon(painterResource(icon), contentDescription = null) },
+        trailingIcon = {
+            Box(
+                Modifier
+                    .size(16.dp)
+                    .border(
+                        width = 1.5.dp,
+                        color = if (enabled) {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        } else {
+                            MaterialTheme.colorScheme.outline
+                        },
+                        shape = RoundedCornerShape(4.dp),
+                    )
+                    .padding(2.dp)
+                    .background(
+                        color = if (checked) {
+                            MaterialTheme.colorScheme.onSurface
+                        } else {
+                            Color.Transparent
+                        },
+                        shape = RoundedCornerShape(2.dp),
+                    ),
+            )
+        },
+        onClick = onClick,
+    )
 }
 
 /**

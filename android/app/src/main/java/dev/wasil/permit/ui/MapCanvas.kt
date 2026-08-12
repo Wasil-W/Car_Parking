@@ -15,6 +15,8 @@ import dev.wasil.permit.R
 import dev.wasil.permit.parking.FreeZone
 import dev.wasil.permit.parking.GeoPoint
 import dev.wasil.permit.parking.distanceMeters
+import dev.wasil.permit.parking.facilities.Facility
+import dev.wasil.permit.parking.facilities.FacilityKind
 import dev.wasil.permit.parking.zones.TariffArea
 import dev.wasil.permit.parking.zones.ZonePolygon
 import dev.wasil.permit.ui.theme.LocalHandoffColors
@@ -90,6 +92,18 @@ fun MapCanvas(
      * of them lit up half the city at once.
      */
     highlightRing: ZonePolygon? = null,
+    /**
+     * Garages and P+R sites to draw. Empty means the layer is off, which is the
+     * default — the screen is the map, and a layer nobody asked for is chrome.
+     *
+     * Drawn *below* the car and your own position, deliberately. These are
+     * places you might go; those two are where things actually are, and on a
+     * screen this size the answer to "where is my car" must never be behind a
+     * plate advertising a car park.
+     */
+    facilities: List<Facility> = emptyList(),
+    /** Tapping a facility plate. Null leaves them inert. */
+    onFacilityTap: ((Facility) -> Unit)? = null,
     /** The proposed new car position while a correction is being confirmed. */
     ghostCar: GeoPoint? = null,
     /** Tapping the car marker; null leaves the marker inert as before. */
@@ -311,6 +325,31 @@ fun MapCanvas(
                 )
             }
 
+            // Before the car and before you: added first means drawn first means
+            // underneath. A plate must never cover the pin you opened the map for.
+            facilities.forEach { f ->
+                map.overlays.add(Marker(map).apply {
+                    position = OsmGeoPoint(f.lat, f.lng)
+                    icon = ContextCompat.getDrawable(
+                        map.context,
+                        if (f.kind == FacilityKind.PARK_AND_RIDE) {
+                            R.drawable.ic_marker_pr
+                        } else {
+                            R.drawable.ic_marker_garage
+                        },
+                    )
+                    title = f.name
+                    // Centre-anchored, unlike the car. The car's pin has a point
+                    // that means "here"; a plate is a label for a building and
+                    // has no tip, so hanging it by its bottom edge would put it
+                    // half a block north of the thing it names.
+                    setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                    setOnMarkerClickListener { _, _ ->
+                        onFacilityTap?.invoke(f)
+                        true
+                    }
+                })
+            }
             car?.let {
                 map.overlays.add(Marker(map).apply {
                     position = OsmGeoPoint(it.lat, it.lng)

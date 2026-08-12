@@ -231,6 +231,11 @@ fun HandoffTabs(
                     // and the map then offers a circle exactly as it does in
                     // Utrecht — see MapScreen's placing flow.
                     zoneRegistry = app.zoneRegistry,
+                    // The city's garages and P+R sites. Null when the asset is
+                    // unreadable, and the layer then never appears — its menu
+                    // row stays present but disabled, so the menu is the same
+                    // shape on every install.
+                    facilityRegistry = app.facilityRegistry,
                     zoneResolver = { app.zoneResolver() },
                     routeClient = app.routeClient,
                     // Owned here rather than in MapScreen so that a position
