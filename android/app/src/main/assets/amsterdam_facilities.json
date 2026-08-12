@@ -10,7 +10,7 @@
    "k": 0,
    "y": 52.3555,
    "x": 4.88686,
-   "a": "Ruysdaelkade 100 1072 AT",
+   "a": "Ruysdaelkade 100, 1072 AT",
    "u": "https://www.amsterdam.nl/parkeren/gemeentelijke-parkeergarages/overzicht/albert-cuyp/"
   },
   {
@@ -18,7 +18,7 @@
    "k": 0,
    "y": 52.32908,
    "x": 4.85397,
-   "a": "Bosbaan 4 1182 AG",
+   "a": "Bosbaan 4, 1182 AG",
    "u": "https://www.amsterdam.nl/parkeren/gemeentelijke-parkeergarages/overzicht/amsterdamse-bos/"
   },
   {
@@ -26,7 +26,7 @@
    "k": 0,
    "y": 52.40841,
    "x": 4.91514,
-   "a": "Bezaanjachtplein 129 1034 CR",
+   "a": "Bezaanjachtplein 129, 1034 CR",
    "u": "https://www.amsterdam.nl/parkeren/gemeentelijke-parkeergarages/overzicht/banne/"
   },
   {
@@ -34,7 +34,7 @@
    "k": 0,
    "y": 52.36776,
    "x": 4.86837,
-   "a": "Bellamyplein 41 1053 AT",
+   "a": "Bellamyplein 41, 1053 AT",
    "u": "https://www.amsterdam.nl/parkeren/gemeentelijke-parkeergarages/overzicht/hallen/"
   },
   {
@@ -42,7 +42,7 @@
    "k": 0,
    "y": 52.39764,
    "x": 4.93858,
-   "a": "Buikslotermeerplein 226 1025 EZ",
+   "a": "Buikslotermeerplein 226, 1025 EZ",
    "u": "https://www.amsterdam.nl/parkeren/gemeentelijke-parkeergarages/overzicht/opgang/"
   },
   {
@@ -50,7 +50,7 @@
    "k": 0,
    "y": 52.31437,
    "x": 4.93881,
-   "a": "Passage 90 1101 AX",
+   "a": "Passage 90, 1101 AX",
    "u": "https://www.amsterdam.nl/parkeren/gemeentelijke-parkeergarages/overzicht/dome/",
    "t": [
     {
@@ -67,7 +67,7 @@
    "k": 0,
    "y": 52.32391,
    "x": 4.97555,
-   "a": "Gouden Leeuw 100 1103 KA",
+   "a": "Gouden Leeuw 100, 1103 KA",
    "u": "https://www.amsterdam.nl/parkeren/gemeentelijke-parkeergarages/overzicht/gouden-leeuw/"
   },
   {
@@ -75,7 +75,7 @@
    "k": 0,
    "y": 52.32477,
    "x": 4.97786,
-   "a": "Groenhoven 100 1103 LA",
+   "a": "Groenhoven 100, 1103 LA",
    "u": "https://www.amsterdam.nl/parkeren/gemeentelijke-parkeergarages/overzicht/groenhoven/"
   },
   {
@@ -83,7 +83,7 @@
    "k": 0,
    "y": 52.31121,
    "x": 4.95227,
-   "a": "Haardstee 100 1102 NE",
+   "a": "Haardstee 100, 1102 NE",
    "u": "https://www.amsterdam.nl/parkeren/gemeentelijke-parkeergarages/overzicht/haardstee/"
   },
   {
@@ -91,7 +91,7 @@
    "k": 0,
    "y": 52.30908,
    "x": 4.95474,
-   "a": "Hoptille 100 1102 PR",
+   "a": "Hoptille 100, 1102 PR",
    "u": "https://www.amsterdam.nl/parkeren/gemeentelijke-parkeergarages/overzicht/hoptille/"
   },
   {
@@ -99,7 +99,7 @@
    "k": 0,
    "y": 52.36963,
    "x": 4.90871,
-   "a": "Anne Frankstraat 220 1011 MP",
+   "a": "Anne Frankstraat 220, 1011 MP",
    "u": "https://www.amsterdam.nl/parkeren/gemeentelijke-parkeergarages/overzicht/markenhoven/",
    "t": [
     {
@@ -116,7 +116,7 @@
    "k": 0,
    "y": 52.3783,
    "x": 4.87719,
-   "a": "Ter hoogte van Frederik Hendrikplantsoen 25 1052 XZ",
+   "a": "Ter hoogte van Frederik Hendrikplantsoen 25, 1052 XZ",
    "u": "https://www.amsterdam.nl/parkeren/gemeentelijke-parkeergarages/overzicht/marnix/"
   },
   {
@@ -124,7 +124,7 @@
    "k": 0,
    "y": 52.36945,
    "x": 4.85141,
-   "a": "Mercatorplein 2A 1057 CB",
+   "a": "Mercatorplein 2A, 1057 CB",
    "u": "https://www.amsterdam.nl/parkeren/gemeentelijke-parkeergarages/overzicht/mercatorplein/"
   },
   {
@@ -132,7 +132,7 @@
    "k": 0,
    "y": 52.30725,
    "x": 4.94164,
-   "a": "Herikerbergweg 288 1101 CT",
+   "a": "Herikerbergweg 288, 1101 CT",
    "u": "https://www.amsterdam.nl/parkeren/gemeentelijke-parkeergarages/overzicht/p10-plaza-arena/",
    "t": [
     {
@@ -149,7 +149,7 @@
    "k": 0,
    "y": 52.30353,
    "x": 4.9511,
-   "a": "Hullenbergweg 6 1101 BL",
+   "a": "Hullenbergweg 6, 1101 BL",
    "u": "https://www.amsterdam.nl/parkeren/gemeentelijke-parkeergarages/overzicht/p14-evenemententerrein/"
   },
   {
@@ -157,7 +157,7 @@
    "k": 0,
    "y": 52.31538,
    "x": 4.94629,
-   "a": "Fraijlemaborg 131 1102 CV",
+   "a": "Fraijlemaborg 131, 1102 CV",
    "u": "https://www.amsterdam.nl/parkeren/gemeentelijke-parkeergarages/overzicht/p18-hva-roc/",
    "t": [
     {
@@ -174,7 +174,7 @@
    "k": 0,
    "y": 52.31619,
    "x": 4.92988,
-   "a": "Borchlandweg 1 1114 BD",
+   "a": "Borchlandweg 1, 1114 BD",
    "u": "https://www.amsterdam.nl/parkeren/gemeentelijke-parkeergarages/overzicht/p2-evenemententerrein/"
   },
   {
@@ -182,7 +182,7 @@
    "k": 0,
    "y": 52.31031,
    "x": 4.94127,
-   "a": "De Entree 228 1101 EE",
+   "a": "De Entree 228, 1101 EE",
    "u": "https://www.amsterdam.nl/parkeren/gemeentelijke-parkeergarages/overzicht/p3-mikado/",
    "t": [
     {
@@ -199,7 +199,7 @@
    "k": 0,
    "y": 52.31142,
    "x": 4.93942,
-   "a": "De Entree 7 1101 EE",
+   "a": "De Entree 7, 1101 EE",
    "u": "https://www.amsterdam.nl/parkeren/gemeentelijke-parkeergarages/overzicht/p4-villa-arena/",
    "t": [
     {
@@ -216,7 +216,7 @@
    "k": 0,
    "y": 52.31186,
    "x": 4.93896,
-   "a": "De Entree 7 1101 BH",
+   "a": "De Entree 7, 1101 BH",
    "u": "https://www.amsterdam.nl/parkeren/gemeentelijke-parkeergarages/overzicht/p5-villa-arena/",
    "t": [
     {
@@ -233,7 +233,7 @@
    "k": 0,
    "y": 52.31175,
    "x": 4.94571,
-   "a": "De Corridor 15 1101 BC",
+   "a": "De Corridor 15, 1101 BC",
    "u": "https://www.amsterdam.nl/parkeren/gemeentelijke-parkeergarages/overzicht/p6-uitgaansdriehoek/"
   },
   {
@@ -241,7 +241,7 @@
    "k": 0,
    "y": 52.37768,
    "x": 4.91454,
-   "a": "Piet Heinkade 59 1019 GM",
+   "a": "Piet Heinkade 59, 1019 GM",
    "u": "https://www.amsterdam.nl/parkeren/gemeentelijke-parkeergarages/overzicht/piet-heingarage/"
   },
   {
@@ -249,7 +249,7 @@
    "k": 0,
    "y": 52.37056,
    "x": 4.89251,
-   "a": "Rokin 67 1012 KK",
+   "a": "Rokin 67, 1012 KK",
    "u": "https://www.amsterdam.nl/parkeren/gemeentelijke-parkeergarages/overzicht/rokin/"
   },
   {
@@ -257,7 +257,7 @@
    "k": 0,
    "y": 52.35441,
    "x": 4.95571,
-   "a": "Science Park 904 1098 XH",
+   "a": "Science Park 904, 1098 XH",
    "u": "https://www.amsterdam.nl/parkeren/gemeentelijke-parkeergarages/overzicht/science-park-p7/"
   },
   {
@@ -265,7 +265,7 @@
    "k": 0,
    "y": 52.36706,
    "x": 4.9018,
-   "a": "Waterlooplein 28 1011 PG",
+   "a": "Waterlooplein 28, 1011 PG",
    "u": "https://www.amsterdam.nl/parkeren/gemeentelijke-parkeergarages/overzicht/stadhuis/",
    "t": [
     {
@@ -282,7 +282,7 @@
    "k": 0,
    "y": 52.38495,
    "x": 4.88438,
-   "a": "Haarlemmer Houttuinen 549 1013 GM",
+   "a": "Haarlemmer Houttuinen 549, 1013 GM",
    "u": "https://www.amsterdam.nl/parkeren/gemeentelijke-parkeergarages/overzicht/willemspoort/",
    "t": [
     {
@@ -299,7 +299,7 @@
    "k": 1,
    "y": 52.37926,
    "x": 4.84526,
-   "a": "Leeuwendalersweg 23b 1055 JE",
+   "a": "Leeuwendalersweg 23b, 1055 JE",
    "u": "https://www.amsterdam.nl/parkeren/parkeren-reizen/plaatsen-binnen-stad/pr-bos-lommer/",
    "t": [
     {
@@ -326,7 +326,7 @@
    "k": 1,
    "y": 52.39946,
    "x": 4.93883,
-   "a": "Buikslotermeerplein 237 1025 XB",
+   "a": "Buikslotermeerplein 237, 1025 XB",
    "u": "https://www.amsterdam.nl/parkeren/parkeren-reizen/plaatsen-binnen-stad/pr-boven-t-y/"
   },
   {
@@ -334,7 +334,7 @@
    "k": 1,
    "y": 52.40299,
    "x": 4.93277,
-   "a": "Nieuwe Leeuwarderweg 25 1022 BP",
+   "a": "Nieuwe Leeuwarderweg 25, 1022 BP",
    "u": "https://www.amsterdam.nl/parkeren/parkeren-reizen/plaatsen-binnen-stad/noord/"
   },
   {
@@ -342,7 +342,7 @@
    "k": 1,
    "y": 52.34496,
    "x": 4.85459,
-   "a": "Laan der Hesperiden 80 1076 DE",
+   "a": "Laan der Hesperiden 80, 1076 DE",
    "u": "https://www.amsterdam.nl/parkeren/parkeren-reizen/plaatsen-binnen-stad/pr-olympisch-stadion/",
    "t": [
     {
@@ -369,7 +369,7 @@
    "k": 1,
    "y": 52.31363,
    "x": 4.94073,
-   "a": "Burgemeester Stramanweg 130 1101 EP",
+   "a": "Burgemeester Stramanweg 130, 1101 EP",
    "u": "https://www.amsterdam.nl/parkeren/parkeren-reizen/plaatsen-binnen-stad/p1-arena/",
    "t": [
     {
@@ -396,7 +396,7 @@
    "k": 1,
    "y": 52.33939,
    "x": 4.88976,
-   "a": "Europaplein 2a 1078 GZ",
+   "a": "Europaplein 2a, 1078 GZ",
    "u": "https://www.amsterdam.nl/parkeren/parkeren-reizen/plaatsen-binnen-stad/pr-rai/",
    "t": [
     {
@@ -420,7 +420,7 @@
    "k": 1,
    "y": 52.39001,
    "x": 4.83842,
-   "a": "Piarcoplein 1 1043 DW",
+   "a": "Piarcoplein 1, 1043 DW",
    "u": "https://www.amsterdam.nl/parkeren/parkeren-reizen/plaatsen-binnen-stad/pr-sloterdijk/",
    "t": [
     {
@@ -447,7 +447,7 @@
    "k": 1,
    "y": 52.33612,
    "x": 4.86111,
-   "a": "Gustav Mahlerlaan 3004 1081 LA",
+   "a": "Gustav Mahlerlaan 3004, 1081 LA",
    "u": "https://www.amsterdam.nl/parkeren/parkeren-reizen/plaatsen-binnen-stad/pr-vumc/",
    "t": [
     {
@@ -467,7 +467,7 @@
    "k": 1,
    "y": 52.3123,
    "x": 5.04541,
-   "a": "Leeuwenveldseweg 5F 1382 LV",
+   "a": "Leeuwenveldseweg 5F, 1382 LV",
    "u": "https://www.amsterdam.nl/parkeren/parkeren-reizen/plaatsen-binnen-stad/pr-weesp/"
   },
   {
@@ -475,7 +475,7 @@
    "k": 1,
    "y": 52.372,
    "x": 4.96071,
-   "a": "Zuiderzeeweg 8 1095 KG",
+   "a": "Zuiderzeeweg 8, 1095 KG",
    "u": "https://www.amsterdam.nl/parkeren/parkeren-reizen/plaatsen-binnen-stad/pr-zeeburg/",
    "t": [
     {
@@ -502,7 +502,7 @@
    "k": 1,
    "y": 52.36977,
    "x": 4.97115,
-   "a": "Anthonie van Akenstraat 1095 MV",
+   "a": "Anthonie van Akenstraat, 1095 MV",
    "u": "https://www.amsterdam.nl/parkeren/parkeren-reizen/plaatsen-binnen-stad/pr-zeeburg-iii/",
    "t": [
     {
