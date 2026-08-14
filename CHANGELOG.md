@@ -10,6 +10,60 @@ change as a minor.
 
 ---
 
+## v0.7.5 — every garage and P+R, and what they cost
+
+Amsterdam's published parking facilities on their own map layer, with their
+prices in the operator's own words.
+
+### 37 places, on a layer of their own
+
+26 municipal garages and 11 P+R sites, from the council's own map data — the
+same map at `amsterdam.nl/parkeren/parkeertarieven-kaart`. The layers button
+stopped being an on/off switch and now opens two named rows, **Tariff areas**
+and **Garages & P+R**, both off until you ask.
+
+Switching facilities on does not move the map. Tariff areas are kilometres wide
+so they need the zoom out; a garage is a point, and pulling the camera away from
+where you are standing would undo the fix from v0.6.5.
+
+### What they cost, quoted rather than calculated
+
+Tap a plate and you get the operator's own line — *"0,50 per 7 min"*,
+*"Dagkaart 47,50"*, *"1,00 per 24u, max 4 dg"*.
+
+**Nothing is computed.** The national register publishes structured rates as
+well as text, and they cannot be evaluated: one garage lists three price bands
+covering overlapping durations, which cannot all apply at once. Adding them up
+gave **€130 for a day** at a garage whose own day ticket is **€30**. So the app
+quotes and never calculates, and the lines stay in Dutch — translating a
+published price risks changing what it says.
+
+**17 of the 37 have a published rate. The other 20 say so.** A parking sheet
+with no price reads as *free* to anyone in a hurry, so it states the gap and
+sends you to the council's page.
+
+### Why 37 and not 75
+
+Three registers publish Amsterdam facilities and they disagree. Reconciled,
+there are 75 — but 28 of them carry a name and no coordinate anywhere, and the
+register's address table holds the council's own postbus rather than the garage.
+Placing those means asking a geocoder, which puts **P+R RAI eleven kilometres
+away in Muiden**. A pin is a claim about where something is, so the ones that
+ship are the ones the council itself positioned.
+
+### The marker could not be the obvious one
+
+Dutch parking signage is a white **P** on blue, and blue in this app means
+Wasil. Nine colours already carry meaning on that screen. So facilities take no
+colour of their own: a near-black plate, told apart by shape and glyph rather
+than hue, and a plate rather than a teardrop — a teardrop here means a point
+*you* chose.
+
+**Known:** a facility directly underneath your own position is hidden behind it.
+Your position wins, deliberately.
+
+---
+
 ## v0.6.9 — which price is the one you are paying
 
 Four small things from reading the timetable on a real screen.
