@@ -1,0 +1,36 @@
+<!--
+  A garage on the map: a signage plate, not a teardrop.
+
+  Teardrops in this app mean "a point someone chose" — your car, you. A
+  published facility is neither, so it takes the shape the street itself uses.
+
+  Colours are baked rather than tinted because map markers are mode-independent
+  by rule: the MAPNIK tiles stay light whatever the app theme does, so a marker
+  that followed the theme would vanish in one of them. The near-black is
+  ZoneCandidate (#211E19) — the palette's existing "a place" neutral, reused so
+  facilities add no new token. The white keyline is what carries it over a dark
+  tile; without it the plate disappears into road casings and water.
+
+  15dp square, per the v0.7.5 mockup.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="15dp"
+    android:height="15dp"
+    android:viewportWidth="30"
+    android:viewportHeight="30">
+
+    <!-- Keyline first, so the plate sits inside it. -->
+    <path
+        android:pathData="M4,0.5 L26,0.5 A3.5,3.5 0 0 1 29.5,4 L29.5,26 A3.5,3.5 0 0 1 26,29.5 L4,29.5 A3.5,3.5 0 0 1 0.5,26 L0.5,4 A3.5,3.5 0 0 1 4,0.5 Z"
+        android:fillColor="#F2EFE6" />
+
+    <path
+        android:pathData="M5,3 L25,3 A2.6,2.6 0 0 1 27.6,5.6 L27.6,24.4 A2.6,2.6 0 0 1 25,27 L5,27 A2.6,2.6 0 0 1 2.4,24.4 L2.4,5.6 A2.6,2.6 0 0 1 5,3 Z"
+        android:fillColor="#211E19" />
+
+    <!-- The P, filled rather than stroked so it holds at 15dp. -->
+    <path
+        android:pathData="M10.4,23.2 L10.4,6.8 L16.2,6.8 A5.2,5.2 0 0 1 16.2,17.2 L13.6,17.2 L13.6,23.2 Z M13.6,14.2 L16.0,14.2 A2.2,2.2 0 0 0 16.0,9.8 L13.6,9.8 Z"
+        android:fillColor="#F2EFE6"
+        android:fillType="evenOdd" />
+</vector>

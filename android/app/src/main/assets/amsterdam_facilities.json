@@ -1,0 +1,528 @@
+{
+ "source": "https://amsterdam-maps.bma-collective.com/embed/parkeren/deploy_data/locaties.json",
+ "rateSource": "https://npropendata.rdw.nl/parkingdata/v2/ (NPR open data, RDW)",
+ "fetched": "2026-08-11",
+ "note": "Gemeente Amsterdam parking facilities — municipal garages and P+R sites, the points behind amsterdam.nl/parkeren/parkeertarieven-kaart. Positions are the council's own, WGS84, rounded to 5dp and otherwise unmodified. k: 0 = garage, 1 = P+R. t: the operator's published rate lines, VERBATIM and in Dutch — they are quoted rather than computed, because the register's structured rates carry overlapping duration bands that cannot all apply. d: ISO weekdays (Mon=1) when a line does not apply every day. ts: unix time the register last refreshed it. Facilities with no t have no published rate in the register — that is stated on screen rather than left blank.",
+ "attribution": "© Gemeente Amsterdam, CC-BY 4.0 · rates © RDW/NPR open data",
+ "facilities": [
+  {
+   "n": "Albert Cuyp",
+   "k": 0,
+   "y": 52.3555,
+   "x": 4.88686,
+   "a": "Ruysdaelkade 100, 1072 AT",
+   "u": "https://www.amsterdam.nl/parkeren/gemeentelijke-parkeergarages/overzicht/albert-cuyp/"
+  },
+  {
+   "n": "Amsterdamse Bos",
+   "k": 0,
+   "y": 52.32908,
+   "x": 4.85397,
+   "a": "Bosbaan 4, 1182 AG",
+   "u": "https://www.amsterdam.nl/parkeren/gemeentelijke-parkeergarages/overzicht/amsterdamse-bos/"
+  },
+  {
+   "n": "Banne Centrum",
+   "k": 0,
+   "y": 52.40841,
+   "x": 4.91514,
+   "a": "Bezaanjachtplein 129, 1034 CR",
+   "u": "https://www.amsterdam.nl/parkeren/gemeentelijke-parkeergarages/overzicht/banne/"
+  },
+  {
+   "n": "De Hallen",
+   "k": 0,
+   "y": 52.36776,
+   "x": 4.86837,
+   "a": "Bellamyplein 41, 1053 AT",
+   "u": "https://www.amsterdam.nl/parkeren/gemeentelijke-parkeergarages/overzicht/hallen/"
+  },
+  {
+   "n": "De Opgang",
+   "k": 0,
+   "y": 52.39764,
+   "x": 4.93858,
+   "a": "Buikslotermeerplein 226, 1025 EZ",
+   "u": "https://www.amsterdam.nl/parkeren/gemeentelijke-parkeergarages/overzicht/opgang/"
+  },
+  {
+   "n": "Dome",
+   "k": 0,
+   "y": 52.31437,
+   "x": 4.93881,
+   "a": "Passage 90, 1101 AX",
+   "u": "https://www.amsterdam.nl/parkeren/gemeentelijke-parkeergarages/overzicht/dome/",
+   "t": [
+    {
+     "r": "1,00 per 20 min"
+    },
+    {
+     "r": "Dagkaart 30,00"
+    }
+   ],
+   "ts": 1733974810
+  },
+  {
+   "n": "Gouden Leeuw",
+   "k": 0,
+   "y": 52.32391,
+   "x": 4.97555,
+   "a": "Gouden Leeuw 100, 1103 KA",
+   "u": "https://www.amsterdam.nl/parkeren/gemeentelijke-parkeergarages/overzicht/gouden-leeuw/"
+  },
+  {
+   "n": "Groenhoven",
+   "k": 0,
+   "y": 52.32477,
+   "x": 4.97786,
+   "a": "Groenhoven 100, 1103 LA",
+   "u": "https://www.amsterdam.nl/parkeren/gemeentelijke-parkeergarages/overzicht/groenhoven/"
+  },
+  {
+   "n": "Haardstee",
+   "k": 0,
+   "y": 52.31121,
+   "x": 4.95227,
+   "a": "Haardstee 100, 1102 NE",
+   "u": "https://www.amsterdam.nl/parkeren/gemeentelijke-parkeergarages/overzicht/haardstee/"
+  },
+  {
+   "n": "Hoptille",
+   "k": 0,
+   "y": 52.30908,
+   "x": 4.95474,
+   "a": "Hoptille 100, 1102 PR",
+   "u": "https://www.amsterdam.nl/parkeren/gemeentelijke-parkeergarages/overzicht/hoptille/"
+  },
+  {
+   "n": "Markenhoven",
+   "k": 0,
+   "y": 52.36963,
+   "x": 4.90871,
+   "a": "Anne Frankstraat 220, 1011 MP",
+   "u": "https://www.amsterdam.nl/parkeren/gemeentelijke-parkeergarages/overzicht/markenhoven/",
+   "t": [
+    {
+     "r": "0,50 per 7 min"
+    },
+    {
+     "r": "Dagkaart 47,50"
+    }
+   ],
+   "ts": 1733974812
+  },
+  {
+   "n": "Marnix",
+   "k": 0,
+   "y": 52.3783,
+   "x": 4.87719,
+   "a": "Ter hoogte van Frederik Hendrikplantsoen 25, 1052 XZ",
+   "u": "https://www.amsterdam.nl/parkeren/gemeentelijke-parkeergarages/overzicht/marnix/"
+  },
+  {
+   "n": "Mercatorplein",
+   "k": 0,
+   "y": 52.36945,
+   "x": 4.85141,
+   "a": "Mercatorplein 2A, 1057 CB",
+   "u": "https://www.amsterdam.nl/parkeren/gemeentelijke-parkeergarages/overzicht/mercatorplein/"
+  },
+  {
+   "n": "P10 Plaza ArenA",
+   "k": 0,
+   "y": 52.30725,
+   "x": 4.94164,
+   "a": "Herikerbergweg 288, 1101 CT",
+   "u": "https://www.amsterdam.nl/parkeren/gemeentelijke-parkeergarages/overzicht/p10-plaza-arena/",
+   "t": [
+    {
+     "r": "Eerste 24 min 1,00, daarna 1,00 per 25 min"
+    },
+    {
+     "r": "Dagkaart 24,50"
+    }
+   ],
+   "ts": 1733974817
+  },
+  {
+   "n": "P14 Evenemententerrein",
+   "k": 0,
+   "y": 52.30353,
+   "x": 4.9511,
+   "a": "Hullenbergweg 6, 1101 BL",
+   "u": "https://www.amsterdam.nl/parkeren/gemeentelijke-parkeergarages/overzicht/p14-evenemententerrein/"
+  },
+  {
+   "n": "P18 HvA / ROC",
+   "k": 0,
+   "y": 52.31538,
+   "x": 4.94629,
+   "a": "Fraijlemaborg 131, 1102 CV",
+   "u": "https://www.amsterdam.nl/parkeren/gemeentelijke-parkeergarages/overzicht/p18-hva-roc/",
+   "t": [
+    {
+     "r": "1,00 per 20 min"
+    },
+    {
+     "r": "Dagkaart 30,00"
+    }
+   ],
+   "ts": 1733974811
+  },
+  {
+   "n": "P2 Evenemententerrein",
+   "k": 0,
+   "y": 52.31619,
+   "x": 4.92988,
+   "a": "Borchlandweg 1, 1114 BD",
+   "u": "https://www.amsterdam.nl/parkeren/gemeentelijke-parkeergarages/overzicht/p2-evenemententerrein/"
+  },
+  {
+   "n": "P3 Mikado",
+   "k": 0,
+   "y": 52.31031,
+   "x": 4.94127,
+   "a": "De Entree 228, 1101 EE",
+   "u": "https://www.amsterdam.nl/parkeren/gemeentelijke-parkeergarages/overzicht/p3-mikado/",
+   "t": [
+    {
+     "r": "1,00 per 20 min"
+    },
+    {
+     "r": "Dagkaart 30,00"
+    }
+   ],
+   "ts": 1733974813
+  },
+  {
+   "n": "P4 Villa ArenA",
+   "k": 0,
+   "y": 52.31142,
+   "x": 4.93942,
+   "a": "De Entree 7, 1101 EE",
+   "u": "https://www.amsterdam.nl/parkeren/gemeentelijke-parkeergarages/overzicht/p4-villa-arena/",
+   "t": [
+    {
+     "r": "1,00 per 20 min"
+    },
+    {
+     "r": "Dagkaart 30,00"
+    }
+   ],
+   "ts": 1733974825
+  },
+  {
+   "n": "P5 Villa ArenA",
+   "k": 0,
+   "y": 52.31186,
+   "x": 4.93896,
+   "a": "De Entree 7, 1101 BH",
+   "u": "https://www.amsterdam.nl/parkeren/gemeentelijke-parkeergarages/overzicht/p5-villa-arena/",
+   "t": [
+    {
+     "r": "1,00 per 20 min"
+    },
+    {
+     "r": "Dagkaart 30,00"
+    }
+   ],
+   "ts": 1733974826
+  },
+  {
+   "n": "P6 Uitgaansdriehoek",
+   "k": 0,
+   "y": 52.31175,
+   "x": 4.94571,
+   "a": "De Corridor 15, 1101 BC",
+   "u": "https://www.amsterdam.nl/parkeren/gemeentelijke-parkeergarages/overzicht/p6-uitgaansdriehoek/"
+  },
+  {
+   "n": "Piet Hein",
+   "k": 0,
+   "y": 52.37768,
+   "x": 4.91454,
+   "a": "Piet Heinkade 59, 1019 GM",
+   "u": "https://www.amsterdam.nl/parkeren/gemeentelijke-parkeergarages/overzicht/piet-heingarage/"
+  },
+  {
+   "n": "Rokin",
+   "k": 0,
+   "y": 52.37056,
+   "x": 4.89251,
+   "a": "Rokin 67, 1012 KK",
+   "u": "https://www.amsterdam.nl/parkeren/gemeentelijke-parkeergarages/overzicht/rokin/"
+  },
+  {
+   "n": "Science Park P7",
+   "k": 0,
+   "y": 52.35441,
+   "x": 4.95571,
+   "a": "Science Park 904, 1098 XH",
+   "u": "https://www.amsterdam.nl/parkeren/gemeentelijke-parkeergarages/overzicht/science-park-p7/"
+  },
+  {
+   "n": "Stadhuis",
+   "k": 0,
+   "y": 52.36706,
+   "x": 4.9018,
+   "a": "Waterlooplein 28, 1011 PG",
+   "u": "https://www.amsterdam.nl/parkeren/gemeentelijke-parkeergarages/overzicht/stadhuis/",
+   "t": [
+    {
+     "r": "0,21 per 2 min"
+    },
+    {
+     "r": "Dagkaart 63,00"
+    }
+   ],
+   "ts": 1733974824
+  },
+  {
+   "n": "Willemspoort",
+   "k": 0,
+   "y": 52.38495,
+   "x": 4.88438,
+   "a": "Haarlemmer Houttuinen 549, 1013 GM",
+   "u": "https://www.amsterdam.nl/parkeren/gemeentelijke-parkeergarages/overzicht/willemspoort/",
+   "t": [
+    {
+     "r": "0,21 per 2 min"
+    },
+    {
+     "r": "Dagkaart 63"
+    }
+   ],
+   "ts": 1733974829
+  },
+  {
+   "n": "P+R Bos en Lommer",
+   "k": 1,
+   "y": 52.37926,
+   "x": 4.84526,
+   "a": "Leeuwendalersweg 23b, 1055 JE",
+   "u": "https://www.amsterdam.nl/parkeren/parkeren-reizen/plaatsen-binnen-stad/pr-bos-lommer/",
+   "t": [
+    {
+     "r": "1,00 per dag. Max 4 dg. Hierna regulier tarief"
+    },
+    {
+     "r": "Eerste 24u 8,00, daarna 1,00 per dag. Max 4 dg. Hierna regulier tarief",
+     "d": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ]
+    },
+    {
+     "r": "Dagkaart 12,00 (treedt in werking na 4 dagen)"
+    }
+   ],
+   "ts": 1733974819
+  },
+  {
+   "n": "P+R Boven 't Y",
+   "k": 1,
+   "y": 52.39946,
+   "x": 4.93883,
+   "a": "Buikslotermeerplein 237, 1025 XB",
+   "u": "https://www.amsterdam.nl/parkeren/parkeren-reizen/plaatsen-binnen-stad/pr-boven-t-y/"
+  },
+  {
+   "n": "P+R Noord",
+   "k": 1,
+   "y": 52.40299,
+   "x": 4.93277,
+   "a": "Nieuwe Leeuwarderweg 25, 1022 BP",
+   "u": "https://www.amsterdam.nl/parkeren/parkeren-reizen/plaatsen-binnen-stad/noord/"
+  },
+  {
+   "n": "P+R Olympisch Stadion",
+   "k": 1,
+   "y": 52.34496,
+   "x": 4.85459,
+   "a": "Laan der Hesperiden 80, 1076 DE",
+   "u": "https://www.amsterdam.nl/parkeren/parkeren-reizen/plaatsen-binnen-stad/pr-olympisch-stadion/",
+   "t": [
+    {
+     "r": "1,00 per 24u, max 4 dg. Daarna reg. tarief"
+    },
+    {
+     "r": "Eerste 24u 8,00, daarna 1,00 per dag. Max 4 dg. Hierna regulier tarief",
+     "d": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ]
+    },
+    {
+     "r": "Dagkaart 50,00 (treedt in werking na 4 dagen)"
+    }
+   ],
+   "ts": 1752635520
+  },
+  {
+   "n": "P+R P1 ArenA",
+   "k": 1,
+   "y": 52.31363,
+   "x": 4.94073,
+   "a": "Burgemeester Stramanweg 130, 1101 EP",
+   "u": "https://www.amsterdam.nl/parkeren/parkeren-reizen/plaatsen-binnen-stad/p1-arena/",
+   "t": [
+    {
+     "r": "1,00 per 20min"
+    },
+    {
+     "r": "Eerste 24u 8,00, daarna 1,00 per dag. Max 4 dg. Hierna regulier tarief",
+     "d": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ]
+    },
+    {
+     "r": "Dagkaart 30"
+    }
+   ],
+   "ts": 1733974818
+  },
+  {
+   "n": "P+R RAI",
+   "k": 1,
+   "y": 52.33939,
+   "x": 4.88976,
+   "a": "Europaplein 2a, 1078 GZ",
+   "u": "https://www.amsterdam.nl/parkeren/parkeren-reizen/plaatsen-binnen-stad/pr-rai/",
+   "t": [
+    {
+     "r": "1,00 (ma-vr 0-4 en 10-24, za-zo) of 8.00 per 24u (ma-vr 4-10). Daarna reg tarief"
+    },
+    {
+     "r": "8,00 voor eerste 24 uur, max 24 uur. Daarna reguliere tarief",
+     "d": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ]
+    }
+   ],
+   "ts": 1733974820
+  },
+  {
+   "n": "P+R Sloterdijk",
+   "k": 1,
+   "y": 52.39001,
+   "x": 4.83842,
+   "a": "Piarcoplein 1, 1043 DW",
+   "u": "https://www.amsterdam.nl/parkeren/parkeren-reizen/plaatsen-binnen-stad/pr-sloterdijk/",
+   "t": [
+    {
+     "r": "1,00 per 24u, max 4 dg. Daarna reg. tarief"
+    },
+    {
+     "r": "Eerste 24u 8,00, daarna 1,00 per dag. Max 4 dg. Hierna regulier tarief",
+     "d": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ]
+    },
+    {
+     "r": "Dagkaart 14,00 (treedt in werking na 4 dagen)"
+    }
+   ],
+   "ts": 1733974821
+  },
+  {
+   "n": "P+R Weekend VUmc",
+   "k": 1,
+   "y": 52.33612,
+   "x": 4.86111,
+   "a": "Gustav Mahlerlaan 3004, 1081 LA",
+   "u": "https://www.amsterdam.nl/parkeren/parkeren-reizen/plaatsen-binnen-stad/pr-vumc/",
+   "t": [
+    {
+     "r": "1,00 per 24u, max 4 dagen. Daarna regulier tarief",
+     "d": [
+      1,
+      5,
+      6,
+      7
+     ]
+    }
+   ],
+   "ts": 1733974822
+  },
+  {
+   "n": "P+R Weesp",
+   "k": 1,
+   "y": 52.3123,
+   "x": 5.04541,
+   "a": "Leeuwenveldseweg 5F, 1382 LV",
+   "u": "https://www.amsterdam.nl/parkeren/parkeren-reizen/plaatsen-binnen-stad/pr-weesp/"
+  },
+  {
+   "n": "P+R Zeeburg II",
+   "k": 1,
+   "y": 52.372,
+   "x": 4.96071,
+   "a": "Zuiderzeeweg 8, 1095 KG",
+   "u": "https://www.amsterdam.nl/parkeren/parkeren-reizen/plaatsen-binnen-stad/pr-zeeburg/",
+   "t": [
+    {
+     "r": "1,00 per 24u, max 4 dg. Daarna reg. tarief"
+    },
+    {
+     "r": "Eerste 24u 8,00, daarna 1,00 per dag. Max 4 dg. Hierna regulier tarief",
+     "d": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ]
+    },
+    {
+     "r": "Dagkaart 24,00 (treedt in werking na 4 dagen)"
+    }
+   ],
+   "ts": 1733974823
+  },
+  {
+   "n": "P+R Zeeburg III",
+   "k": 1,
+   "y": 52.36977,
+   "x": 4.97115,
+   "a": "Anthonie van Akenstraat, 1095 MV",
+   "u": "https://www.amsterdam.nl/parkeren/parkeren-reizen/plaatsen-binnen-stad/pr-zeeburg-iii/",
+   "t": [
+    {
+     "r": "1,00 per 24u, max 4 dg. Daarna reg. tarief"
+    },
+    {
+     "r": "Eerste 24u 8,00, daarna 1,00 per dag. Max 4 dg. Hierna regulier tarief",
+     "d": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ]
+    },
+    {
+     "r": "Dagkaart 24,00 (treedt in werking na 4 dagen)"
+    }
+   ],
+   "ts": 1733974823
+  }
+ ]
+}

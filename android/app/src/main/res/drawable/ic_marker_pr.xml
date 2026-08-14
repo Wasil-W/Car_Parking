@@ -1,0 +1,46 @@
+<!--
+  A P+R on the map — the same plate, widened to carry "P+R".
+
+  Its own marker rather than a colour variant of the garage one, because the
+  difference is the whole reason to show any of this: P+R Sloterdijk is
+  "1,00 per 24u" against EUR 8,05 an hour on a Centrum street. Shape and label
+  carry that; hue cannot, because every hue in this palette already means
+  something else.
+
+  Same near-black (ZoneCandidate) and same keyline as ic_marker_garage, and
+  mode-independent for the same reason: the tiles under it do not follow the
+  app theme.
+
+  23x15dp, per the v0.7.5 mockup.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="23dp"
+    android:height="15dp"
+    android:viewportWidth="46"
+    android:viewportHeight="30">
+
+    <path
+        android:pathData="M4,0.5 L42,0.5 A3.5,3.5 0 0 1 45.5,4 L45.5,26 A3.5,3.5 0 0 1 42,29.5 L4,29.5 A3.5,3.5 0 0 1 0.5,26 L0.5,4 A3.5,3.5 0 0 1 4,0.5 Z"
+        android:fillColor="#F2EFE6" />
+
+    <path
+        android:pathData="M5,3 L41,3 A2.6,2.6 0 0 1 43.6,5.6 L43.6,24.4 A2.6,2.6 0 0 1 41,27 L5,27 A2.6,2.6 0 0 1 2.4,24.4 L2.4,5.6 A2.6,2.6 0 0 1 5,3 Z"
+        android:fillColor="#211E19" />
+
+    <!-- P -->
+    <path
+        android:pathData="M6.4,22.4 L6.4,7.6 L11.4,7.6 A4.7,4.7 0 0 1 11.4,17.0 L9.2,17.0 L9.2,22.4 Z M9.2,14.3 L11.2,14.3 A2.0,2.0 0 0 0 11.2,10.3 L9.2,10.3 Z"
+        android:fillColor="#F2EFE6"
+        android:fillType="evenOdd" />
+
+    <!-- + -->
+    <path
+        android:pathData="M19.0,13.6 L22.0,13.6 L22.0,10.6 L24.4,10.6 L24.4,13.6 L27.4,13.6 L27.4,16.0 L24.4,16.0 L24.4,19.0 L22.0,19.0 L22.0,16.0 L19.0,16.0 Z"
+        android:fillColor="#F2EFE6" />
+
+    <!-- R -->
+    <path
+        android:pathData="M30.4,22.4 L30.4,7.6 L35.4,7.6 A4.4,4.4 0 0 1 37.6,15.8 L40.2,22.4 L37.2,22.4 L34.9,16.6 L33.2,16.6 L33.2,22.4 Z M33.2,13.9 L35.2,13.9 A1.9,1.9 0 0 0 35.2,10.3 L33.2,10.3 Z"
+        android:fillColor="#F2EFE6"
+        android:fillType="evenOdd" />
+</vector>
