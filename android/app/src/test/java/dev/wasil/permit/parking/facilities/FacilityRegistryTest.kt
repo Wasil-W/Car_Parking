@@ -92,6 +92,59 @@ class FacilityRegistryTest {
         assertEquals(d.sorted(), d)
     }
 
+    /**
+     * The class KDoc promises the shipped facilities are ones the council
+     * positioned. Until v0.7.6 nothing enforced that, so an asset with lat and
+     * lng transposed parsed cleanly and put 37 plates in the Indian Ocean.
+     */
+    @Test
+    fun `a facility outside Amsterdam is dropped rather than drawn`() {
+        val swapped = """{"facilities":[{"n":"Swapped","k":0,"y":4.89,"x":52.37}]}"""
+        assertNull("lat/lng transposed must not parse", FacilityRegistry.parse(swapped))
+
+        val nullIsland = """{"facilities":[{"n":"Nowhere","k":0,"y":0.0,"x":0.0}]}"""
+        assertNull("0,0 must not parse", FacilityRegistry.parse(nullIsland))
+
+        // One good entry survives alongside one bad one, rather than the whole
+        // asset being discarded for a single corrupt row.
+        val mixed = """
+            {"facilities":[
+              {"n":"Real","k":0,"y":52.37,"x":4.89},
+              {"n":"Bad","k":0,"y":12.34,"x":56.78}
+            ]}
+        """.trimIndent()
+        val r = FacilityRegistry.parse(mixed)
+        assertNotNull(r)
+        assertEquals(1, r!!.facilities.size)
+        assertEquals("Real", r.facilities.single().name)
+    }
+
+    /**
+     * `weekdayRange` indexes a seven-element list, so an out-of-range day was
+     * IndexOutOfBoundsException thrown from inside the bottom sheet — a crash
+     * on tap rather than a rejection at load.
+     */
+    @Test
+    fun `a rate line with unusable weekdays is dropped, not widened to every day`() {
+        val bad = """
+            {"facilities":[{"n":"X","k":0,"y":52.37,"x":4.89,
+              "t":[{"r":"1,00 per uur","d":[0,8,99]}]}]}
+        """.trimIndent()
+        val r = FacilityRegistry.parse(bad)
+        assertNotNull(r)
+        // Dropped entirely: an empty day set means "every day" on this type, so
+        // keeping the line would widen the operator's claim rather than narrow it.
+        assertTrue(r!!.facilities.single().rates.isEmpty())
+
+        // Out-of-range values mixed with good ones keep only the good ones.
+        val partial = """
+            {"facilities":[{"n":"X","k":0,"y":52.37,"x":4.89,
+              "t":[{"r":"1,00 per uur","d":[1,2,9]}]}]}
+        """.trimIndent()
+        val line = FacilityRegistry.parse(partial)!!.facilities.single().rates.single()
+        assertEquals(setOf(1, 2), line.days)
+    }
+
     @Test
     fun `garbage parses to null rather than an empty registry`() {
         assertNull(FacilityRegistry.parse("not json"))

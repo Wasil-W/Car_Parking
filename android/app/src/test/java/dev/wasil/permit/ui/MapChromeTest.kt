@@ -6,10 +6,34 @@ import org.junit.Test
 class MapChromeTest {
 
     @Test
-    fun `the tariff button says what it will do, not what is on screen`() {
-        assertEquals("Show tariff areas", tariffToggleLabel(showing = false))
-        assertEquals("Hide tariff areas", tariffToggleLabel(showing = true))
+    fun `weekdayRange survives a day outside 1 to 7 instead of throwing`() {
+        // It indexes a fixed seven-element list. Before v0.7.6 this threw
+        // IndexOutOfBoundsException from inside the facility sheet — a crash on
+        // tap, on data the parser had already accepted.
+        assertEquals("", weekdayRange(setOf(0)))
+        assertEquals("", weekdayRange(setOf(8)))
+        assertEquals("", weekdayRange(emptySet()))
+        assertEquals("ma, di", weekdayRange(setOf(0, 1, 2, 99)))
     }
+
+    @Test
+    fun `weekdayRange abbreviates a run of three or more and lists the rest`() {
+        assertEquals("ma–vr", weekdayRange(setOf(1, 2, 3, 4, 5)))
+        assertEquals("ma–wo", weekdayRange(setOf(3, 1, 2)))
+        // Two adjacent days stay a list: "ma–di" is longer to read than
+        // "ma, di" and says nothing extra.
+        assertEquals("ma, di", weekdayRange(setOf(1, 2)))
+        assertEquals("za, zo", weekdayRange(setOf(6, 7)))
+        assertEquals("ma, vr", weekdayRange(setOf(1, 5)))
+        assertEquals("zo", weekdayRange(setOf(7)))
+    }
+
+    // The tariff button's own label test is gone with the function. v0.7.5 turned
+    // that button into a menu, so it now reads "Layers" and the show/hide
+    // phrasing moved onto two rows that carry their state as a tick instead.
+    // The test outlived the string by one release and kept passing, which is the
+    // failure this project already has a name for: a green assertion about a
+    // sentence no screen can produce.
 
     @Test
     fun `the header chip says what tapping it will do, in the same voice`() {

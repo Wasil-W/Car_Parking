@@ -116,6 +116,7 @@ class FacilityRegistry(val facilities: List<Facility>) {
                 val name = o.string("n") ?: return@mapNotNull null
                 val lat = o["y"]?.jsonPrimitive?.doubleOrNull ?: return@mapNotNull null
                 val lng = o["x"]?.jsonPrimitive?.doubleOrNull ?: return@mapNotNull null
+                if (!plausiblyAmsterdam(lat, lng)) return@mapNotNull null
                 Facility(
                     name = name,
                     kind = if (o["k"]?.jsonPrimitive?.intOrNull == 1) {
@@ -130,18 +131,56 @@ class FacilityRegistry(val facilities: List<Facility>) {
                     rates = o["t"]?.jsonArray?.mapNotNull { r ->
                         val ro = r.jsonObject
                         val text = ro.string("r") ?: return@mapNotNull null
-                        RateLine(
-                            text = text,
-                            days = ro["d"]?.jsonArray
-                                ?.mapNotNull { it.jsonPrimitive.intOrNull }?.toSet()
-                                .orEmpty(),
-                        )
+                        val dayList = ro["d"]?.jsonArray
+                        val days = dayList
+                            ?.mapNotNull { it.jsonPrimitive.intOrNull }
+                            ?.filter { it in 1..7 }
+                            ?.toSet()
+                            .orEmpty()
+                        // A `d` that was present but yielded nothing usable is
+                        // bad data, and the line is dropped rather than kept.
+                        // Keeping it would read as `days.isEmpty()`, which this
+                        // type defines as **every day** — so a corrupt weekday
+                        // would silently widen a price from five days to seven.
+                        // Losing one published line beats broadcasting a wider
+                        // claim than the operator made.
+                        if (dayList != null && dayList.isNotEmpty() && days.isEmpty()) {
+                            return@mapNotNull null
+                        }
+                        RateLine(text = text, days = days)
                     }.orEmpty(),
                     ratesUpdated = o["ts"]?.jsonPrimitive?.contentOrNull?.toLongOrNull(),
                 )
             }
             FacilityRegistry(list).takeIf { list.isNotEmpty() }
         }.getOrNull()
+
+        /**
+         * A data-integrity check on the bundled asset, **not** a scope test.
+         *
+         * The distinction matters and this repo has a rule about it: *coverage
+         * is containment, never a name* — whether a spot is in scope is
+         * [dev.wasil.permit.parking.zones.ZoneRegistry] finding a match for a
+         * point, with no latitude ranges anywhere. Nothing here is ever asked
+         * about the user's position. This box is only asked whether a line in
+         * a file the app ships is a coordinate at all.
+         *
+         * It exists because the class KDoc above makes a promise — that the
+         * facilities which ship are the ones the council itself positioned —
+         * and until now nothing enforced it. 28 facilities were excluded from
+         * this release precisely because their positions could not be trusted,
+         * while the parser would have accepted a swapped `lat`/`lng` and drawn
+         * every plate in the Indian Ocean. A pin is the most confident sentence
+         * this app writes, so the guarantee belongs in the code and not only in
+         * a test over today's data.
+         *
+         * Generous on purpose: the municipality reaches Weesp in the south-east
+         * and Westpoort in the west, and the box has room around both. A real
+         * facility rejected here would be a bug in the box, so it is drawn to
+         * catch corruption rather than to be tight.
+         */
+        private fun plausiblyAmsterdam(lat: Double, lng: Double): Boolean =
+            lat.isFinite() && lng.isFinite() && lat in 52.20..52.50 && lng in 4.65..5.15
 
         private fun JsonObject.string(key: String): String? =
             this[key]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }

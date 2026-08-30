@@ -162,14 +162,10 @@ internal fun tariffChipOpens(area: TariffArea, dayIndex: Int, minuteOfDay: Int):
         area.windows.any { it.stepNote != null } ||
         weekSchedule(area).size > 1
 
-/** What the tariff-areas button announces it will do, not what it is showing. */
-fun tariffToggleLabel(showing: Boolean): String =
-    if (showing) "Hide tariff areas" else "Show tariff areas"
-
 /**
  * What tapping the header chip will do. Same "announce the outcome" voice as
- * [tariffToggleLabel] and the focus button: the chevron pictures it, this is
- * what a screen reader says and what a long press shows.
+ * the focus button: the chevron pictures it, this is what a screen reader says
+ * and what a long press shows.
  *
  * **It no longer says "the whole week"**, because the chevron no longer opens
  * one. v0.7.0 moved the week into a sheet behind its own "Whole week" row and
@@ -568,9 +564,17 @@ private fun FacilityTag(label: String) {
  */
 internal fun weekdayRange(days: Set<Int>): String {
     val names = listOf("ma", "di", "wo", "do", "vr", "za", "zo")
-    val sorted = days.sorted()
+    // Filtered here as well as in FacilityRegistry.parse, and deliberately not
+    // only there. This indexes a fixed seven-element list, so a day outside
+    // 1..7 is not a wrong string — it is IndexOutOfBoundsException thrown from
+    // inside a bottom sheet, i.e. a crash on tap rather than a rejection at
+    // load. A total function costs one filter; trusting an upstream guard costs
+    // the whole screen the first time someone hand-edits the asset.
+    val sorted = days.filter { it in 1..7 }.sorted()
     if (sorted.isEmpty()) return ""
     val contiguous = sorted.zipWithNext().all { (a, b) -> b == a + 1 }
+    // Three or more, because "ma–di" for two adjacent days is longer to read
+    // than "ma, di" and says nothing extra.
     return if (contiguous && sorted.size > 2) {
         "${names[sorted.first() - 1]}–${names[sorted.last() - 1]}"
     } else {
