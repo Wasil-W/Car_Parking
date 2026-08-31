@@ -327,18 +327,34 @@ fun MapCanvas(
 
             // Before the car and before you: added first means drawn first means
             // underneath. A plate must never cover the pin you opened the map for.
+            //
+            // The two icons are resolved ONCE per pass rather than once per
+            // facility. They were inside the loop, which meant 37 drawable
+            // lookups on every update — and this block runs on every
+            // recomposition, so panning with the layer on repeated it
+            // continuously.
+            //
+            // The Markers themselves are still rebuilt, deliberately, and not
+            // cached the way the tariff polygons above are. Those carry a
+            // stateless click listener; these close over `onFacilityTap`, and a
+            // cached Marker would hold the first one forever — the exact
+            // stale-closure hazard this file's `removeAll` exists to prevent.
+            // Trading 37 cheap allocations for that risk is the wrong way round.
+            val garageIcon by lazy { ContextCompat.getDrawable(map.context, R.drawable.ic_marker_garage) }
+            val prIcon by lazy { ContextCompat.getDrawable(map.context, R.drawable.ic_marker_pr) }
             facilities.forEach { f ->
                 map.overlays.add(Marker(map).apply {
                     position = OsmGeoPoint(f.lat, f.lng)
-                    icon = ContextCompat.getDrawable(
-                        map.context,
-                        if (f.kind == FacilityKind.PARK_AND_RIDE) {
-                            R.drawable.ic_marker_pr
-                        } else {
-                            R.drawable.ic_marker_garage
-                        },
-                    )
+                    icon = if (f.kind == FacilityKind.PARK_AND_RIDE) prIcon else garageIcon
                     title = f.name
+                    // Suppressed the same way every other marker and circle on
+                    // this canvas suppresses it, rather than relying on the
+                    // click listener below returning true. osmdroid's stock
+                    // bubble is off-centre and only repeats the title, and a
+                    // future path that draws this marker without a listener
+                    // would otherwise resurface something the file has twice
+                    // decided against.
+                    infoWindow = null
                     // Centre-anchored, unlike the car. The car's pin has a point
                     // that means "here"; a plate is a label for a building and
                     // has no tip, so hanging it by its bottom edge would put it

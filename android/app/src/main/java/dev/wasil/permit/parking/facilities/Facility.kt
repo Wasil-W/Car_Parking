@@ -1,5 +1,7 @@
 package dev.wasil.permit.parking.facilities
 
+import dev.wasil.permit.parking.GeoPoint
+import dev.wasil.permit.parking.distanceMeters
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
@@ -98,14 +100,31 @@ data class RateLine(
 class FacilityRegistry(val facilities: List<Facility>) {
 
     /** Nearest facility, or null when none is within [withinMetres]. */
-    fun nearest(lat: Double, lng: Double, withinMetres: Double = Double.MAX_VALUE): Facility? =
-        facilities.minByOrNull { distanceM(lat, lng, it.lat, it.lng) }
-            ?.takeIf { distanceM(lat, lng, it.lat, it.lng) <= withinMetres }
+    fun nearest(lat: Double, lng: Double, withinMetres: Double = Double.MAX_VALUE): Facility? {
+        val from = GeoPoint(lat, lng, 0f)
+        return facilities
+            .minByOrNull { distanceMeters(from, it.point()) }
+            ?.takeIf { distanceMeters(from, it.point()) <= withinMetres }
+    }
 
-    /** Facilities within [metres], nearest first. */
-    fun near(lat: Double, lng: Double, metres: Double): List<Facility> =
-        facilities.filter { distanceM(lat, lng, it.lat, it.lng) <= metres }
-            .sortedBy { distanceM(lat, lng, it.lat, it.lng) }
+    /**
+     * Facilities within [metres], nearest first.
+     *
+     * Each facility is measured exactly once. The obvious spelling —
+     * `filter { d(it) <= m }.sortedBy { d(it) }` — measures every entry in the
+     * filter and then re-measures the survivors on every comparison, because
+     * `sortedBy` evaluates its selector per comparison rather than once per
+     * element. Harmless at 37 entries and not harmless if this is ever called
+     * per frame from a map update, which is the direction this data is heading.
+     */
+    fun near(lat: Double, lng: Double, metres: Double): List<Facility> {
+        val from = GeoPoint(lat, lng, 0f)
+        return facilities
+            .map { it to distanceMeters(from, it.point()) }
+            .filter { (_, d) -> d <= metres }
+            .sortedBy { (_, d) -> d }
+            .map { (facility, _) -> facility }
+    }
 
     companion object {
         /** Null on anything unreadable — the layer simply does not appear. */
@@ -187,13 +206,19 @@ class FacilityRegistry(val facilities: List<Facility>) {
     }
 }
 
-/** Metres between two WGS84 points. Haversine; the distances here are urban. */
-internal fun distanceM(lat1: Double, lng1: Double, lat2: Double, lng2: Double): Double {
-    val r = 6_371_000.0
-    val dLat = Math.toRadians(lat2 - lat1)
-    val dLng = Math.toRadians(lng2 - lng1)
-    val a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) *
-        Math.sin(dLng / 2) * Math.sin(dLng / 2)
-    return 2 * r * Math.asin(Math.sqrt(a))
-}
+/**
+ * This facility as a [GeoPoint], so distances go through the app's one
+ * haversine ([distanceMeters], `ParkSignals.kt`) rather than a second copy.
+ *
+ * There *was* a second copy here until v0.7.6 — same earth radius, same
+ * formula, written because this class holds bare doubles rather than points.
+ * Two haversines in one module drift apart the first time one is corrected, and
+ * the existing one is the better of the two anyway: it uses `atan2(√h, √(1-h))`
+ * where the duplicate used `asin(√a)`, which loses precision near antipodal
+ * points. Irrelevant at urban distances, and exactly the kind of difference
+ * nobody would notice had diverged.
+ *
+ * `accuracyM` is 0 because it is not part of the distance; [GeoPoint] simply
+ * has no two-argument constructor.
+ */
+private fun Facility.point(): GeoPoint = GeoPoint(lat, lng, 0f)

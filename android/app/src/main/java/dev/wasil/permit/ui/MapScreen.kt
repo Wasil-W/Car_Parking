@@ -900,13 +900,6 @@ private fun MovePinCard(
 }
 
 /**
- * Hands off to whichever maps app is installed for a walking route back to
- * the car — this app deliberately has no in-app navigation, and deliberately
- * avoids a Maps SDK dependency (the API key and billing account that would
- * need). `google.navigation` opens turn-by-turn walking directions directly
- * in Google Maps; `geo:` is the fallback any maps app understands.
- */
-/**
  * The council's page for a facility, in whatever browser the phone has.
  *
  * Swallows the no-browser case the same way [openWalkingDirections] swallows a
@@ -921,6 +914,13 @@ private fun openFacilityPage(context: Context, url: String) {
     }
 }
 
+/**
+ * Hands off to whichever maps app is installed for a walking route back to
+ * the car — this app deliberately has no in-app navigation, and deliberately
+ * avoids a Maps SDK dependency (the API key and billing account that would
+ * need). `google.navigation` opens turn-by-turn walking directions directly
+ * in Google Maps; `geo:` is the fallback any maps app understands.
+ */
 private fun openWalkingDirections(context: Context, point: GeoPoint) {
     val primary = Intent(Intent.ACTION_VIEW, Uri.parse(walkingDirectionsUri(point)))
         .setPackage("com.google.android.apps.maps")

@@ -1,5 +1,7 @@
 package dev.wasil.permit.parking.facilities
 
+import dev.wasil.permit.parking.GeoPoint
+import dev.wasil.permit.parking.distanceMeters
 import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -17,12 +19,31 @@ class FacilityRegistryTest {
             ?: error("bundled asset failed to parse")
     }
 
+    /**
+     * These totals pin a bundled snapshot, so they are *expected* to fail the
+     * day the asset is legitimately refreshed. The message has to say so —
+     * otherwise the next person meets "expected:<17> but was:<18>" and starts
+     * looking for a bug in the parser instead of updating a constant.
+     */
+    private val REFRESHED =
+        "the bundled asset has changed. If amsterdam_facilities.json was just " +
+            "regenerated this is expected — update the constant. If it was not, " +
+            "something is dropping entries at parse time."
+
     @Test
     fun `the bundled asset parses to 37 facilities`() {
         val r = bundled()
-        assertEquals(37, r.facilities.size)
-        assertEquals(26, r.facilities.count { it.kind == FacilityKind.GARAGE })
-        assertEquals(11, r.facilities.count { it.kind == FacilityKind.PARK_AND_RIDE })
+        assertEquals(REFRESHED, 37, r.facilities.size)
+        assertEquals(REFRESHED, 26, r.facilities.count { it.kind == FacilityKind.GARAGE })
+        assertEquals(REFRESHED, 11, r.facilities.count { it.kind == FacilityKind.PARK_AND_RIDE })
+        // Relational, so it holds through any refresh: every facility is one of
+        // the two kinds and nothing is silently dropped between them.
+        assertEquals(
+            "garages + P+R must account for every facility",
+            r.facilities.size,
+            r.facilities.count { it.kind == FacilityKind.GARAGE } +
+                r.facilities.count { it.kind == FacilityKind.PARK_AND_RIDE },
+        )
     }
 
     /**
@@ -43,8 +64,11 @@ class FacilityRegistryTest {
         val r = bundled()
         val withRates = r.facilities.filter { it.rates.isNotEmpty() }
         val without = r.facilities.filter { it.rates.isEmpty() }
-        assertEquals(17, withRates.size)
-        assertEquals(20, without.size)
+        assertEquals(REFRESHED, 17, withRates.size)
+        assertEquals(REFRESHED, 20, without.size)
+        // Relational: the split must account for everything, whatever the totals
+        // become. This half survives a refresh; the two above do not.
+        assertEquals(r.facilities.size, withRates.size + without.size)
         // Absence must be an empty list rather than a fabricated line.
         without.forEach { assertNull("${it.name} should have no timestamp", it.ratesUpdated) }
         withRates.forEach { assertNotNull("${it.name} should have a timestamp", it.ratesUpdated) }
@@ -88,7 +112,8 @@ class FacilityRegistryTest {
     fun `near returns nearest first`() {
         val list = bundled().near(52.36760, 4.90180, metres = 4000.0)
         assertTrue(list.size >= 2)
-        val d = list.map { distanceM(52.36760, 4.90180, it.lat, it.lng) }
+        val from = GeoPoint(52.36760, 4.90180, 0f)
+        val d = list.map { distanceMeters(from, GeoPoint(it.lat, it.lng, 0f)) }
         assertEquals(d.sorted(), d)
     }
 
@@ -156,8 +181,13 @@ class FacilityRegistryTest {
 
     @Test
     fun `distance is roughly right`() {
-        // Waterlooplein to Sloterdijk is about 5.5 km.
-        val d = distanceM(52.36760, 4.90180, 52.39001, 4.83842)
+        // Waterlooplein to Sloterdijk is about 5.5 km. Measured through the
+        // app's one haversine — this file used to call a second copy that
+        // lived in Facility.kt until v0.7.6 removed it.
+        val d = distanceMeters(
+            GeoPoint(52.36760, 4.90180, 0f),
+            GeoPoint(52.39001, 4.83842, 0f),
+        )
         assertTrue("was $d", d in 4500.0..6500.0)
     }
 }

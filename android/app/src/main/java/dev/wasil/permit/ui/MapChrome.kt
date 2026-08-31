@@ -434,6 +434,12 @@ fun MapControlStack(
 }
 
 /**
+ * The council's own parking-tariff map — the page the bundled facility data was
+ * taken from, and the fallback when a facility has no page of its own.
+ */
+private const val COUNCIL_PARKING_MAP = "https://www.amsterdam.nl/parkeren/parkeertarieven-kaart/"
+
+/**
  * What a facility says when you tap its plate.
  *
  * Four facts the data actually carries — name, kind, address, the council's own
@@ -528,19 +534,32 @@ fun FacilitySheet(
                 )
             }
 
-            facility.url?.let { url ->
-                Button(
-                    onClick = { onOpenPage(url) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 16.dp),
-                    shape = HandoffShapes.Control,
-                ) {
-                    Text(
-                        if (facility.rates.isEmpty()) "Rates on amsterdam.nl" else "Open on amsterdam.nl",
-                        style = MaterialTheme.typography.labelLarge,
-                    )
-                }
+            // Never conditional on the facility having its own page.
+            //
+            // It used to be `facility.url?.let { }`, which meant a facility with
+            // neither a rate nor a link rendered an admission and no action of
+            // any kind — the same dead end as the no-position park, where the
+            // app states a problem and offers no way out. All 37 bundled
+            // entries carry a url today and nothing enforced that, so the
+            // fallback is the council's own tariff map: the page this data came
+            // from, which always answers the question even when it cannot
+            // answer it about this specific garage.
+            val target = facility.url ?: COUNCIL_PARKING_MAP
+            Button(
+                onClick = { onOpenPage(target) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 16.dp),
+                shape = HandoffShapes.Control,
+            ) {
+                Text(
+                    when {
+                        facility.url == null -> "Find it on amsterdam.nl"
+                        facility.rates.isEmpty() -> "Rates on amsterdam.nl"
+                        else -> "Open on amsterdam.nl"
+                    },
+                    style = MaterialTheme.typography.labelLarge,
+                )
             }
         }
     }
