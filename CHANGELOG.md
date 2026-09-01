@@ -10,6 +10,48 @@ change as a minor.
 
 ---
 
+## v0.7.6 — eleven things found by looking instead of waiting
+
+Nothing on screen changes. This is v0.7.5's own code reviewed against itself,
+at Wasil's instruction: *"check your own code this time completely to find
+errors or mistakes in code that could cause the bugs to appear instead of
+waiting for them to appear."*
+
+Eleven findings, all of them mine, none of them yet a failure anyone had hit.
+
+**Three that would have become one.**
+
+*The parser did not enforce its own promise.* The facility registry's comment
+says the places that ship are the ones the council itself positioned — and 28
+were excluded from v0.7.5 for exactly that reason — while the code accepted any
+two numbers. An asset with latitude and longitude transposed would have drawn
+all 37 plates in the Indian Ocean. The guarantee is now in the code rather than
+in a test over today's data.
+
+*A crash waiting in the sheet.* The weekday label indexes a seven-element list
+with a value nothing range-checked, so a stray `0` or `8` in the data threw the
+moment you tapped that garage. Closed twice over: the parser drops such a line,
+and the function no longer trusts it. It **drops** rather than ignores, because
+an empty day set means *every day* — silently widening a five-day price to
+seven is the wrong direction to be wrong in.
+
+*A dead function with a passing test.* When the layers button became a menu, its
+old label lost every caller — and the test kept asserting two strings no screen
+could produce. A green check for nothing at all, which is a shape this project
+has met before.
+
+**And eight smaller ones**: a second copy of a distance formula the app already
+had, thirty-seven icon lookups per frame where two suffice, a sheet that could
+offer no action at all if a garage had no page, a comment orphaned from the
+function it described, a missing guard on the marker's info bubble, a distance
+measured twice, and tests that failed with a bare number instead of saying the
+data had simply moved.
+
+Every new test was checked by removing the fix and watching it fail, then
+restoring it. 568 pass.
+
+---
+
 ## v0.7.5 — every garage and P+R, and what they cost
 
 Amsterdam's published parking facilities on their own map layer, with their

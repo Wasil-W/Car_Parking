@@ -26,7 +26,8 @@ other document under `docs/` is a deep-dive that this one points at.
 
 | Version | What it did |
 |---|---|
-| `v0.7.5` | **Built, not released** — Amsterdam's 37 published garages and P+R sites on their own map layer, with what they cost in the operator's own words. See below |
+| `v0.7.6` | Eleven defects found by reviewing v0.7.5's own code rather than waiting for them — a parser that did not enforce its own promise, a crash waiting in the facility sheet, a dead function with a passing test, and eight smaller ones |
+| `v0.7.5` | Amsterdam's 37 published garages and P+R sites on their own map layer, with what they cost in the operator's own words. See below |
 | `v0.7.1` | Three things v0.7.0's own release review found after it was tagged: a round cap that undid the walking route's dashes, a header that gave panel width to a chip that could not open, and a chevron announcing a week it no longer opens |
 | `v0.7.0` | **Bugs and design in one release.** Five wrong answers fixed — "all day" for 7 areas, boundaries that dropped their day, stepped rates shown as flat, a live line computed once and never again, timetable rows below the readability floor. The panel now says what happens next and the week moved one tap out. Every map line converted from device pixels to dp and given a hierarchy. The dark ground warmed |
 | `v0.1` | Switching the permit between two plates |
@@ -458,7 +459,74 @@ connected to any of them.
 
 ---
 
-## v0.7.5 — the garages, and the price they publish — BUILT 2026-08-12, not released
+## Paying is off the table — DECIDED 2026-08-31
+
+**Wasil, after asking around:** *"i am not able to implement the paying system
+into the app as that is a huge pain in the ass with legal stuff and a good
+tariff connected with it… the least we can do is go as far as we can to mimick
+it and finish the app for a moment when the moment hits."*
+
+**This confirms Q1 rather than contradicting it.** The 2026-08-06 research
+reached the same place from the other direction — writing a parking right to the
+NPR is limited to SHPV-accredited providers, so the barrier is commercial and
+not technical — and recommended *"say what is owed and hand off to the
+provider's app."* Two independent routes, one answer. The question is closed.
+
+**What this changes, and what it does not.** It does not change the app's
+direction; that recommendation has been the plan since v0.6.0 and everything
+built since has followed it. What it changes is the *definition of finished*.
+Section D of [`USE-CASES.md`](USE-CASES.md) can never be completed here, so it
+stops being a backlog and becomes a **specification held ready** — the rows stay
+written, the obligation half stays honest, and the settlement half stops one
+step short on purpose.
+
+Concretely, "as far as we can" already has a shape and most of it exists:
+
+- **What a spot costs, now and next** — v0.6.0, v0.7.0
+- **What a garage or P+R costs instead** — v0.7.5, quoted from the operator
+- **The obligation/settlement split** — v0.6.1, which is what makes the last
+  step separable at all
+- **What is left**: the session log as a record of what *was owed* rather than
+  what was paid. [`USER-MODEL`](USER-MODEL.md) item 7 already argues this and
+  notes three of its four fields are obligation, not settlement — **so it is the
+  one substantial feature that was never blocked on paying**, and it is now the
+  natural last piece.
+
+**Do not build a fake payment flow.** Mimicking means going up to the handoff
+and stopping, not drawing a button that pretends. A screen that looks like it
+takes money and does not is the one thing worse here than a missing feature.
+
+### The gemeente idea — Wasil, 2026-08-31, unexplored
+
+*"mail the gemeente about this with the idea to make it an app that uses their
+api (which we already do) and then use it for rented cars and maybe something
+more into that direction or get the support of the gemeente to make it
+standalone for the people to help them out."*
+
+Recorded because it is the first idea in this project that changes what the app
+*is* rather than what it does, and because ideas that live only in a
+conversation are lost — which is what this file exists to prevent.
+
+Three things that make it more plausible than it sounds:
+
+1. **The app already runs entirely on the city's own published data** — 29
+   tariff areas, 107 permit zones, 518 buurten, 37 facilities, all from
+   Amsterdam's open data under CC-BY 4.0, with attribution. There is nothing to
+   ask permission for that is not already granted; the ask would be for
+   *support*, not access.
+2. **It is a working demonstration, not a proposal.** Most people writing to a
+   council have a slide. This has an APK, eleven tagged releases and a public
+   repository.
+3. **Rented cars is a genuinely different reading of the same machine.** The
+   permit-switching core is "one entitlement, several vehicles, move it to
+   whichever one is parked" — which is a fleet problem wearing a family costume.
+   That is the first framing found that does not need paying to be useful.
+
+**Nothing is decided and nothing is being built for it.** The honest next step
+is one email, which is Wasil's to send — the same shape as the SHPV email under
+Q1 that would have closed the paying question a month earlier.
+
+## v0.7.5 — the garages, and the price they publish — SHIPPED 2026-08-31
 
 **Wasil, 2026-08-11:** *"I want you to gather all data about all parking lots /
 garages in amsterdam in order to add them too"*, pointing at the council's own
