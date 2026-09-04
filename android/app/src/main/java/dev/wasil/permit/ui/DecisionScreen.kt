@@ -31,8 +31,15 @@ import dev.wasil.permit.parking.PendingDecision
  * settled holder.
  */
 @Composable
-fun DecisionScreen(decision: PendingDecision, onChoice: (DecisionActionKind) -> Unit) {
-    val content = contentFor(decision)
+fun DecisionScreen(
+    decision: PendingDecision,
+    onChoice: (DecisionActionKind) -> Unit,
+    /** False when this park never got a position — see [contentFor]. */
+    positionKnown: Boolean = true,
+    /** True when a grantable permission explains the missing position. */
+    fixablePermission: Boolean = false,
+) {
+    val content = contentFor(decision, positionKnown, fixablePermission)
 
     Column(
         modifier = Modifier

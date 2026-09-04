@@ -74,7 +74,25 @@ fun blockedBody(
  * one choice more than its notification can hold — the full screen has the
  * room "mark this spot free" never had.
  */
-fun contentFor(decision: PendingDecision): DecisionContent = when (decision) {
+fun contentFor(
+    decision: PendingDecision,
+    /**
+     * Whether this park has a position at all.
+     *
+     * Read from the store by the caller rather than carried on
+     * [PendingDecision.Manual], which is persisted as flat primitives and would
+     * need a migration for one boolean — and this is a fact about *now* anyway:
+     * the ask can be opened up to 12 hours later, by which time the pin may have
+     * been set by hand on the Map.
+     */
+    positionKnown: Boolean = true,
+    /**
+     * Whether the missing position is explained by a permission the user can
+     * grant. Keeps the prompt from advising a fix that would not fix anything —
+     * a failed fix instruction is worse than none.
+     */
+    fixablePermission: Boolean = false,
+): DecisionContent = when (decision) {
     is PendingDecision.Blocked -> DecisionContent(
         title = blockedTitle(decision.otherLabel, decision.known),
         body = blockedBody(
@@ -86,9 +104,35 @@ fun contentFor(decision: PendingDecision): DecisionContent = when (decision) {
             DecisionChoice("Leave it", DecisionActionKind.IGNORE),
         ),
     )
+    // Two different situations wearing one prompt, and until now one sentence.
+    //
+    // "A possible park was detected. Choose what to do with the permit" says
+    // nothing about *why* it cannot decide, so the same unanswerable question
+    // arrives after every park and the only way out is to answer it by hand
+    // every time — Wasil, 2026-09-03: "the message pop up far more often than
+    // before... i have to do it manually now every time."
+    //
+    // When the position is known this is a real question (auto-claim is off, or
+    // the permit holder could not be read) and the old wording is fine. When it
+    // is not known, the app is asking about a spot it cannot see, and saying so
+    // is the difference between a decision and a riddle.
     is PendingDecision.Manual -> DecisionContent(
-        title = "Parked — decide about the permit",
-        body = "A possible park was detected at ${hm(decision.raisedAtMs)}. Choose what to do with the permit.",
+        title = if (positionKnown) "Parked — decide about the permit" else "Parked — but where?",
+        body = if (positionKnown) {
+            "A possible park was detected at ${hm(decision.raisedAtMs)}. " +
+                "Choose what to do with the permit."
+        } else {
+            "The car parked at ${hm(decision.raisedAtMs)}, but the phone could not work out " +
+                "where. Without a position the app cannot tell whether this spot is paid, so " +
+                "it has to ask." +
+                if (fixablePermission) {
+                    " This usually means location is set to “Allow only while using the app” — " +
+                        "Handoff reads your position in the background, so it needs “Allow all " +
+                        "the time”. Settings has a row that fixes it."
+                } else {
+                    " You can set the car's position on the Map."
+                }
+        },
         choices = listOf(
             DecisionChoice("Claim permit", DecisionActionKind.CLAIM),
             DecisionChoice("Mark this spot free", DecisionActionKind.FREE_HERE),

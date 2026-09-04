@@ -140,8 +140,27 @@ fun SettingsScreen(
     val scope = rememberCoroutineScope()
     val colors = LocalHandoffColors.current
     var refresh by remember { mutableIntStateOf(0) }
+    /**
+     * Asks for **every** missing permission in one press.
+     *
+     * It was `RequestPermission()` — singular — driven by
+     * `needed.firstOrNull { !granted }`, so recovering four permissions took
+     * four separate presses of a button that gave no sign more were coming.
+     * Nobody presses an unchanged-looking "Grant" four times, so in practice the
+     * app sat with two or three of the four and no way to tell.
+     *
+     * That is not cosmetic. Detection needs `ACTIVITY_RECOGNITION` for the
+     * activity path and location for the displacement path; with neither,
+     * `ParkDecisionEngine` can only ever time out into `Unclear`, and every
+     * single park ends in the manual prompt. Wasil, 2026-09-03: *"the message
+     * pop up far more often than before… i have to do it manually now every
+     * time."*
+     *
+     * Android shows the dialogs in sequence itself and returns a map when the
+     * last one closes — one press, one refresh.
+     */
     val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
+        ActivityResultContracts.RequestMultiplePermissions(),
     ) { refresh++ }
 
     var permit by remember { mutableStateOf(credentialStore.load()) }
@@ -184,14 +203,7 @@ fun SettingsScreen(
     // already granted — so it is checked here, reported as its own row, and
     // fixed by sending the user to the one screen where "Allow all the time"
     // exists at all.
-    val backgroundLocation = remember(revision) {
-        when {
-            Build.VERSION.SDK_INT < 29 -> BackgroundLocation.NOT_APPLICABLE
-            granted(context, Manifest.permission.ACCESS_BACKGROUND_LOCATION) ->
-                BackgroundLocation.GRANTED
-            else -> BackgroundLocation.MISSING
-        }
-    }
+    val backgroundLocation = remember(revision) { backgroundLocationState(context) }
     val powerManager = context.getSystemService(PowerManager::class.java)
     val ignoringBatteryOpt = remember(revision) {
         powerManager?.isIgnoringBatteryOptimizations(context.packageName) == true
@@ -432,7 +444,7 @@ fun SettingsScreen(
             trailing = if (!bluetoothGranted) {
                 {
                     TextButton(onClick = {
-                        permissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
+                        permissionLauncher.launch(arrayOf(Manifest.permission.BLUETOOTH_CONNECT))
                     }) { Text("Grant") }
                 }
             } else null,
@@ -546,8 +558,10 @@ fun SettingsScreen(
                             TextButton(onClick = {
                                 when (fix) {
                                     FixAction.GrantPermission ->
-                                        needed.firstOrNull { !granted(context, it) }
-                                            ?.let { permissionLauncher.launch(it) }
+                                        // All of them, not the first of them.
+                                        needed.filterNot { granted(context, it) }
+                                            .takeIf { it.isNotEmpty() }
+                                            ?.let { permissionLauncher.launch(it.toTypedArray()) }
                                     FixAction.BatterySettings -> {
                                         context.startActivity(
                                             Intent(
