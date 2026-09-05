@@ -13,8 +13,8 @@ android {
         applicationId = "dev.wasil.permit"
         minSdk = 26
         targetSdk = 35
-        versionCode = 30
-        versionName = "0.7.6"
+        versionCode = 31
+        versionName = "0.7.7"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

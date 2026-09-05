@@ -36,6 +36,24 @@ sealed interface FixAction {
  */
 enum class BackgroundLocation { GRANTED, MISSING, NOT_APPLICABLE }
 
+/**
+ * The one place this state is decided.
+ *
+ * Lifted out of `SettingsScreen` in v0.7.7 because a second caller appeared:
+ * the decision prompt now explains *why* it could not place a park, and the
+ * honest answer is usually this permission. Two copies of the same three-branch
+ * check would be two things to keep in step, and this project has a rule about
+ * exactly that.
+ */
+fun backgroundLocationState(context: android.content.Context): BackgroundLocation = when {
+    android.os.Build.VERSION.SDK_INT < 29 -> BackgroundLocation.NOT_APPLICABLE
+    androidx.core.content.ContextCompat.checkSelfPermission(
+        context,
+        android.Manifest.permission.ACCESS_BACKGROUND_LOCATION,
+    ) == android.content.pm.PackageManager.PERMISSION_GRANTED -> BackgroundLocation.GRANTED
+    else -> BackgroundLocation.MISSING
+}
+
 /** [hint] is the rare case where the row's consequence needs a sentence, not a label. */
 data class HealthRow(
     val label: String,

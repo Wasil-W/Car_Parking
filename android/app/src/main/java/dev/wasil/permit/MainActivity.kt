@@ -25,8 +25,10 @@ import dev.wasil.permit.parking.PendingDecision
 import dev.wasil.permit.parking.android.ParkActionReceiver
 import dev.wasil.permit.parking.android.SharedSync
 import dev.wasil.permit.parking.currentPendingDecision
+import dev.wasil.permit.ui.BackgroundLocation
 import dev.wasil.permit.ui.DecisionActionKind
 import dev.wasil.permit.ui.DecisionScreen
+import dev.wasil.permit.ui.backgroundLocationState
 import dev.wasil.permit.ui.HandoffTabs
 import dev.wasil.permit.ui.MainViewModel
 import dev.wasil.permit.ui.SetupFlow
@@ -118,6 +120,12 @@ class MainActivity : ComponentActivity() {
                     } else if (decision != null) {
                         DecisionScreen(
                             decision = decision,
+                            // Read here rather than carried on the decision:
+                            // the ask can be opened hours later, and by then
+                            // the pin may have been placed by hand on the Map.
+                            positionKnown = app.parkStateStore.lastParkLocation != null,
+                            fixablePermission =
+                                backgroundLocationState(this@MainActivity) == BackgroundLocation.MISSING,
                             onChoice = { kind ->
                                 // Same call the notification's own action buttons
                                 // make — exactly one implementation per action.

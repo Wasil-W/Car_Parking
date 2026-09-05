@@ -656,6 +656,30 @@ private fun LayerToggleItem(
 }
 
 /**
+ * "Where is the car?" — the way into placing a pin for a park that never got one.
+ *
+ * Deliberately the same pill as [WalkPill] and in the same place, because it is
+ * the same kind of thing: the one action this screen offers about the car,
+ * shown when it is the one that applies. They are mutually exclusive by
+ * construction — the walk pill needs a position, this needs the absence of one.
+ *
+ * It says "Where is the car?" and not "Fix the location", because nothing is
+ * broken from the user's side and there is nothing to fix. The app is asking a
+ * question it could not answer itself.
+ */
+@Composable
+fun PlaceCarPill(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Button(onClick = onClick, modifier = modifier, shape = CircleShape) {
+        Text(
+            "Where is the car?",
+            style = MaterialTheme.typography.labelLarge,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+/**
  * "Walk to car", as a pill rather than the full-width slab it was.
  *
  * Full width made it the loudest thing on the screen and pinned a whole row of

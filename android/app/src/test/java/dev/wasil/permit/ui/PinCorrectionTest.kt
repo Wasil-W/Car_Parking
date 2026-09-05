@@ -105,4 +105,58 @@ class PinCorrectionTest {
         assertEquals(false, result.parkedOutside)
         assertEquals(Flip.NONE, result.flip)
     }
+
+    // ---- a park that never had a position at all -------------------------
+    //
+    // Reproduced on shipped v0.7.5: with no position there is no marker, and
+    // the marker was the only way into this flow. These pin the way out.
+
+    @Test
+    fun `the first placement of a never-placed park is not capped`() {
+        // Ten kilometres away. There is no detected point to have wandered
+        // from, so there is nothing for the 300 m cap to measure — and
+        // refusing here would leave the park unfixable, which is the bug.
+        val faraway = northOf(inPaid, 10_000.0)
+        assertTrue(correctionFor(null, faraway, null, resolver) is CorrectionResult.Ok)
+    }
+
+    @Test
+    fun `once placed, the cap applies from that first placement`() {
+        // The caller writes the first placement into detectedParkLocation, so
+        // the second move is measured against it. The guard is postponed by
+        // one placement, never removed.
+        val first = correctionFor(null, inPaid, null, resolver) as CorrectionResult.Ok
+        assertTrue(
+            correctionFor(first.point, northOf(first.point, 500.0), true, resolver)
+                is CorrectionResult.TooFar,
+        )
+    }
+
+    /**
+     * The case that silently stranded the other car.
+     *
+     * `CarBluetoothReceiver` writes `parkedOutside = false` at the start of
+     * every drive. Passing that leftover as "what it was before" makes a first
+     * placement in a free zone compute [Flip.NONE] — which USE-CASES C9 says
+     * means *ask nothing* — so the spot would stay unknown forever and the
+     * other phone would stay blocked by a car whose owner had just placed it.
+     */
+    @Test
+    fun `a first placement in a free zone still asks, rather than reading as unchanged`() {
+        val leftover = correctionFor(null, inFree, false, resolver) as CorrectionResult.Ok
+        assertEquals("the old signature's answer, and it is wrong here", Flip.NONE, leftover.flip)
+
+        val correct = correctionFor(null, inFree, null, resolver) as CorrectionResult.Ok
+        assertEquals(Flip.UNKNOWN_BEFORE, correct.flip)
+        assertEquals(false, correct.parkedOutside)
+    }
+
+    @Test
+    fun `a first placement in a paid zone resolves the area and asks`() {
+        val result = correctionFor(null, inPaid, null, resolver) as CorrectionResult.Ok
+        assertEquals("T13B", result.zoneCode)
+        assertEquals(true, result.parkedOutside)
+        // Not NOW_PAID: nothing changed to paid, because nothing was known.
+        assertEquals(Flip.UNKNOWN_BEFORE, result.flip)
+    }
 }

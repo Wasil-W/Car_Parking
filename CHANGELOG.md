@@ -10,6 +10,61 @@ change as a minor.
 
 ---
 
+## v0.7.7 — the question that arrived after every park
+
+### Install this one
+
+**The permit question was appearing after every single park, and there was no
+way to stop it.** Reported from real use: *"the message pop up far more often
+than before and i dont like that. i have to do it manually now every time."*
+
+**It was never the Bluetooth pairing.** The app ignores any device that is not
+your car, so a question arriving at all is proof the pairing worked — it is what
+lets detection start in the first place.
+
+What actually happened: the app works out that you have parked in one of two
+ways — from movement, or from your position shifting a few metres. **Both are
+read while the app is in the background**, and both need permissions that had
+quietly stopped being granted. With neither, the app waits ninety seconds,
+learns nothing, and has to ask. Every time.
+
+### The button meant to fix it could only fix a quarter of it
+
+Settings' **Grant** asked for **one** permission per press, out of four — and
+looked exactly the same afterwards, with nothing saying more were needed.
+Nobody presses an unchanged button four times, so an install could sit for
+weeks with half its permissions and no sign of it.
+
+It now asks for all of them in one press.
+
+### The question says what it does not know
+
+*"A possible park was detected. Choose what to do with the permit"* described
+neither situation it covered. When the spot is known, it is a fair question.
+When it is not, the app was asking about a place it could not see, and never
+said so.
+
+It now reads **"Parked — but where?"**, explains that without a position it
+cannot tell whether the spot is paid, and — only when that is genuinely the
+cause — says which setting fixes it. It will not point you at a setting that is
+already correct.
+
+### A park with no position is no longer a dead end
+
+If the app could not work out where you parked, there was **nothing you could
+do about it, ever.** No pin on the map, and correcting the pin was only
+reachable by tapping the pin that did not exist. The car stayed lost until you
+drove away.
+
+The map now offers **"Where is the car?"** — tap it, tap the spot, confirm. The
+first placement is uncapped, because there is no detected point to have wandered
+from; every correction after that is capped against it as before.
+
+Telling the app where your car is now also unblocks the other phone. It did not,
+which meant placing your car by hand still left your brother waiting on it.
+
+---
+
 ## v0.7.6 — eleven things found by looking instead of waiting
 
 Nothing on screen changes. This is v0.7.5's own code reviewed against itself,

@@ -227,7 +227,9 @@ fun MapScreen(
     var movingPin by remember { mutableStateOf(false) }
     var pending by remember { mutableStateOf<CorrectionResult.Ok?>(null) }
     var tooFarM by remember { mutableStateOf<Double?>(null) }
-    var flipToConfirm by remember { mutableStateOf<Flip?>(null) }
+    // Carries the whole result, not just the flip: the dialog needs to know what
+    // the spot RESOLVED TO, and the flip only says what changed.
+    var flipToConfirm by remember { mutableStateOf<CorrectionResult.Ok?>(null) }
 
     val candidateBuurtInUse = candidateBuurt?.takeIf { addingKind != ZoneKind.HOME }
     val candidateZone = candidatePoint?.let {
@@ -389,12 +391,31 @@ fun MapScreen(
             onMapTap = { point ->
                 when {
                     addingKind != null -> placeAt(point)
-                    movingPin && car != null -> {
+                    // No `car != null` any more, and that is the whole fix.
+                    // A park the app could not place has no marker, and this
+                    // gate used to require one — so the tap that would have
+                    // placed the pin fell through to the tariff branch and was
+                    // read as selecting an area. Between that and the marker
+                    // being the only way to *enter* this mode, there was no way,
+                    // ever, to tell the app where such a car was.
+                    movingPin -> {
                         // Anchored to where detection put the car, not to
                         // the current pin: measuring from the pin let a
                         // confirmed move become the origin of the next one.
+                        //
+                        // Null on a park that was never placed — no detected
+                        // point exists to measure from, so the first placement
+                        // is uncapped and then becomes the anchor itself.
                         val anchor = stateStore.detectedParkLocation ?: car
-                        when (val r = correctionFor(anchor, point, stateStore.parkedOutside, zoneResolver())) {
+                        // Null when the park never resolved a zone, so nothing
+                        // was ever published about this spot. Passing the
+                        // leftover `parkedOutside` instead would compare against
+                        // whatever the *start of the drive* wrote and report a
+                        // first placement in a free zone as "unchanged".
+                        val wasOutside =
+                            if (car == null && !stateStore.parkedOutsideKnown) null
+                            else stateStore.parkedOutside
+                        when (val r = correctionFor(anchor, point, wasOutside, zoneResolver())) {
                             is CorrectionResult.TooFar -> {
                                 tooFarM = r.distanceM
                                 pending = null
@@ -509,8 +530,10 @@ fun MapScreen(
             ) {
                 when {
                     pending != null -> MovePinCard(
+                        // Null rather than 0.0 when there is no anchor: there is
+                        // no distance, and zero is a number that reads as one.
                         distanceM = (stateStore.detectedParkLocation ?: car)
-                            ?.let { distanceMeters(it, pending!!.point) } ?: 0.0,
+                            ?.let { distanceMeters(it, pending!!.point) },
                         flip = pending!!.flip,
                         onCancel = {
                             pending = null
@@ -518,14 +541,31 @@ fun MapScreen(
                         },
                         onConfirm = {
                             val result = pending!!
+                            // The first placement of a never-placed park becomes
+                            // the anchor every later correction is capped
+                            // against. Written only when there was none, so a
+                            // confirmed move can still never reset the cap —
+                            // which is the invariant detectedParkLocation exists
+                            // for.
+                            if (stateStore.detectedParkLocation == null) {
+                                stateStore.detectedParkLocation = result.point
+                            }
                             stateStore.lastParkLocation = result.point
                             stateStore.lastZoneCode = result.zoneCode
                             stateStore.parkedOutside = result.parkedOutside
+                            // A person standing next to the car has just said
+                            // where it is. That is testimony, not a guess, so
+                            // the spot stops being unknown — and until this line
+                            // existed it never did: the other phone stayed
+                            // blocked by a car whose owner had just placed it,
+                            // because ClaimGuard needs parkedOutside AND
+                            // parkedOutsideKnown to clear the way.
+                            stateStore.parkedOutsideKnown = true
                             // The other phone learns the corrected position via
                             // the path that already exists — SyncStateWorker
-                            // reads exactly these three fields.
+                            // reads exactly these fields.
                             SharedSync.requestSync(context)
-                            flipToConfirm = result.flip.takeIf { it != Flip.NONE }
+                            flipToConfirm = result.takeIf { it.flip != Flip.NONE }
                             pending = null
                             movingPin = false
                         },
@@ -605,6 +645,28 @@ fun MapScreen(
                 }
             }
         } else {
+            // THE DOOR.
+            //
+            // A park the app could not place is otherwise a dead end with no
+            // exit at all. Correction is entered by tapping the car marker, and
+            // a park with no position has no marker — so the one screen that
+            // could fix the problem was reachable only from the thing that was
+            // missing. Reproduced on shipped v0.7.5: the Now tab offered no
+            // action of any kind, the map had no pin, no walk pill and nothing
+            // tappable, and the state persisted until the car was driven away.
+            //
+            // It sits with the walk pill rather than in the control stack
+            // because it is not a map control. It is the answer to the sentence
+            // already on screen — "Parked — but the location is unknown" — and
+            // it appears only while that sentence is true.
+            if (stateStore.parked && car == null) {
+                PlaceCarPill(
+                    onClick = { movingPin = true },
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(start = CHROME_SIDE_INSET, bottom = CHROME_BOTTOM_INSET),
+                )
+            }
             MapControlStack(
                 homeZoneSet = homeZone != null,
                 tariffShowing = showTariff,
@@ -821,18 +883,35 @@ fun MapScreen(
     // user is standing next to the car and has just told the app something it
     // did not know. Asking costs one tap and removes the whole class of "it
     // did something because I mis-tapped".
-    flipToConfirm?.let { flip ->
+    // Branched on what the spot RESOLVED TO, never on the flip.
+    //
+    // This read `if (flip == Flip.NOW_PAID) … else …` — a binary test on a
+    // three-then-four-value enum, which worked only while NOW_PAID and NOW_FREE
+    // were the only ways to get here. Adding UNKNOWN_BEFORE made every first
+    // placement fall into the `else`, so a car placed on a paid street was
+    // offered "hand the permit back" while the header beside it read €8,05/h.
+    // Caught on the emulator, not by the compiler: the `when` in MovePinCard is
+    // exhaustive and failed the build, this one had an implicit else and
+    // compiled happily.
+    //
+    // The flip says what *changed*; the dialog needs what the spot *is*. Those
+    // are different questions and only one of them can be asked here.
+    flipToConfirm?.let { result ->
+        val paid = result.parkedOutside
         AlertDialog(
             onDismissRequest = { flipToConfirm = null },
-            title = {
-                Text(if (flip == Flip.NOW_PAID) "This spot is paid parking" else "This spot is free")
-            },
+            title = { Text(if (paid) "This spot is paid parking" else "This spot is free") },
             text = {
                 Text(
-                    if (flip == Flip.NOW_PAID) {
-                        "The corrected position is in a paid area. Claim the permit for your car?"
-                    } else {
-                        "The corrected position is not in a paid area. Hand the permit back?"
+                    when {
+                        result.flip == Flip.UNKNOWN_BEFORE && paid ->
+                            "This spot is in a paid area. Claim the permit for your car?"
+                        result.flip == Flip.UNKNOWN_BEFORE ->
+                            "This spot is not in a paid area. Hand the permit back?"
+                        paid ->
+                            "The corrected position is in a paid area. Claim the permit for your car?"
+                        else ->
+                            "The corrected position is not in a paid area. Hand the permit back?"
                     },
                 )
             },
@@ -840,14 +919,11 @@ fun MapScreen(
                 TextButton(onClick = {
                     ParkActionReceiver.perform(
                         context,
-                        if (flip == Flip.NOW_PAID) {
-                            ParkActionReceiver.ACTION_CLAIM
-                        } else {
-                            ParkActionReceiver.ACTION_GIVE_BACK
-                        },
+                        if (paid) ParkActionReceiver.ACTION_CLAIM
+                        else ParkActionReceiver.ACTION_GIVE_BACK,
                     )
                     flipToConfirm = null
-                }) { Text(if (flip == Flip.NOW_PAID) "Claim" else "Hand back") }
+                }) { Text(if (paid) "Claim" else "Hand back") }
             },
             dismissButton = {
                 TextButton(onClick = { flipToConfirm = null }) { Text("Not now") }
@@ -863,7 +939,8 @@ fun MapScreen(
  */
 @Composable
 private fun MovePinCard(
-    distanceM: Double,
+    /** Null when this park never had a position, so there is nothing to measure from. */
+    distanceM: Double?,
     flip: Flip,
     onCancel: () -> Unit,
     onConfirm: () -> Unit,
@@ -874,9 +951,21 @@ private fun MovePinCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Column(Modifier.fillMaxWidth().padding(14.dp)) {
-            Text("Move the car pin", style = MaterialTheme.typography.bodyLarge)
+            // Two different actions wearing one card. Moving a pin that exists
+            // is a correction; placing one for a park that never had a position
+            // is the first statement about that spot, and calling it a "move"
+            // would be the app describing something that did not happen.
             Text(
-                "%.0f m from where it was detected".format(distanceM),
+                if (distanceM == null) "Set the car's position" else "Move the car pin",
+                style = MaterialTheme.typography.bodyLarge,
+            )
+            Text(
+                // The old string was unconditional, and on a never-placed park
+                // the caller's `?: 0.0` fallback rendered it as "0 m from where
+                // it was detected" — a measurement from a point that does not
+                // exist, asserting a detection that never happened.
+                distanceM?.let { "%.0f m from where it was detected".format(it) }
+                    ?: "The app could not work out where this park was.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -885,6 +974,12 @@ private fun MovePinCard(
                     when (flip) {
                         Flip.NOW_PAID -> "This spot is paid parking. You will be asked about the permit."
                         Flip.NOW_FREE -> "This spot is not paid parking. You will be asked about the permit."
+                        // Not "changed to" — nothing changed, because nothing
+                        // was ever established. It states what it resolved and
+                        // routes to the same question, which is why it is a
+                        // distinct case rather than folded into the two above.
+                        Flip.UNKNOWN_BEFORE ->
+                            "Now the spot is known, you will be asked about the permit."
                         Flip.NONE -> ""
                     },
                     style = MaterialTheme.typography.bodySmall,
