@@ -26,6 +26,7 @@ other document under `docs/` is a deep-dive that this one points at.
 
 | Version | What it did |
 |---|---|
+| `v0.7.7` | **The permit question after every park.** Not Bluetooth — detection reads position and activity from a *worker*, and with those permissions ungranted it can only time out and ask. Plus the Grant button that asked for one permission of four, the prompt that never said why, and a park with no position that was a dead end with no exit |
 | `v0.7.6` | Eleven defects found by reviewing v0.7.5's own code rather than waiting for them — a parser that did not enforce its own promise, a crash waiting in the facility sheet, a dead function with a passing test, and eight smaller ones |
 | `v0.7.5` | Amsterdam's 37 published garages and P+R sites on their own map layer, with what they cost in the operator's own words. See below |
 | `v0.7.1` | Three things v0.7.0's own release review found after it was tagged: a round cap that undid the walking route's dashes, a header that gave panel width to a chip that could not open, and a chevron announcing a week it no longer opens |
@@ -458,6 +459,47 @@ connected to any of them.
 | **Deciding the permit by tariff** | Decided 2026-08-05. "The expensive spot keeps the permit" only pays off once the cheaper car can **pay instead**; today it gets a fine either way, so deciding by rate would change which brother is fined and nothing else. It was built and tested in v0.6.2 and **deleted again in v0.6.3** on Wasil's call — no unused machinery. It gets built against a working payment path, or not at all. Recoverable from git if that day comes, but likely to need different requirements by then anyway. |
 
 ---
+
+## v0.7.7 — the question after every park — SHIPPED 2026-09-03
+
+**Wasil:** *"i noticed the message pop up far more often than before and i dont
+like that. i have to do it manually now everytime."* He attributed it to the
+Bluetooth pairing. It is not, and the reason matters: `CarBluetoothReceiver`
+returns before doing anything when the stored MAC does not match, so **a prompt
+arriving at all is proof the pairing worked.**
+
+**The mechanism, traced end to end.** `ParkDecisionEngine.decide` can reach a
+verdict two ways — a confident activity sample, or two positions more than 4 m
+apart. Both are read from a *worker*. Without `ACCESS_BACKGROUND_LOCATION` every
+position read returns null; without `ACTIVITY_RECOGNITION` there are no samples.
+So the loop runs the full 90 s into `Unclear`, `parkedFix` falls back to
+`liveLocation` (another worker, also null), and `unclearPark` asks. Every park,
+the same path. *"Doesn't detect"* is the timeout and *"always says parking
+detected"* is the prompt — one failure, not two.
+
+**And the remedy could not remedy it.** The health card's Grant used
+`RequestPermission` — singular — fed by `needed.firstOrNull { !granted }`, so
+four permissions took four presses of a visually identical button with no
+indication more were coming. This is also the answer to his separate *"the
+settings button + the way it is all being asked"* complaint: the same defect,
+reported twice, from two directions.
+
+**Three fixes, and one correction to this file.** `RequestMultiplePermissions`;
+the prompt now names its own ignorance (*"Parked — but where?"*) and the likely
+cause, but only when that permission is genuinely missing; and the door.
+
+**Verified on the emulator with the permission revoked to match his phone.**
+Reaching the decision screen needs the notification's `EXTRA_DECISION_ID` — a
+plain `am start` shows the tabs, which is correct behaviour and worth knowing
+for anyone seeding this state again.
+
+### Still not settled, and it is his to settle
+
+**Nobody has looked at whether those permissions are granted on either phone.**
+Everything above explains the symptom and none of it proves the cause on his
+device. One screenshot of Settings → Apps → Handoff → Permissions closes it. The
+v0.7.7 fixes make the failure *recoverable and legible* either way; granting the
+permission is what makes it *stop*.
 
 ## Paying is off the table — DECIDED 2026-08-31
 
