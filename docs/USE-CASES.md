@@ -156,9 +156,22 @@ consulted. **This is the section where the app must stay silent.**
 
 ### D. Parked where something is owed — settled by paying
 
-**None of this exists yet** — verified, not assumed: there is no payment code in
-the app. This is the standalone half, and it is what makes the app useful to
-someone who has no shared permit at all.
+**Paying itself will never exist here.** Closed 2026-08-31: Wasil asked the
+operator and the answer was no, which matches the 2026-08-06 research from the
+other direction — writing a parking right is limited to accredited providers,
+a commercial barrier and not a technical one. D1–D6 stay written as a
+**specification held ready**, not a backlog.
+
+**What is possible without paying is telling you, in time, that you are about to
+owe.** That is D7–D8, shipped in `v0.8.0`, and it needs no payment capability
+because it is entirely an *obligation*-layer question — where you parked and
+what the clock says. See the split at the top of this file.
+
+Note what B6 does to the scope. The app claims the permit on **geometry alone**,
+regardless of the hour, so a permit holder who got the permit owes nothing and
+must never be reminded. **The reminder is therefore for exactly the two cases
+this app previously had no answer for**: the contested permit (C3 — the other
+car has it) and the person with no permit at all.
 
 | # | Situation | Action | Why | Status | Notes |
 |---|---|---|---|---|---|
@@ -167,6 +180,9 @@ someone who has no shared permit at all.
 | D3 | In a paid area, permit valid but **already in use by the other car** | Offer to pay rather than contest it | This is the case that makes the two mainframes worth combining: today C3 offers only "strand your brother or do nothing". Paying is the third answer, and it is the correct one | **OPEN** — needs Q1, Q3 | |
 | D4 | A paid session is running and the car leaves | Stop the session | Paying for an empty space is the clearest possible waste | **PLANNED** | The trigger already exists and is reliable — A5 |
 | D5 | A paid session is running and the tariff window ends | Stop the session, say what it cost | Tariff windows are display-only today because the permit has no hour budget. Money changes that: `ma-za 09-19` means something the moment a meter is running | **PLANNED** | The schedule engine answers this already; nothing acts on the answer |
+| D7 | Parked in a paid area, **free right now**, charging starts soon, and the permit is **not** settling it | Notify before it starts: what the spot will cost, and from when | This is the only moment the app can prevent a fine rather than report one. The person is away from the car and has no other way to know the clock turned | **BUILT** `v0.8.0` | Fires only when all four hold. **Never when the permit is on this car** — B6 means a permit holder already claimed on arrival and owes nothing, so a reminder would be noise about a solved problem. Cancelled when the car drives off, when the permit is claimed, or when a pin correction moves the spot out of a paid area |
+| D8 | Parked in a paid area, **charging right now**, and it becomes free soon | Say so, so nothing is paid for the last few minutes | D6's rule, which was written for a paying app and turns out not to need one: *"charging for five minutes of a free evening is exactly the kind of small betrayal that gets an app deleted."* The advice is useful whoever takes the money | **BUILT** `v0.8.0` | Same four conditions, mirrored. Lower priority than D7 — being told late costs money, being told early only saves a little |
+| D9 | Any of D7–D8, but the app cannot say where the car is (A3) | Send nothing | A reminder about an unknown spot would be a guess wearing a deadline, and the direction that costs a fine is telling someone they are fine when they are not | **BUILT** `v0.8.0` | The A3 door is the route out: place the pin, and the reminder schedules itself from the resolved zone |
 | D6 | Free parking begins shortly (e.g. 18:55 in a `09-19` zone) | Say so before charging anything | Charging for five minutes of a free evening is exactly the kind of small betrayal that gets an app deleted | **PLANNED** | Same engine, same answer — "until 19:00" is on screen today. See also B6, which is the free-permit version of this and is decided the other way |
 
 ### E. Where the two mainframes touch
