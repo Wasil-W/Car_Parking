@@ -26,6 +26,7 @@ other document under `docs/` is a deep-dive that this one points at.
 
 | Version | What it did |
 |---|---|
+| `v0.8.0` | **The reminder — the first thing this app does that can prevent a fine rather than report one.** "You start paying here at 09:00", half an hour early, when a paid spot is about to start charging and the permit is not covering it; and "Free here from 19:00" ten minutes before it stops. Silent when the permit already settles it. See below |
 | `v0.7.7` | **The permit question after every park.** Not Bluetooth — detection reads position and activity from a *worker*, and with those permissions ungranted it can only time out and ask. Plus the Grant button that asked for one permission of four, the prompt that never said why, and a park with no position that was a dead end with no exit |
 | `v0.7.6` | Eleven defects found by reviewing v0.7.5's own code rather than waiting for them — a parser that did not enforce its own promise, a crash waiting in the facility sheet, a dead function with a passing test, and eight smaller ones |
 | `v0.7.5` | Amsterdam's 37 published garages and P+R sites on their own map layer, with what they cost in the operator's own words. See below |
@@ -460,6 +461,69 @@ connected to any of them.
 
 ---
 
+## v0.8.0 — the reminder — SHIPPED 2026-09-07
+
+**Wasil:** *"lets do the reminder as v0.8.0"* — after the parking operator said
+no (see "Paying is off the table", below), his own list of what was still
+possible opened with it.
+
+**Why it is the right last feature.** Everything the app did before reported. It
+could say where you parked, what that costs and who holds the permit, always
+after the fact. The reminder is the only thing on that list that acts *before*
+the money starts, and it needs no ability to take money at all — it is entirely
+an obligation-layer question. See [`USE-CASES`](USE-CASES.md) D7, D8, D9.
+
+**The scoping came from B6 and was sharper than expected.** The app claims the
+permit on geometry alone regardless of the clock, so a permit holder parked
+overnight in an `09-19` zone already holds it and owes nothing at 09:00.
+Reminding them would be noise about a problem solved on arrival. So the reminder
+serves exactly the two cases the app previously had no answer for: the contested
+permit (C3, the other car has it) and the person with no permit.
+
+**Four conditions**, each pinned by a test that fails without it: parked, in a
+paid area (geometry, not the clock), a boundary within the lead time, and the
+permit not already settling it.
+
+**Two leads, deliberately different.** Thirty minutes before you start owing;
+ten before it turns free. Being told late about the first costs a fine, about
+the second a few minutes of meter. They also get **a notification channel each**,
+so the chatty one can be silenced without losing the useful one — Android's own
+controls rather than a settings screen of ours.
+
+**A chain, not one alarm.** Each run books exactly one successor
+(`nextCheckInMin`), the same shape `LiveLocationWorker` already uses for the
+drive. That also made cancellation almost free: every condition is re-read at
+fire time, so driving off, claiming the permit, or correcting the pin onto a
+free street each stop it without a cancel call being needed for correctness.
+
+**The strongest test parks a car for a week.** Monday 00:00, in all 29 bundled
+areas, following the chain and requiring that every charging start in that week
+was preceded by a reminder inside its window. An off-by-one in the booking shows
+up there as a missed transition, which is a fine in real life.
+
+**One defect found by looking, as usual.** The longest notification —
+stepped rate, long neighbourhood, long street — clipped to `Cr…`, and expanding
+it showed the same clipped line. `BigTextStyle` fixed it. 597 unit tests were
+blind to it; one screenshot was not.
+
+**The mockup deviated from what shipped, and the mockup lost.** It drew
+"Walid's car has the permit" in the body. The app cannot honestly write that from
+a worker — the only local record of the holder is marked presentation-only
+because it goes stale — so the copy dropped it, a test now pins the absence, and
+`docs/mockups/v0.8.0-reminder.html` was corrected to match.
+<https://claude.ai/code/artifact/82d2baa1-80ad-477e-b2fb-7b9b68358de6>
+
+**Left open, on the mockup and here:**
+- Are 30 and 10 the right leads? Two constants, never met a real morning.
+- A park that *starts* while the meter is already running gets nothing until the
+  spot turns free. Arguably the park notification's job, but neither says it.
+- A three-day park collects a reminder per boundary — six over a weekend. No cap
+  written.
+- Doze. Thirty minutes of lead is deliberate slack for it; only a real overnight
+  park settles whether that is enough.
+
+---
+
 ## v0.7.7 — the question after every park — SHIPPED 2026-09-03
 
 **Wasil:** *"i noticed the message pop up far more often than before and i dont
@@ -528,6 +592,10 @@ Concretely, "as far as we can" already has a shape and most of it exists:
 - **What a garage or P+R costs instead** — v0.7.5, quoted from the operator
 - **The obligation/settlement split** — v0.6.1, which is what makes the last
   step separable at all
+- **A warning before the money starts** — v0.8.0, and the only item on this list
+  that *prevents* rather than reports. Added 2026-09-07: it was not foreseen when
+  this section was written, and it turned out to be the strongest answer to "how
+  far can we go", because a reminder needs no payment capability whatsoever
 - **What is left**: the session log as a record of what *was owed* rather than
   what was paid. [`USER-MODEL`](USER-MODEL.md) item 7 already argues this and
   notes three of its four fields are obligation, not settlement — **so it is the
@@ -672,7 +740,13 @@ broken.
 **Mockup, published before the code:**
 <https://claude.ai/code/artifact/ab68f7ce-cc42-4b07-a67d-e89f0a5c2736>
 
-## v0.8.0 — the map that takes a moment, and the introduction — PLANNED
+## v0.9.0 — the map that takes a moment, and the introduction — PLANNED
+
+**This was v0.8.0 until 2026-09-07**, when Wasil took that number for the
+reminder instead — *"lets do the reminder as v0.8.0"*. Nothing about the work
+below changed; only its number. Renamed rather than left with a stale one,
+because two sections claiming the same version is exactly the sort of drift this
+file exists to prevent.
 
 Two halves, and Wasil wants the second designed rather than assumed:
 *"it should be somewhat of a introduction, figure out what the user wants and

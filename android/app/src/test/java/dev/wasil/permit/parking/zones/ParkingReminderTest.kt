@@ -110,4 +110,94 @@ class ParkingReminderTest {
         assertTrue(withoutRate is Reminder.StartsOwing)
         assertEquals("", (withoutRate as Reminder.StartsOwing).rateText)
     }
+
+    // ---- the chain of wake-ups ---------------------------------------------
+
+    @Test
+    fun `the wait is the lead time short of the boundary`() {
+        // Free, charging in 400 minutes: wake 30 minutes before it, not at it.
+        assertEquals(
+            400 - OWING_LEAD_MIN,
+            nextCheckInMin(TariffNow.Free(400), TariffNext(true, "€3,01/h", 1000)),
+        )
+        // Charging, stopping in 400: wake 10 minutes before.
+        assertEquals(
+            400 - FREE_LEAD_MIN,
+            nextCheckInMin(TariffNow.Charging("€3,01/h", 400), TariffNext(false, null, 1000)),
+        )
+    }
+
+    @Test
+    fun `a boundary already inside its lead window is not booked again`() {
+        // startsInMin 20 is inside the 30-minute window, so the caller has just
+        // notified about it. Booking it again would wake the phone immediately
+        // to repeat itself; the next span's end is the real next thing.
+        assertEquals(
+            900 - FREE_LEAD_MIN,
+            nextCheckInMin(freeSoonCharging, TariffNext(true, "€3,01/h", 900)),
+        )
+    }
+
+    @Test
+    fun `an area that never changes gives nothing to wait for`() {
+        // T11V, T12V, T13V: charging every minute of the week, so tariffNext is
+        // null and endsInMin is null. A chain here would wake forever to
+        // rediscover that nothing has happened.
+        assertNull(nextCheckInMin(TariffNow.Charging("€8,05/h", null), null))
+        assertNull(nextCheckInMin(TariffNow.Free(null), null))
+    }
+
+    /**
+     * The property the whole chain exists for, checked against the city's own
+     * data rather than against an example I chose.
+     *
+     * Park at Monday 00:00 in each of the 29 bundled areas, follow the chain of
+     * wake-ups for a week, and require that **every** moment those areas start
+     * charging was preceded by a reminder inside its lead window. A missed
+     * transition here is a fine in real life, and an off-by-one in
+     * [nextCheckInMin] would show up as exactly that.
+     */
+    @Test
+    fun `a week-long park is reminded before every charging start, in every real area`() {
+        val areas = TariffAreas.parse(
+            java.io.File("src/main/assets/amsterdam_tarieven.json").readText(),
+        )
+        val roundTheClock = mutableSetOf<String>()
+
+        areas.filter { it.windows.isNotEmpty() }.forEach { area ->
+            val starts = chargeRuns(area.windows).map { it.start % WEEK_MINUTES }.toSet()
+            val warned = mutableSetOf<Int>()
+            var at = 0
+            var steps = 0
+            while (at < WEEK_MINUTES && steps++ < 200) {
+                val day = (at / 1440) % 7
+                val minute = at % 1440
+                val now = tariffNow(area.windows, day, minute)
+                val next = tariffNext(area.windows, day, minute)
+                val reminder = reminderFor(
+                    parked = true, inPaidArea = true, permitSettles = false, now = now,
+                )
+                if (reminder is Reminder.StartsOwing) {
+                    warned += (at + reminder.inMin) % WEEK_MINUTES
+                }
+                val wait = nextCheckInMin(now, next)
+                if (wait == null) { roundTheClock += area.code; break }
+                at += wait
+            }
+            if (area.code in roundTheClock) return@forEach
+            assertTrue(
+                "${area.code}: chain stalled after $steps steps at minute $at",
+                steps < 200,
+            )
+            // Sunday-evening runs that wrap into Monday begin before this park
+            // did, so their start is not reachable from a Monday-00:00 arrival.
+            val reachable = starts.filter { it >= OWING_LEAD_MIN }
+            assertEquals(
+                "${area.code} missed a charging start",
+                emptySet<Int>(),
+                reachable.toSet() - warned,
+            )
+        }
+        assertEquals(setOf("T11V", "T12V", "T13V"), roundTheClock)
+    }
 }

@@ -33,6 +33,14 @@ class CarBluetoothReceiver : BroadcastReceiver() {
             BluetoothDevice.ACTION_ACL_CONNECTED -> {
                 // Back in the car: driving again, everything pending is stale.
                 SharedSync.cancelClaimChain(context)
+                // Including any reminder booked for the spot just left, and the
+                // one that may still be sitting in the shade about it. Neither
+                // could produce a wrong notification on its own — the worker
+                // re-reads `parked` before it says anything — but a booked
+                // wake-up for a street the car has driven away from is a wake-up
+                // for nothing, and a stale card in the shade is worse than that.
+                ParkWorkers.cancelReminder(context)
+                ParkNotifications.dismissReminder(context)
                 store.parked = false
                 store.parkedOutside = false
                 // Driving is a fact, not a gap: this is exactly the case where

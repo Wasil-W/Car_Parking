@@ -111,3 +111,42 @@ fun reminderFor(
     is Reminder.StartsOwing -> r.copy(rateText = next?.rateText.orEmpty())
     else -> r
 }
+
+/**
+ * Minutes to wait before asking [reminderFor] again, or null when there is
+ * nothing ahead worth waking for.
+ *
+ * A parked car needs a *chain* of wake-ups, not one. Park at 07:00 in a 09:00
+ * zone and the interesting moments are 08:30 (you are about to owe) and 18:50
+ * (it is about to stop) — and after that the next morning. Booking only the
+ * first would leave the second unsaid, and booking a repeating check would wake
+ * the phone all night to learn nothing. So each run books exactly one
+ * successor, the same shape [dev.wasil.permit.parking.android.LiveLocationWorker]
+ * already uses for the drive.
+ *
+ * Two candidates, because [TariffNow] can only see as far as the boundary it is
+ * standing on. [TariffNext] supplies the one after it, which is the whole reason
+ * that function exists — and it counts from *now* too, so the two are directly
+ * comparable without any date arithmetic here.
+ *
+ * Only strictly-positive candidates count. A candidate at or below zero is a
+ * boundary we are already inside the lead window for, which means the caller has
+ * just notified about it: booking it again would be an immediate second wake-up
+ * saying the same thing.
+ *
+ * Null for the three round-the-clock areas and for an area with no windows —
+ * both have no boundary ahead, and a chain that keeps waking to rediscover that
+ * is a battery cost with nothing on the other end.
+ */
+fun nextCheckInMin(now: TariffNow, next: TariffNext?): Int? {
+    val candidates = buildList {
+        when (now) {
+            is TariffNow.Free -> now.startsInMin?.let { add(it - OWING_LEAD_MIN) }
+            is TariffNow.Charging -> now.endsInMin?.let { add(it - FREE_LEAD_MIN) }
+        }
+        // The span after this one: if it charges, we want to catch its end; if
+        // it is the free gap, we want to catch the charging that follows it.
+        next?.let { add(it.endsInMin - if (it.charging) FREE_LEAD_MIN else OWING_LEAD_MIN) }
+    }
+    return candidates.filter { it > 0 }.minOrNull()
+}

@@ -10,6 +10,71 @@ change as a minor.
 
 ---
 
+## v0.8.0 — it tells you before the meter starts
+
+### The first thing this app has done that can prevent a fine
+
+Everything before this reported. The app could tell you where you parked, what
+it costs and who has the permit — always *after* the fact, and never in time to
+do anything about it.
+
+**Park somewhere free at 07:40 and the phone now says, at 08:30: "You start
+paying here at 09:00."** Rate, street, and a Claim button, half an hour before
+it matters.
+
+This is the answer to paying being closed off on 31 August. The app can never
+settle a debt for you. It can still make sure you see the one coming.
+
+### The quieter one
+
+**"Free here from 19:00"**, ten minutes before a charging street stops charging.
+No buttons, because there is nothing the app can do about it.
+
+The two leads are different on purpose. Being told late that you *owe* costs a
+fine; being told late that it is *free* costs a few minutes of meter.
+
+**They are also separate notification categories**, so you can silence the
+second without losing the first — Android's own notification settings, under
+*Before you start paying* and *When parking turns free*.
+
+### When it stays quiet, which is most of the time
+
+Four things must all be true, and the last one is the interesting one:
+
+- the car is parked,
+- the spot is in a paid area,
+- a boundary is close enough to be worth saying,
+- **and the permit is not already covering it.**
+
+If you hold the permit, you owe nothing — the app claimed it when you arrived,
+whatever the clock said — so you get nothing. The reminder is for the case this
+app previously had no answer to at all: your brother has the permit and your car
+is on a paid street.
+
+**A park with no position gets nothing either.** Not "you are fine", not a
+guessed street: if the app could not work out where the car is, it says nothing
+about what that spot costs. Place the pin on the map and the reminders start.
+
+### Checked against a week, not against an example
+
+A test parks a car at Monday 00:00 in every one of Amsterdam's 29 tariff areas,
+follows the chain of reminders for a full week, and requires that every single
+moment those areas start charging was preceded by a warning. That includes the
+overnight areas that charge from 19:00 to 06:00, which are the ones this app has
+got wrong before.
+
+### And one thing only the screen could find
+
+Both notifications were posted on a real device before shipping. The longest
+case — a stepped rate, a long neighbourhood, a long street — was cut off at
+`Cr…`, and expanding the notification showed the same cut-off line. Fixed.
+Nothing in 597 passing tests could see it.
+
+The design that went into this is at
+[`docs/mockups/v0.8.0-reminder.html`](docs/mockups/v0.8.0-reminder.html).
+
+---
+
 ## v0.7.7 — the question that arrived after every park
 
 ### Install this one

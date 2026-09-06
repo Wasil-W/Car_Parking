@@ -17,8 +17,11 @@ import dev.wasil.permit.parking.PendingDecision
 import dev.wasil.permit.parking.PrefsParkStateStore
 import dev.wasil.permit.parking.Roster
 import dev.wasil.permit.parking.shared.PhoneState
+import dev.wasil.permit.parking.zones.Reminder
 import dev.wasil.permit.ui.blockedNotificationText
 import dev.wasil.permit.ui.blockedTitle
+import dev.wasil.permit.ui.reminderBody
+import dev.wasil.permit.ui.reminderTitle
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -52,8 +55,32 @@ class ParkNotifications(private val context: Context) : ParkNotifier {
     companion object {
         const val CHANNEL_STATUS = "permit_status"
         const val CHANNEL_EVENTS = "park_events"
+
+        /**
+         * The two reminders get a channel each, and that is the answer to
+         * "should the quieter one exist at all".
+         *
+         * They are not the same kind of message. One can save a fine and the
+         * other saves a few minutes of meter, so putting both on one channel
+         * would mean silencing the useful one to be rid of the chatty one.
+         * Android's own per-channel controls settle it without this app growing
+         * a settings screen for it: [CHANNEL_OWING] is HIGH and heads up,
+         * [CHANNEL_FREE] is DEFAULT and does not.
+         */
+        const val CHANNEL_OWING = "park_owing"
+        const val CHANNEL_FREE = "park_free"
+
         const val STATUS_ID = 1
         const val EVENT_ID = 2
+
+        /**
+         * One id for both reminders, so a new one replaces the old.
+         *
+         * A shade holding "you start paying at 09:00" from this morning next to
+         * "free from 19:00" from tonight would be showing two answers to one
+         * question, and the older is always the wrong one.
+         */
+        const val REMINDER_ID = 3
 
         fun createChannels(context: Context) {
             val manager = context.getSystemService(NotificationManager::class.java)
@@ -63,10 +90,31 @@ class ParkNotifications(private val context: Context) : ParkNotifier {
             manager.createNotificationChannel(
                 NotificationChannel(CHANNEL_EVENTS, "Parking events", NotificationManager.IMPORTANCE_HIGH)
             )
+            manager.createNotificationChannel(
+                NotificationChannel(
+                    CHANNEL_OWING, "Before you start paying", NotificationManager.IMPORTANCE_HIGH,
+                ).apply { description = "A paid street is about to start charging and nothing is covering it." }
+            )
+            manager.createNotificationChannel(
+                NotificationChannel(
+                    CHANNEL_FREE, "When parking turns free", NotificationManager.IMPORTANCE_DEFAULT,
+                ).apply { description = "The spot you are parked in is about to stop charging." }
+            )
         }
 
         fun dismissEvents(context: Context) {
             NotificationManagerCompat.from(context).cancel(EVENT_ID)
+        }
+
+        /**
+         * Drops the reminder, whichever of the two it was.
+         *
+         * Called from every notification action: acting on the permit at all
+         * resolves the thing the reminder was raised about, and leaving it in
+         * the shade afterwards would keep asking a question already answered.
+         */
+        fun dismissReminder(context: Context) {
+            NotificationManagerCompat.from(context).cancel(REMINDER_ID)
         }
     }
 
@@ -213,6 +261,47 @@ class ParkNotifications(private val context: Context) : ParkNotifier {
             .addAction(action(ParkActionReceiver.ACTION_CLAIM, "Claim permit"))
             .addAction(action(ParkActionReceiver.ACTION_IGNORE, "Ignore"))
             .addAction(action(ParkActionReceiver.ACTION_FREE_HERE, "Free here")))
+    }
+
+    /**
+     * A boundary is coming and this spot is not covered.
+     *
+     * The only notification in the app raised about *time* rather than about
+     * the permit, which is why it takes neither an identity icon nor a slot: it
+     * is a fact about a street, and drawing a brother's colour on it would say
+     * the street belonged to someone.
+     *
+     * [Reminder.StartsOwing] offers Claim because that is the one action that can
+     * still change the outcome — and if the other car is genuinely parked out
+     * there, [GuardedClaim] answers with [blockedByOther] rather than taking it.
+     * [Reminder.BecomesFree] offers nothing, because there is nothing the app can
+     * do about it and a button that only dismisses is a button pretending.
+     */
+    fun reminder(reminder: Reminder, dayOfWeek: Int, minuteOfDay: Int, place: String?) {
+        val channel = when (reminder) {
+            is Reminder.StartsOwing -> CHANNEL_OWING
+            is Reminder.BecomesFree -> CHANNEL_FREE
+        }
+        val builder = NotificationCompat.Builder(context, channel)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(reminderTitle(reminder, dayOfWeek, minuteOfDay))
+            .setAutoCancel(true)
+            .setContentIntent(openAppIntent())
+        // BigTextStyle because the shade clipped the real thing: "from €1,72/h ·
+        // Oostelijk Havengebied · Cr…" on the emulator, losing the street. The
+        // truncation order is at least the right way round — the time is in the
+        // title and the rate comes first — but the street is what tells you
+        // *which* car this is about, and without a style the expanded view
+        // showed the same clipped line. Caught by looking, not by a test.
+        reminderBody(reminder, place)?.let {
+            builder.setContentText(it)
+            builder.setStyle(NotificationCompat.BigTextStyle().bigText(it))
+        }
+        if (reminder is Reminder.StartsOwing) {
+            builder.addAction(action(ParkActionReceiver.ACTION_CLAIM, "Claim permit"))
+            builder.addAction(action(ParkActionReceiver.ACTION_IGNORE, "Ignore"))
+        }
+        notify(REMINDER_ID, builder)
     }
 
     /**

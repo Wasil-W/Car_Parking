@@ -40,6 +40,7 @@ import dev.wasil.permit.parking.GeoPoint
 import dev.wasil.permit.parking.ParkStateStore
 import dev.wasil.permit.parking.distanceMeters
 import dev.wasil.permit.parking.android.ParkActionReceiver
+import dev.wasil.permit.parking.android.ParkWorkers
 import dev.wasil.permit.parking.android.SharedSync
 import dev.wasil.permit.parking.areaSizeText
 import dev.wasil.permit.parking.areaSqKm
@@ -565,6 +566,15 @@ fun MapScreen(
                             // the path that already exists — SyncStateWorker
                             // reads exactly these fields.
                             SharedSync.requestSync(context)
+                            // And the reminder chain is re-planned from the new
+                            // spot. Re-reading at fire time would keep it from
+                            // saying anything *wrong*, but not from waking at
+                            // the wrong minute: the booking still carries the
+                            // old area's boundaries. This is also the way out of
+                            // D9 — a park with no position gets no reminder
+                            // until someone puts the pin down, and this is that
+                            // moment.
+                            ParkWorkers.scheduleReminder(context, delayMin = 0)
                             flipToConfirm = result.takeIf { it.flip != Flip.NONE }
                             pending = null
                             movingPin = false

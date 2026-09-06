@@ -37,6 +37,11 @@ class ParkActionReceiver : BroadcastReceiver() {
             }
             // Whichever way the user acted, the decision that prompted it is resolved.
             PrefsParkStateStore.from(context).pendingDecision = null
+            // And so is the reminder, if one raised this. Acting on the permit
+            // at all answers the question a reminder asks, and the two actions
+            // it offers — Claim and Ignore — are both in this list. Leaving the
+            // card up afterwards would keep asking something already settled.
+            ParkNotifications.dismissReminder(context)
         }
     }
 
