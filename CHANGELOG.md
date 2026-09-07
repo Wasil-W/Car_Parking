@@ -10,6 +10,97 @@ change as a minor.
 
 ---
 
+## v0.8.0 — it tells you before the meter starts
+
+### The first thing this app has done that can prevent a fine
+
+Everything before this reported. The app could tell you where you parked, what
+it costs and who has the permit — always *after* the fact, and never in time to
+do anything about it.
+
+**Park somewhere free at 07:40 and the phone says, around 08:30: "You start
+paying here at 09:00."** Rate, street, and a Claim button, roughly half an hour
+before it matters.
+
+*Roughly*, and deliberately so: this is a scheduled background job, not an alarm,
+so a phone in deep sleep can deliver it late. The thirty minutes is slack for
+exactly that. It is honest to call this a good warning and dishonest to call it a
+guarantee.
+
+This is the answer to paying being closed off on 31 August. The app can never
+settle a debt for you. It can still make sure you see the one coming.
+
+### The quieter one
+
+**"Free here from 19:00"**, ten minutes before a charging street stops charging.
+No buttons, because there is nothing the app can do about it.
+
+The two leads are different on purpose. Being told late that you *owe* costs a
+fine; being told late that it is *free* costs a few minutes of meter.
+
+**They are also separate notification categories**, so you can silence the
+second without losing the first — Android's own notification settings, under
+*Before you start paying* and *When parking turns free*.
+
+### When it stays quiet, which is most of the time
+
+Four things must all be true, and the last one is the interesting one:
+
+- the car is parked,
+- the spot is in a paid area,
+- a boundary is close enough to be worth saying,
+- **and the permit is not already covering it.**
+
+If you hold the permit, you owe nothing — the app claimed it when you arrived,
+whatever the clock said — so you get nothing. The reminder is for the case this
+app previously had no answer to at all: your brother has the permit and your car
+is on a paid street.
+
+**A park with no position gets nothing either.** Not "you are fine", not a
+guessed street: if the app could not work out where the car is, it says nothing
+about what that spot costs. Place the pin on the map and the reminders start.
+
+### Checked against a week, not against an example
+
+A test parks a car at Monday 00:00 in each of Amsterdam's tariff areas, follows
+the chain of reminders for a full week, and requires that every moment those
+areas start charging was preceded by a warning. That includes the overnight areas
+charging 19:00 to 06:00, which are the ones this app has got wrong before.
+
+26 of the 29 areas are checked that way. The other three — T11V, T12V, T13V —
+charge every minute of every day, so they have no free-to-charging moment to warn
+about; the test asserts that the excluded set is exactly those three and nothing
+else quietly joins them.
+
+### Two things found in the hour before the tag
+
+**A takeover used to silence the reminder for good.** If your brother claimed the
+permit *after* you had parked and claimed it, this phone raised the "took the
+permit" alert and then went quiet forever about the meter — because the park was
+still recorded as covered by a permit that had left. That is the exact situation
+the feature exists for, failing silently, in the direction that costs a fine.
+Now a takeover un-covers the park and the reminders resume. **History was wrong
+in the same way** and is also fixed: a park the permit had abandoned kept its
+"Permit" badge.
+
+**The reminder's Ignore button used to cancel your park question.** Both cards
+shared one handler, so dismissing the clock reminder also cleared an unanswered
+"Parked? Decide about the permit" — and the decision screen behind it. The
+reminder now has its own two buttons and touches nothing else.
+
+### And one thing only the screen could find
+
+Both notifications were posted and tapped on an emulator before shipping — not on
+a phone, which is the check still outstanding. The longest case — a stepped rate,
+a long neighbourhood, a long street — was cut off at `Cr…`, and expanding the
+notification showed the same cut-off line. Fixed. Nothing in 602 passing tests
+could see it.
+
+The design that went into this is at
+[`docs/mockups/v0.8.0-reminder.html`](docs/mockups/v0.8.0-reminder.html).
+
+---
+
 ## v0.7.7 — the question that arrived after every park
 
 ### Install this one

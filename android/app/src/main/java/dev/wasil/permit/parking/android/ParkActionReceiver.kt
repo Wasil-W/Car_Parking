@@ -15,6 +15,24 @@ class ParkActionReceiver : BroadcastReceiver() {
         const val ACTION_FREE_HERE = "dev.wasil.permit.FREE_HERE"
 
         /**
+         * The reminder's own two buttons, and they exist because sharing the
+         * permit ones was a bug.
+         *
+         * v0.8.0 first wired the reminder to [ACTION_CLAIM] and [ACTION_IGNORE].
+         * Both are handled by [perform], which cancels the *event* notification
+         * and clears [ParkStateStore.pendingDecision] — so "stop telling me
+         * about the clock" also silently threw away an unanswered permit
+         * question and the only route back to its decision screen. The two
+         * notifications are about different things and must not share a verb.
+         *
+         * [ACTION_REMINDER_CLAIM] still claims, because that is the one action
+         * that can settle the spot — it just does not also resolve a decision
+         * nobody answered.
+         */
+        const val ACTION_REMINDER_CLAIM = "dev.wasil.permit.REMINDER_CLAIM"
+        const val ACTION_REMINDER_IGNORE = "dev.wasil.permit.REMINDER_IGNORE"
+
+        /**
          * The single implementation of every notification action, so the
          * notification's action buttons (via [onReceive], a broadcast) and the
          * tappable-notification decision screen (a direct call from
@@ -33,6 +51,18 @@ class ParkActionReceiver : BroadcastReceiver() {
                 ACTION_FREE_HERE -> {
                     SharedSync.requestFreeHere(context)
                     ParkNotifications.dismissEvents(context)
+                }
+                // The reminder's own actions touch only the reminder. They
+                // return early: everything below this `when` is about resolving
+                // a pending permit decision, and a reminder never raises one.
+                ACTION_REMINDER_CLAIM -> {
+                    ParkWorkers.enqueueClaim(context)
+                    ParkNotifications.dismissReminder(context)
+                    return
+                }
+                ACTION_REMINDER_IGNORE -> {
+                    ParkNotifications.dismissReminder(context)
+                    return
                 }
             }
             // Whichever way the user acted, the decision that prompted it is resolved.

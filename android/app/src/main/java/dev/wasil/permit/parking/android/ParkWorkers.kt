@@ -20,7 +20,11 @@ import dev.wasil.permit.parking.LiveLocation
 import dev.wasil.permit.parking.ParkDetectionUseCase
 import dev.wasil.permit.parking.ParkOutcome
 import dev.wasil.permit.parking.PrefsParkStateStore
+import dev.wasil.permit.parking.Settlement
 import dev.wasil.permit.parking.shouldWatchForTakeover
+import dev.wasil.permit.parking.zones.nextCheckInMin
+import dev.wasil.permit.parking.zones.reminderFor
+import dev.wasil.permit.parking.zones.tariffNext
 import dev.wasil.permit.parking.zones.tariffNow
 import dev.wasil.permit.ui.tariffNowText
 import java.util.Calendar
@@ -30,6 +34,7 @@ object ParkWorkers {
     const val DETECTION_WORK = "park_detection"
     const val CLAIM_WORK = "claim_permit"
     const val LIVE_LOCATION_WORK = "live_location"
+    const val REMINDER_WORK = "park_reminder"
 
     /**
      * Stop retrying a claim after this many attempts. Without a cap, a
@@ -81,6 +86,34 @@ object ParkWorkers {
         // sample — the stalest possible answer, in the direction that matters.
         WorkManager.getInstance(context)
             .enqueueUniqueWork(LIVE_LOCATION_WORK, ExistingWorkPolicy.REPLACE, request)
+    }
+
+    /**
+     * Look at the parked spot in [delayMin] minutes and say something if a
+     * tariff boundary has come within reach.
+     *
+     * Zero means now, which is how a fresh park starts the chain: the first run
+     * either finds a boundary already inside its lead window and says so, or
+     * finds nothing and simply books the run that will.
+     *
+     * No constraints, and deliberately none. A reminder needs no network — the
+     * schedules are bundled — and adding a network or battery constraint would
+     * let WorkManager hold the one job in this app whose entire value is that it
+     * arrives before a particular minute.
+     */
+    fun scheduleReminder(context: Context, delayMin: Int) {
+        val request = OneTimeWorkRequestBuilder<ParkReminderWorker>()
+            .setInitialDelay(delayMin.toLong().coerceAtLeast(0), TimeUnit.MINUTES)
+            .build()
+        // REPLACE for the same reason live location uses it: the worker re-books
+        // itself under this name, and KEEP would drop every link after the first.
+        WorkManager.getInstance(context)
+            .enqueueUniqueWork(REMINDER_WORK, ExistingWorkPolicy.REPLACE, request)
+    }
+
+    /** Drop the chain. Called when the car is driven away — see CarBluetoothReceiver. */
+    fun cancelReminder(context: Context) {
+        WorkManager.getInstance(context).cancelUniqueWork(REMINDER_WORK)
     }
 
     /**
@@ -146,6 +179,83 @@ class ParkDetectionWorker(context: Context, params: WorkerParameters) :
         // Retry the CLAIM, not the detection: we know we're parked.
         if (outcome == ParkOutcome.SwitchFailed) {
             ParkWorkers.enqueueClaim(applicationContext, userInitiated = false)
+        }
+        // Start the reminder chain for whatever this park turned out to be. Run
+        // unconditionally rather than only for the outcomes that look like they
+        // need it: the worker asks the four questions itself, from state written
+        // moments ago, and a park that got the permit is exactly as capable of
+        // losing it an hour later as one that never had it.
+        if (PrefsParkStateStore.from(applicationContext).parked) {
+            ParkWorkers.scheduleReminder(applicationContext, delayMin = 0)
+        }
+        return Result.success()
+    }
+}
+
+/**
+ * Ask what the parked spot is doing, say something if a boundary is close, and
+ * book the next look.
+ *
+ * The chain, rather than one alarm per park: see
+ * [dev.wasil.permit.parking.zones.nextCheckInMin]. Every condition is re-read
+ * here at the moment of firing instead of being baked into the schedule, which
+ * is what makes the cancellation story so small. Drive off and the park closes,
+ * so this finds `parked == false` and stops. Claim the permit and the open
+ * record becomes [Settlement.PERMIT], so this finds nothing to say. Correct the
+ * pin onto a free street and `lastZoneCode` is null, so this stops. None of
+ * those needed a cancel call to be correct — only [ParkWorkers.cancelReminder]
+ * on drive-off, and that is a courtesy to the battery rather than a guard
+ * against a wrong notification.
+ */
+class ParkReminderWorker(context: Context, params: WorkerParameters) :
+    CoroutineWorker(context, params) {
+
+    override suspend fun doWork(): Result {
+        val app = applicationContext as PermitApp
+        val store = PrefsParkStateStore.from(applicationContext)
+        // Not parked any more: the chain has served its purpose and ends here,
+        // unbooked. Same stale-timer guard LiveLocationWorker opens with, and
+        // for the same reason — WorkManager promises nothing about when a
+        // delayed job actually lands.
+        if (!store.parked) return Result.success()
+
+        // The area is geometry, not the clock: a polygon this car sits inside.
+        // A null code is a spot with no tariff area resolved — a free street, or
+        // a park whose position never came back (D9) — and neither has a
+        // boundary this app is entitled to name.
+        val area = store.lastZoneCode
+            ?.let { code -> app.tariffAreas?.firstOrNull { it.code == code } }
+            ?: return Result.success()
+
+        val calendar = Calendar.getInstance()
+        val dayIndex = (calendar.get(Calendar.DAY_OF_WEEK) + 5) % 7
+        val minuteOfDay = calendar.get(Calendar.HOUR_OF_DAY) * 60 + calendar.get(Calendar.MINUTE)
+        val now = tariffNow(area.windows, dayIndex, minuteOfDay)
+        val next = tariffNext(area.windows, dayIndex, minuteOfDay)
+
+        // The settlement half, read from the open history record rather than
+        // from the permit site. That record is already re-badged by every path
+        // that can change the answer — settleOpen on a claim, uncoverOpen when
+        // the other car takes it — so it is both local and current, where a
+        // remembered holder VRN would be local and stale.
+        val open = app.parkLogStore.all().lastOrNull()
+        val settled = open != null && open.endedAtMs == null && open.settlement == Settlement.PERMIT
+
+        reminderFor(
+            parked = true,
+            inPaidArea = store.parkedOutside && store.parkedOutsideKnown,
+            permitSettles = settled,
+            now = now,
+            next = next,
+        )?.let {
+            ParkNotifications(applicationContext)
+                .reminder(it, dayIndex, minuteOfDay, open?.place)
+        }
+
+        // Null here is an area that never changes — nothing left to wait for, so
+        // the chain ends rather than waking all week to rediscover that.
+        nextCheckInMin(now, next)?.let {
+            ParkWorkers.scheduleReminder(applicationContext, delayMin = it)
         }
         return Result.success()
     }

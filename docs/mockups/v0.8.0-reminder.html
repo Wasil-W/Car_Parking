@@ -1,0 +1,502 @@
+<title>Thirty Minutes Before You Owe</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;700&family=Roboto:wght@400;500&display=swap">
+
+<style>
+/* ---------------------------------------------------------------------------
+   Every colour below is COPIED from android/app/src/main/java/dev/wasil/permit/
+   ui/theme/Color.kt, not approximated. CLAUDE.md: a mockup that disagrees with
+   the app is a bug in the mockup.
+   --------------------------------------------------------------------------- */
+:root {
+  /* SurfaceLight / CardLight / HairlineLight / TextPrimaryLight / TextSecondaryLight */
+  --ground:      #FAF9F5;
+  --card:        #FFFFFF;
+  --hairline:    #E3E1D9;
+  --ink:         #26241F;
+  --ink-soft:    #6B6862;
+  --sunken:      #F2F0E9;   /* SurfaceContainerLight */
+  /* AlertLight / FineLight */
+  --alert:       #96412F;
+  --fine:        #4C7645;
+  /* WasilStrongLight / WalidStrongLight - identity only, never generic chrome */
+  --wasil:       #45657F;
+  --walid:       #8A5C39;
+  --shade:       #F4F2EC;   /* the notification shade behind the cards */
+  --notif:       #FFFFFF;
+  --notif-ink:   #1B1A17;
+  --notif-soft:  #5E5B54;
+  --on-band:     #FFFFFF;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground:     #16130E;  /* SurfaceDark  */
+    --card:       #221D15;  /* CardDark     */
+    --hairline:   #332B20;  /* HairlineDark */
+    --ink:        #DEDCD4;  /* TextPrimaryDark   */
+    --ink-soft:   #918E85;  /* TextSecondaryDark */
+    --sunken:     #0E0B07;  /* SurfaceContainerLowestDark */
+    --alert:      #B3503C;  /* AlertDark */
+    --fine:       #5C8A54;  /* FineDark  */
+    --wasil:      #5A7D9A;
+    --walid:      #B07B55;
+    --shade:      #0E0B07;
+    --notif:      #221D15;
+    --notif-ink:  #DEDCD4;
+    --notif-soft: #918E85;
+    --on-band:    #FFFFFF;
+  }
+}
+:root[data-theme="dark"] {
+  --ground: #16130E; --card: #221D15; --hairline: #332B20;
+  --ink: #DEDCD4; --ink-soft: #918E85; --sunken: #0E0B07;
+  --alert: #B3503C; --fine: #5C8A54;
+  --wasil: #5A7D9A; --walid: #B07B55;
+  --shade: #0E0B07; --notif: #221D15; --notif-ink: #DEDCD4; --notif-soft: #918E85;
+  --on-band: #FFFFFF;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--ground);
+  color: var(--ink);
+  font-family: "Source Serif 4", Georgia, "Times New Roman", serif;
+  font-size: 17px;
+  line-height: 1.6;
+  margin: 0;
+  padding: 0 24px 96px;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 860px; margin: 0 auto; }
+
+h1, h2, h3, .eyebrow { font-family: Archivo, "Helvetica Neue", Arial, sans-serif; }
+h1 {
+  font-size: clamp(34px, 6vw, 54px);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.02;
+  text-wrap: balance;
+  margin: 0 0 18px;
+}
+h2 {
+  font-size: 25px; font-weight: 600; letter-spacing: -0.02em;
+  line-height: 1.15; text-wrap: balance; margin: 0;
+}
+p { margin: 0 0 16px; max-width: 66ch; }
+
+.eyebrow {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--ink-soft);
+}
+.mono, code {
+  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+}
+code {
+  font-size: 0.86em; background: var(--sunken); color: var(--ink);
+  padding: 1px 5px; border-radius: 3px; border: 1px solid var(--hairline);
+}
+
+/* ---- masthead ---- */
+header.top { padding: 72px 0 40px; border-bottom: 2px solid var(--ink); }
+.lede { font-size: 20px; line-height: 1.5; max-width: 60ch; margin: 0 0 26px; }
+.lede em { font-style: italic; }
+.meta {
+  display: flex; flex-wrap: wrap; gap: 10px 28px;
+  font-size: 12px; letter-spacing: 0.04em; color: var(--ink-soft);
+  font-family: "JetBrains Mono", Consolas, monospace;
+}
+.meta b { color: var(--ink); font-weight: 700; }
+
+/* ---- sections ---- */
+section { padding: 56px 0 0; }
+.sechead { display: flex; align-items: baseline; gap: 16px; margin-bottom: 8px; }
+.sechead .eyebrow { flex: none; }
+.rule { flex: 1; height: 1px; background: var(--hairline); }
+
+/* ---- the notification shade ---- */
+.shades {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+  gap: 28px; margin-top: 28px; align-items: start;
+}
+.shade {
+  background: var(--shade); border: 1px solid var(--hairline);
+  border-radius: 22px; padding: 16px 14px 18px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.shade-lbl {
+  font-family: Archivo, sans-serif; font-size: 11px; font-weight: 600;
+  letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--ink-soft); padding: 0 6px 2px; display: flex;
+  justify-content: space-between; align-items: baseline; gap: 12px;
+}
+.shade-clock { font-family: "JetBrains Mono", monospace; font-size: 12px; }
+
+.notif {
+  background: var(--notif); border-radius: 16px; padding: 12px 14px 10px;
+  font-family: Roboto, "Segoe UI", system-ui, sans-serif;
+  color: var(--notif-ink);
+  border-left: 3px solid transparent;
+}
+.notif.is-alert { border-left-color: var(--alert); }
+.notif.is-fine  { border-left-color: var(--fine); }
+.notif.is-quiet { opacity: .55; }
+.notif-hd {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 11px; color: var(--notif-soft); margin-bottom: 6px;
+}
+.dot { width: 13px; height: 13px; border-radius: 50%; flex: none; }
+.dot.neutral { background: var(--notif-soft); }
+.dot.alert { background: var(--alert); }
+.dot.fine { background: var(--fine); }
+.notif-title { font-size: 14.5px; font-weight: 500; line-height: 1.28; margin: 0 0 3px; }
+.notif-body  { font-size: 13px; line-height: 1.38; color: var(--notif-soft); margin: 0; }
+.notif-acts {
+  display: flex; gap: 22px; margin-top: 11px;
+  padding-top: 9px; border-top: 1px solid var(--hairline);
+  font-size: 12.5px; font-weight: 500; text-transform: uppercase; letter-spacing: .05em;
+}
+.notif-acts span { color: var(--notif-soft); }
+.notif-acts span.lead { color: var(--alert); }
+.empty {
+  border: 1px dashed var(--hairline); border-radius: 16px;
+  padding: 22px 16px; text-align: center; color: var(--ink-soft);
+  font-size: 13.5px; font-style: italic; line-height: 1.5;
+}
+
+/* ---- annotation rail ---- */
+.why {
+  border-left: 2px solid var(--alert); padding: 2px 0 2px 16px;
+  margin: 18px 0 0; font-size: 15px; line-height: 1.55; color: var(--ink-soft);
+  max-width: 62ch;
+}
+.why b { color: var(--ink); font-weight: 600; }
+.why.fine { border-left-color: var(--fine); }
+.why.plain { border-left-color: var(--hairline); }
+
+/* ---- timelines ---- */
+.tl { margin-top: 26px; }
+.tl + .tl { margin-top: 38px; }
+.tl-hd { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 6px; }
+.tl-code {
+  font-family: "JetBrains Mono", monospace; font-weight: 700; font-size: 14px;
+  color: var(--ink);
+}
+.tl-desc { font-size: 13.5px; color: var(--ink-soft); }
+.tl-scroll { overflow-x: auto; }
+.tl-scroll svg { display: block; min-width: 660px; width: 100%; height: auto; }
+
+/* ---- condition table ---- */
+table { border-collapse: collapse; width: 100%; margin-top: 22px; font-size: 15px; }
+th, td { text-align: left; padding: 12px 14px 12px 0; vertical-align: top;
+         border-bottom: 1px solid var(--hairline); }
+th {
+  font-family: Archivo, sans-serif; font-size: 11px; font-weight: 600;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--ink-soft);
+  border-bottom-color: var(--ink);
+}
+td:first-child { white-space: nowrap; padding-right: 24px; }
+.cond { font-family: "JetBrains Mono", monospace; font-size: 13px; font-weight: 700; }
+
+/* ---- open questions ---- */
+ol.open { counter-reset: q; list-style: none; padding: 0; margin: 24px 0 0; }
+ol.open li {
+  counter-increment: q; position: relative; padding: 0 0 20px 46px; max-width: 64ch;
+}
+ol.open li::before {
+  content: counter(q); position: absolute; left: 0; top: 1px;
+  font-family: "JetBrains Mono", monospace; font-size: 12px; font-weight: 700;
+  color: var(--alert); border: 1px solid var(--alert); border-radius: 50%;
+  width: 26px; height: 26px; display: grid; place-items: center;
+}
+ol.open b { font-family: Archivo, sans-serif; font-weight: 600; font-size: 15.5px; color: var(--ink); }
+
+footer {
+  margin-top: 64px; padding-top: 22px; border-top: 1px solid var(--hairline);
+  font-size: 12.5px; color: var(--ink-soft);
+  font-family: "JetBrains Mono", monospace; line-height: 1.7;
+}
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+
+<div class="wrap">
+
+<header class="top">
+  <div class="eyebrow">Handoff &middot; v0.8.0 &middot; mockup before code</div>
+  <h1>Thirty minutes before you owe</h1>
+  <p class="lede">Paying closed on 31 August. What is left is the one thing that
+  prevents a fine rather than reporting one: saying, <em>before</em> the clock
+  turns, that this spot is about to start charging and nothing is covering it.</p>
+  <div class="meta">
+    <span><b>Layer</b> obligation, not settlement</span>
+    <span><b>Rows</b> USE-CASES D7 D8 D9</span>
+    <span><b>Logic</b> 14 tests, green</span>
+  </div>
+</header>
+
+<section>
+  <div class="sechead"><span class="eyebrow">The change</span><span class="rule"></span></div>
+  <h2>A Tuesday in Osdorp, on both sides</h2>
+  <p>You park at <span class="mono">07:40</span>. The street is <code>T16B</code>
+  &mdash; <span class="mono">&euro;3,01/h</span>, Monday to Saturday
+  <span class="mono">09:00&ndash;19:00</span>. Walid&rsquo;s car has the permit.
+  Free at the moment you arrive, so nothing is wrong yet.</p>
+
+  <div class="shades">
+    <div class="shade">
+      <div class="shade-lbl"><span>Today &mdash; shipped v0.7.7</span><span class="shade-clock">08:30</span></div>
+      <div class="notif is-quiet">
+        <div class="notif-hd"><span class="dot neutral"></span>Handoff &middot; 07:41</div>
+        <p class="notif-title">Parked &mdash; permit untouched</p>
+        <p class="notif-body">Walid&rsquo;s car holds it (07:41)</p>
+      </div>
+      <div class="empty">Nothing else arrives. At 09:00 the meter starts and the
+      phone says nothing at all.</div>
+    </div>
+
+    <div class="shade">
+      <div class="shade-lbl"><span>Proposed &mdash; D7</span><span class="shade-clock">08:30</span></div>
+      <div class="notif is-quiet">
+        <div class="notif-hd"><span class="dot neutral"></span>Handoff &middot; 07:41</div>
+        <p class="notif-title">Parked &mdash; permit untouched</p>
+        <p class="notif-body">Walid&rsquo;s car holds it (07:41)</p>
+      </div>
+      <div class="notif is-alert">
+        <div class="notif-hd"><span class="dot alert"></span>Handoff &middot; now</div>
+        <p class="notif-title">You start paying here at 09:00</p>
+        <p class="notif-body">&euro;3,01/h &middot; Molenwijk &middot; Computerweg</p>
+        <div class="notif-acts"><span class="lead">Claim permit</span><span>Ignore</span></div>
+      </div>
+    </div>
+  </div>
+
+  <p class="why"><b>A time, not a countdown.</b> &ldquo;In 30 minutes&rdquo; is a
+  number you have to add to a clock you cannot see while walking.
+  <b>09:00</b> is the thing you actually plan around, and it stays true if the
+  notification sits unread for ten minutes &mdash; a countdown does not.</p>
+
+  <p class="why"><b>No holder is named, and this line is the second draft.</b>
+  The first read &ldquo;&hellip; &middot; Walid&rsquo;s car has the permit&rdquo;,
+  which is a better sentence and one the app cannot honestly write: the only
+  local record of who holds it is marked presentation-only precisely because it
+  goes stale, and a stale name here would be a guess published as a fact about
+  the one subject this project has a rule about. <code>Claim permit</code> is the
+  existing <code>ACTION_CLAIM</code>, and it asks the live question instead
+  &mdash; if Walid&rsquo;s car really is parked out there, the guarded claim
+  answers with the blocked notification rather than quietly stealing it. Pinned
+  as a test so it cannot drift back in.</p>
+</section>
+
+<section>
+  <div class="sechead"><span class="eyebrow">The quieter half</span><span class="rule"></span></div>
+  <h2>And the one that saves a few euros</h2>
+  <div class="shades">
+    <div class="shade">
+      <div class="shade-lbl"><span>Proposed &mdash; D8</span><span class="shade-clock">18:50</span></div>
+      <div class="notif is-fine">
+        <div class="notif-hd"><span class="dot fine"></span>Handoff &middot; now</div>
+        <p class="notif-title">Free here from 19:00</p>
+        <p class="notif-body">Molenwijk &middot; Computerweg</p>
+      </div>
+      <div class="empty">No buttons. There is nothing the app can do about this
+      one, and it should not pretend there is.</div>
+    </div>
+    <div>
+      <p class="why fine" style="margin-top:0"><b>Ten minutes, not thirty.</b> The
+      two leads differ on purpose. Being told late that you <em>owe</em> costs a
+      fine; being told late that it is <em>free</em> costs a few minutes of
+      meter. A thirty-minute lead here would be a notification you cannot use
+      yet.</p>
+      <p class="why fine"><b>Green, not rust.</b>
+      <span class="mono">FineLight #4C7645</span> against
+      <span class="mono">AlertLight #96412F</span> &mdash; the state pair the app
+      already owns. Neither is identity colour, so neither can be misread as
+      &ldquo;whose car&rdquo;.</p>
+      <p class="why fine"><b>A channel each, so you can silence this one.</b>
+      They are not the same kind of message: one can save a fine, the other saves
+      a few minutes of meter, and on a single channel you would have to mute the
+      useful one to be rid of the chatty one. <em>Before you start paying</em> is
+      HIGH and heads up; <em>When parking turns free</em> is DEFAULT and does
+      not. Android&rsquo;s own controls settle it, with no settings screen of our
+      own.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="sechead"><span class="eyebrow">Then looked at</span><span class="rule"></span></div>
+  <h2>What the shade changed</h2>
+  <p>Both notifications were posted for real on an API 35 device before this page
+  was finished, because in this project the screen has caught every defect the
+  tests did not. Two things came back.</p>
+  <p class="why plain"><b>The long case clipped.</b> A stepped rate, a
+  double-barrelled neighbourhood and a street name rendered as
+  <span class="mono">from &euro;1,72/h &middot; Oostelijk Havengebied &middot;
+  Cr&hellip;</span> &mdash; and expanding the card showed the same clipped line.
+  The truncation order was at least right (the time is in the title, the rate
+  comes first), but the street is what tells you <em>which</em> car this is
+  about. Fixed with <code>BigTextStyle</code>, so expanding now shows the whole
+  line. Nothing in 597 unit tests could have found that; it took one screenshot.</p>
+  <p class="why plain"><b>Everything else held.</b> Title on one line, actions
+  where they should be, the quiet one correctly button-less.</p>
+</section>
+
+<section>
+  <div class="sechead"><span class="eyebrow">The chain</span><span class="rule"></span></div>
+  <h2>One wake-up books the next</h2>
+  <p>A parked car needs a sequence of alarms, not one. Each run of the worker asks
+  what the spot is doing, says something if a boundary is inside its lead window,
+  then books exactly one successor &mdash; the same shape the drive-time location
+  sampler already uses. Both strips below are the city&rsquo;s real bundled data,
+  drawn to scale.</p>
+
+  <div class="tl">
+    <div class="tl-hd">
+      <span class="tl-code">T16B</span>
+      <span class="tl-desc">Basistarief TC6 &middot; ma&ndash;za 09&ndash;19 &middot; &euro;3,01/h &mdash; the ordinary case</span>
+    </div>
+    <div class="tl-scroll">
+      <svg viewBox="0 0 1000 134" role="img" aria-label="Timeline for tariff area T16B: free until 09:00, charging 09:00 to 19:00, free after. Wake-ups at 08:30 and 18:50.">
+        <rect x="60" y="72" width="900" height="26" fill="var(--sunken)" stroke="var(--hairline)"/>
+        <rect x="397.5" y="72" width="375" height="26" fill="var(--alert)"/>
+        <text x="405" y="90" fill="var(--on-band)" font-family="JetBrains Mono, monospace" font-size="11.5">09:00</text>
+        <text x="765" y="90" fill="var(--on-band)" font-family="JetBrains Mono, monospace" font-size="11.5" text-anchor="end">19:00</text>
+        <text x="585" y="90" fill="var(--on-band)" font-family="Archivo, sans-serif" font-size="11.5" font-weight="600" text-anchor="middle" letter-spacing="1.2">CHARGING</text>
+        <g font-family="JetBrains Mono, monospace" font-size="10.5" fill="var(--ink-soft)">
+          <line x1="60" y1="98" x2="60" y2="104" stroke="var(--hairline)"/><text x="60" y="118" text-anchor="middle">00</text>
+          <line x1="172.5" y1="98" x2="172.5" y2="104" stroke="var(--hairline)"/><text x="172.5" y="118" text-anchor="middle">03</text>
+          <line x1="285" y1="98" x2="285" y2="104" stroke="var(--hairline)"/><text x="285" y="118" text-anchor="middle">06</text>
+          <line x1="397.5" y1="98" x2="397.5" y2="104" stroke="var(--hairline)"/><text x="397.5" y="118" text-anchor="middle">09</text>
+          <line x1="510" y1="98" x2="510" y2="104" stroke="var(--hairline)"/><text x="510" y="118" text-anchor="middle">12</text>
+          <line x1="622.5" y1="98" x2="622.5" y2="104" stroke="var(--hairline)"/><text x="622.5" y="118" text-anchor="middle">15</text>
+          <line x1="735" y1="98" x2="735" y2="104" stroke="var(--hairline)"/><text x="735" y="118" text-anchor="middle">18</text>
+          <line x1="847.5" y1="98" x2="847.5" y2="104" stroke="var(--hairline)"/><text x="847.5" y="118" text-anchor="middle">21</text>
+          <line x1="960" y1="98" x2="960" y2="104" stroke="var(--hairline)"/><text x="960" y="118" text-anchor="middle">24</text>
+        </g>
+        <line x1="348.75" y1="54" x2="348.75" y2="72" stroke="var(--ink-soft)" stroke-width="1" stroke-dasharray="2 2"/>
+        <circle cx="348.75" cy="54" r="3" fill="var(--ink-soft)"/>
+        <text x="341" y="46" text-anchor="end" fill="var(--ink-soft)" font-family="Archivo, sans-serif" font-size="11">parked 07:40</text>
+        <line x1="378.75" y1="24" x2="378.75" y2="72" stroke="var(--alert)" stroke-width="1.5"/>
+        <circle cx="378.75" cy="24" r="4" fill="var(--alert)"/>
+        <text x="389" y="21" fill="var(--alert)" font-family="Archivo, sans-serif" font-size="11.5" font-weight="600">08:30 &mdash; you start paying at 09:00</text>
+        <line x1="766.25" y1="46" x2="766.25" y2="72" stroke="var(--fine)" stroke-width="1.5"/>
+        <circle cx="766.25" cy="46" r="4" fill="var(--fine)"/>
+        <text x="776" y="43" fill="var(--fine)" font-family="Archivo, sans-serif" font-size="11.5" font-weight="600">18:50 &mdash; free from 19:00</text>
+      </svg>
+    </div>
+  </div>
+
+  <div class="tl">
+    <div class="tl-hd">
+      <span class="tl-code">T17N</span>
+      <span class="tl-desc">Basistarief TC7 &middot; 19&ndash;06, niet za op zo &middot; &euro;1,72/h &mdash; the one that already caught a bug</span>
+    </div>
+    <div class="tl-scroll">
+      <svg viewBox="0 0 1000 134" role="img" aria-label="Timeline for tariff area T17N: charging overnight until 06:00 and again from 19:00. Wake-ups at 05:50 and 18:30.">
+        <rect x="60" y="72" width="900" height="26" fill="var(--sunken)" stroke="var(--hairline)"/>
+        <rect x="60" y="72" width="225" height="26" fill="var(--alert)"/>
+        <rect x="772.5" y="72" width="187.5" height="26" fill="var(--alert)"/>
+        <text x="72" y="90" fill="var(--on-band)" font-family="Archivo, sans-serif" font-size="11" font-weight="600" letter-spacing="1.1">UNTIL 06:00</text>
+        <text x="785" y="90" fill="var(--on-band)" font-family="Archivo, sans-serif" font-size="11" font-weight="600" letter-spacing="1.1">FROM 19:00</text>
+        <g font-family="JetBrains Mono, monospace" font-size="10.5" fill="var(--ink-soft)">
+          <line x1="60" y1="98" x2="60" y2="104" stroke="var(--hairline)"/><text x="60" y="118" text-anchor="middle">00</text>
+          <line x1="172.5" y1="98" x2="172.5" y2="104" stroke="var(--hairline)"/><text x="172.5" y="118" text-anchor="middle">03</text>
+          <line x1="285" y1="98" x2="285" y2="104" stroke="var(--hairline)"/><text x="285" y="118" text-anchor="middle">06</text>
+          <line x1="397.5" y1="98" x2="397.5" y2="104" stroke="var(--hairline)"/><text x="397.5" y="118" text-anchor="middle">09</text>
+          <line x1="510" y1="98" x2="510" y2="104" stroke="var(--hairline)"/><text x="510" y="118" text-anchor="middle">12</text>
+          <line x1="622.5" y1="98" x2="622.5" y2="104" stroke="var(--hairline)"/><text x="622.5" y="118" text-anchor="middle">15</text>
+          <line x1="735" y1="98" x2="735" y2="104" stroke="var(--hairline)"/><text x="735" y="118" text-anchor="middle">18</text>
+          <line x1="847.5" y1="98" x2="847.5" y2="104" stroke="var(--hairline)"/><text x="847.5" y="118" text-anchor="middle">21</text>
+          <line x1="960" y1="98" x2="960" y2="104" stroke="var(--hairline)"/><text x="960" y="118" text-anchor="middle">24</text>
+        </g>
+        <line x1="278.75" y1="30" x2="278.75" y2="72" stroke="var(--fine)" stroke-width="1.5"/>
+        <circle cx="278.75" cy="30" r="4" fill="var(--fine)"/>
+        <text x="289" y="27" fill="var(--fine)" font-family="Archivo, sans-serif" font-size="11.5" font-weight="600">05:50 &mdash; free from 06:00</text>
+        <line x1="753.75" y1="30" x2="753.75" y2="72" stroke="var(--alert)" stroke-width="1.5"/>
+        <circle cx="753.75" cy="30" r="4" fill="var(--alert)"/>
+        <text x="744" y="27" text-anchor="end" fill="var(--alert)" font-family="Archivo, sans-serif" font-size="11.5" font-weight="600">18:30 &mdash; you start paying at 19:00</text>
+      </svg>
+    </div>
+  </div>
+
+  <p class="why plain"><b>Checked against all 29 areas, not against these two.</b>
+  A test parks a car at Monday <span class="mono">00:00</span> in every bundled
+  area, follows the chain for a full week, and requires that every moment those
+  areas start charging was preceded by a reminder inside its window. An
+  off-by-one in the booking would show up there as a missed transition &mdash;
+  which is a fine, in real life.</p>
+</section>
+
+<section>
+  <div class="sechead"><span class="eyebrow">Restraint</span><span class="rule"></span></div>
+  <h2>Four conditions, and it stays silent unless all four hold</h2>
+  <table>
+    <thead><tr><th>Condition</th><th>Why it is load-bearing</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="cond">parked</td>
+        <td>Nothing is owed about a car being driven. Drive off and the open park
+        record closes, so the next wake-up finds nothing and the chain stops on
+        its own.</td>
+      </tr>
+      <tr>
+        <td class="cond">in a paid area</td>
+        <td>Geometry, not the clock &mdash; a polygon hit. Home, a marked free
+        zone and a free street owe nothing at any hour.</td>
+      </tr>
+      <tr>
+        <td class="cond">a boundary inside<br>the lead window</td>
+        <td>Thirty minutes for owing, ten for free. Outside that there is nothing
+        yet worth interrupting anyone for.</td>
+      </tr>
+      <tr>
+        <td class="cond">the permit is not<br>already settling it</td>
+        <td><b>The one that is easy to miss.</b> The app claims on geometry
+        regardless of the hour, so a permit holder parked overnight in a
+        <span class="mono">09&ndash;19</span> zone already holds it and owes
+        nothing at 09:00. Reminding them would be noise about a problem the app
+        solved on arrival. This is the obligation/settlement split doing its
+        job.</td>
+      </tr>
+    </tbody>
+  </table>
+  <p class="why plain"><b>And a fifth, which is a silence rather than a
+  condition.</b> A park whose position never resolved gets nothing &mdash; D9.
+  Not &ldquo;you are fine&rdquo;, and not a guessed area: a failed fix is a gap
+  in what we know, and this project has a standing rule against publishing one
+  as a fact. The way out is the pin the map already offers &mdash; place it and
+  the chain schedules itself.</p>
+</section>
+
+<section>
+  <div class="sechead"><span class="eyebrow">Not settled here</span><span class="rule"></span></div>
+  <h2>What this mockup does not decide</h2>
+  <ol class="open">
+    <li><b>Are 30 and 10 the right numbers?</b> Thirty is roughly a walk back to a
+    car in a city; ten is enough not to pay for the tail. Both are guesses that
+    have never met a real morning. They are two constants and cost nothing to
+    change.</li>
+    <li><b>What about a park that starts while the meter is already running?</b>
+    Arrive at 11:00 with no permit and you are owing immediately &mdash; and this
+    feature says nothing until 18:50, because there is no boundary ahead to warn
+    about. That is arguably the park notification&rsquo;s job rather than the
+    reminder&rsquo;s, but right now neither of them says it.</li>
+    <li><b>What happens on a three-day park?</b> The chain keeps going, so a car
+    left outside from Friday to Monday collects six notifications about one spot.
+    A per-park cap, or a rule that goes quiet after the first unacknowledged one,
+    is not written yet.</li>
+    <li><b>Does it survive Doze?</b> Thirty minutes of lead is deliberate slack
+    for exactly that, and a phone walking around town is unlikely to be dozing
+    deeply &mdash; but this is the one claim on the page that only a real
+    overnight park can settle, not a test.</li>
+  </ol>
+</section>
+
+<footer>
+  Handoff v0.8.0 &middot; drawn before it was built, per CLAUDE.md<br>
+  Colours copied verbatim from ui/theme/Color.kt &middot; schedules from
+  assets/amsterdam_tarieven.json &middot; rows D7 D8 D9 in docs/USE-CASES.md
+</footer>
+
+</div>
