@@ -59,6 +59,29 @@ class ReminderNotificationScreenshotTest {
     }
 
     /**
+     * Both cards at once — the regression found auditing v0.8.0 before its tag.
+     *
+     * The reminder first borrowed the permit card's `ACTION_IGNORE`, so tapping
+     * "Ignore" on the clock reminder ran the shared handler, cancelled the
+     * permit question (`EVENT_ID`) and erased its persisted `PendingDecision`.
+     * Posts the park question and a reminder together; tap Ignore on the
+     * reminder and the park question must still be standing.
+     */
+    @Test
+    fun bothCardsUp() {
+        val n = notifications()
+        n.askManualDecision()
+        Thread.sleep(600)
+        n.reminder(
+            reminder = Reminder.StartsOwing(inMin = 30, rateText = "€3,01/h"),
+            dayOfWeek = 0,
+            minuteOfDay = 510,
+            place = "Molenwijk · Computerweg",
+        )
+        Thread.sleep(1_200)
+    }
+
+    /**
      * The worst case for the layout: a long place name, a stepped rate, and a
      * boundary on the far side of midnight so the title carries a day prefix
      * too. If anything is going to be clipped it is this.

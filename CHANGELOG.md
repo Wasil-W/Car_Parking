@@ -18,9 +18,14 @@ Everything before this reported. The app could tell you where you parked, what
 it costs and who has the permit — always *after* the fact, and never in time to
 do anything about it.
 
-**Park somewhere free at 07:40 and the phone now says, at 08:30: "You start
-paying here at 09:00."** Rate, street, and a Claim button, half an hour before
-it matters.
+**Park somewhere free at 07:40 and the phone says, around 08:30: "You start
+paying here at 09:00."** Rate, street, and a Claim button, roughly half an hour
+before it matters.
+
+*Roughly*, and deliberately so: this is a scheduled background job, not an alarm,
+so a phone in deep sleep can deliver it late. The thirty minutes is slack for
+exactly that. It is honest to call this a good warning and dishonest to call it a
+guarantee.
 
 This is the answer to paying being closed off on 31 August. The app can never
 settle a debt for you. It can still make sure you see the one coming.
@@ -57,18 +62,39 @@ about what that spot costs. Place the pin on the map and the reminders start.
 
 ### Checked against a week, not against an example
 
-A test parks a car at Monday 00:00 in every one of Amsterdam's 29 tariff areas,
-follows the chain of reminders for a full week, and requires that every single
-moment those areas start charging was preceded by a warning. That includes the
-overnight areas that charge from 19:00 to 06:00, which are the ones this app has
-got wrong before.
+A test parks a car at Monday 00:00 in each of Amsterdam's tariff areas, follows
+the chain of reminders for a full week, and requires that every moment those
+areas start charging was preceded by a warning. That includes the overnight areas
+charging 19:00 to 06:00, which are the ones this app has got wrong before.
+
+26 of the 29 areas are checked that way. The other three — T11V, T12V, T13V —
+charge every minute of every day, so they have no free-to-charging moment to warn
+about; the test asserts that the excluded set is exactly those three and nothing
+else quietly joins them.
+
+### Two things found in the hour before the tag
+
+**A takeover used to silence the reminder for good.** If your brother claimed the
+permit *after* you had parked and claimed it, this phone raised the "took the
+permit" alert and then went quiet forever about the meter — because the park was
+still recorded as covered by a permit that had left. That is the exact situation
+the feature exists for, failing silently, in the direction that costs a fine.
+Now a takeover un-covers the park and the reminders resume. **History was wrong
+in the same way** and is also fixed: a park the permit had abandoned kept its
+"Permit" badge.
+
+**The reminder's Ignore button used to cancel your park question.** Both cards
+shared one handler, so dismissing the clock reminder also cleared an unanswered
+"Parked? Decide about the permit" — and the decision screen behind it. The
+reminder now has its own two buttons and touches nothing else.
 
 ### And one thing only the screen could find
 
-Both notifications were posted on a real device before shipping. The longest
-case — a stepped rate, a long neighbourhood, a long street — was cut off at
-`Cr…`, and expanding the notification showed the same cut-off line. Fixed.
-Nothing in 597 passing tests could see it.
+Both notifications were posted and tapped on an emulator before shipping — not on
+a phone, which is the check still outstanding. The longest case — a stepped rate,
+a long neighbourhood, a long street — was cut off at `Cr…`, and expanding the
+notification showed the same cut-off line. Fixed. Nothing in 602 passing tests
+could see it.
 
 The design that went into this is at
 [`docs/mockups/v0.8.0-reminder.html`](docs/mockups/v0.8.0-reminder.html).

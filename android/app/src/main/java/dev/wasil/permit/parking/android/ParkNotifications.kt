@@ -178,6 +178,13 @@ class ParkNotifications(private val context: Context) : ParkNotifier {
             .setOnlyAlertOnce(true)
             .setContentIntent(openAppIntent()))
         dismissEvents(context)
+        // The permit is now on this car, so any "you start paying at 09:00" in
+        // the shade has just stopped being true. This is the ONE place a permit
+        // event may clear the reminder, and it is precise: it fires exactly when
+        // a claim has actually landed, not on every button in the app. The
+        // chain itself needs no help — its next wake reads the settled record
+        // and says nothing — this only clears the stale card.
+        dismissReminder(context)
     }
 
     override fun statusParkedNoClaim(reason: String) {
@@ -298,8 +305,11 @@ class ParkNotifications(private val context: Context) : ParkNotifier {
             builder.setStyle(NotificationCompat.BigTextStyle().bigText(it))
         }
         if (reminder is Reminder.StartsOwing) {
-            builder.addAction(action(ParkActionReceiver.ACTION_CLAIM, "Claim permit"))
-            builder.addAction(action(ParkActionReceiver.ACTION_IGNORE, "Ignore"))
+            // The reminder's OWN actions, not the permit card's. Sharing them
+            // meant "Ignore" here also cancelled an unanswered park question and
+            // erased its pending decision — see ParkActionReceiver.
+            builder.addAction(action(ParkActionReceiver.ACTION_REMINDER_CLAIM, "Claim permit"))
+            builder.addAction(action(ParkActionReceiver.ACTION_REMINDER_IGNORE, "Ignore"))
         }
         notify(REMINDER_ID, builder)
     }

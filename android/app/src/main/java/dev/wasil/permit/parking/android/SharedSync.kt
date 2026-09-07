@@ -88,6 +88,35 @@ object SharedSync {
         val by = takeoverBy(permit, store.thisPhoneDrives, store.lastAlertedClaimMs, roster) ?: return
         ParkNotifications(context).takeover(by.name, roster.identitySlotOf(by.id))
         store.lastAlertedClaimMs = permit.claimedAtMs
+
+        // The permit has left this car, so this park is no longer covered by it.
+        //
+        // `uncoverOpen` was reachable from exactly ONE place before this —
+        // ClaimPermit, where *this* phone hands the permit away — even though
+        // `withOpenParkUncovered`'s own doc describes this case: "the permit was
+        // handed to the other car while this one was still parked". The other
+        // phone taking it produced a notification and nothing else, so the open
+        // record kept saying Settlement.PERMIT.
+        //
+        // Two things were wrong with that, and both are fixed here. History
+        // badged a park "Permit" that the permit had abandoned. And — found
+        // auditing v0.8.0 before its tag — ParkReminderWorker reads exactly that
+        // field to decide whether anything is owed, so a takeover silenced the
+        // reminder permanently, in precisely the case the reminder exists for:
+        // your brother has the permit and your car is on a paid street. That is
+        // the expensive direction to be wrong in.
+        //
+        // Only an open record that currently claims the permit is touched, and
+        // what it becomes is decided by what we knew about the spot — a paid one
+        // becomes UNSETTLED, one with no zone resolved becomes UNKNOWN. "The
+        // permit left" is not evidence that anything was owed.
+        if (store.parked) {
+            app.parkLogStore.uncoverOpen()
+            // And re-plan the chain from the new answer. The boundary may
+            // already be inside its lead window, in which case this fires the
+            // reminder now rather than at the next scheduled look.
+            ParkWorkers.scheduleReminder(context, delayMin = 0)
+        }
     }
 
     /** Heartbeat runs only while parked outside; KEEP avoids resetting the period. */

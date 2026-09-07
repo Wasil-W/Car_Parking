@@ -504,7 +504,36 @@ up there as a missed transition, which is a fine in real life.
 **One defect found by looking, as usual.** The longest notification —
 stepped rate, long neighbourhood, long street — clipped to `Cr…`, and expanding
 it showed the same clipped line. `BigTextStyle` fixed it. 597 unit tests were
-blind to it; one screenshot was not.
+blind to it; one screenshot was not. Checked on the **emulator**, not a phone —
+the first draft of the changelog claimed "a real device", which was not true and
+was corrected before the tag.
+
+**And two more found by auditing the release before tagging it.** Six independent
+lenses over the diff, then skeptics per finding. Most of the fleet died on a
+session limit and the run's own summary said "0 blockers" — which was false, and
+worth recording: an unfinished audit reports clean, so the headline of a partial
+run means nothing. Reading the journal of the agents that *had* finished found
+both of these.
+
+- **A takeover silenced the reminder permanently.** `uncoverOpen()` had exactly
+  one caller — `ClaimPermit`, where *this* phone hands the permit away — although
+  `withOpenParkUncovered`'s own doc describes the other case too.
+  `watchForTakeover` raised a notification and touched nothing else, so the open
+  record kept saying `Settlement.PERMIT`, `ParkReminderWorker` read that as
+  "settled", and said nothing. The C3 case the whole feature was built for. Fixed
+  in `SharedSync.watchForTakeover`, which now un-covers the park and re-plans the
+  chain. **The same bug had been mis-badging history** since the log existed — a
+  park the permit had abandoned still showed "Permit".
+- **The reminder's buttons were the permit card's buttons.** v0.8.0 first wired
+  it to `ACTION_CLAIM`/`ACTION_IGNORE`, both handled by `ParkActionReceiver.
+  perform`, which cancels `EVENT_ID` and clears `pendingDecision`. So "stop
+  telling me about the clock" also destroyed an unanswered park question and the
+  only route back to its decision screen — and the blanket `dismissReminder` at
+  the tail of `perform` did the reverse, wiping a live warning when the user
+  answered any unrelated card. Now `ACTION_REMINDER_CLAIM` /
+  `ACTION_REMINDER_IGNORE`, returning early; the one place a permit event may
+  clear the reminder is `statusPermitOn`, where a claim has actually landed.
+  Verified on the emulator: Ignore on the reminder, park question still standing.
 
 **The mockup deviated from what shipped, and the mockup lost.** It drew
 "Walid's car has the permit" in the body. The app cannot honestly write that from
